@@ -14,7 +14,8 @@ function ask(question: string, defaultValue?: string): Promise<string> {
   })
 }
 
-async function askSecret(question: string): Promise<string> {
+async function askSecret(question: string, hint?: string): Promise<string> {
+  if (hint) console.log(hint)
   process.stdout.write(question + ": ")
   // Disable terminal echo so the token is not visible while typing.
   // Guard: stty only works on a real TTY; skip silently in piped contexts.
@@ -32,6 +33,30 @@ async function askSecret(question: string): Promise<string> {
   } finally {
     if (isTTY) await Bun.$`stty echo`.quiet()
     process.stdout.write("\n")
+  }
+}
+
+// ─── URL normalisation ────────────────────────────────────────────────────────
+
+function normalizeUrl(input: string): string {
+  const trimmed = input.trim().replace(/\/$/, "")
+  if (!trimmed) return trimmed
+  // Auto-prepend https:// if no protocol given
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    return `https://${trimmed}`
+  }
+  return trimmed
+}
+
+function validateUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return `Protocol must be http or https (got ${parsed.protocol})`
+    }
+    return null
+  } catch {
+    return `Invalid URL: ${url}`
   }
 }
 
@@ -55,7 +80,31 @@ async function saveToKeychain(url: string, token: string): Promise<void> {
   await Bun.secrets.set({ service: "ntfy-mac", name: "token", value: token })
 }
 
-// ─── Setup wizard ─────────────────────────────────────────────────────────────
+// ─── Non-interactive setup ────────────────────────────────────────────────────
+
+export async function runSetupNonInteractive(url: string, token: string): Promise<void> {
+  const normalized = normalizeUrl(url)
+  const urlError = validateUrl(normalized)
+  if (urlError) {
+    console.error(`Error: ${urlError}`)
+    process.exit(1)
+  }
+
+  process.stdout.write("Testing connection... ")
+  try {
+    const topics = await testConnection(normalized, token)
+    console.log("✓")
+    await saveToKeychain(normalized, token)
+    console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
+  } catch (err) {
+    console.log("✗")
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`Connection failed: ${message}`)
+    process.exit(1)
+  }
+}
+
+// ─── Interactive setup wizard ─────────────────────────────────────────────────
 
 export async function runSetup(): Promise<void> {
   console.log("")
@@ -68,31 +117,35 @@ export async function runSetup(): Promise<void> {
   let config: Config | null = null
 
   while (!config) {
-    const url = await ask("ntfy server URL", "https://ntfy.example.com")
-    const token = await askSecret("Auth token")
-
-    if (!url || !token) {
-      console.log("URL and token are required.\n")
+    // Step 1: URL (validated before asking for token)
+    const rawUrl = await ask("ntfy server URL", "https://ntfy.example.com")
+    if (!rawUrl) {
+      console.log("URL is required.\n")
       continue
     }
 
-    // Basic URL validation
-    try {
-      const parsed = new URL(url)
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        console.log(`Invalid URL protocol: ${parsed.protocol}. Use http or https.\n`)
-        continue
-      }
-    } catch {
-      console.log(`Invalid URL: ${url}\n`)
+    const url = normalizeUrl(rawUrl)
+    const urlError = validateUrl(url)
+    if (urlError) {
+      console.log(`${urlError}\n`)
       continue
     }
 
-    const cleanUrl = url.replace(/\/$/, "")
+    // Step 2: Token (shown only after URL is valid)
+    const token = await askSecret(
+      "Auth token",
+      `  → Get your token at ${url}/account → Access Tokens`,
+    )
 
+    if (!token) {
+      console.log("Token is required.\n")
+      continue
+    }
+
+    // Step 3: Test connection
     process.stdout.write("\nTesting connection... ")
     try {
-      const topics = await testConnection(cleanUrl, token)
+      const topics = await testConnection(url, token)
       console.log("✓\n")
 
       if (topics.length > 0) {
@@ -105,14 +158,14 @@ export async function runSetup(): Promise<void> {
       console.log("")
 
       try {
-        await saveToKeychain(cleanUrl, token)
+        await saveToKeychain(url, token)
         console.log("Credentials saved to macOS Keychain.")
       } catch {
         console.log("Warning: could not save to Keychain.")
         console.log("Set NTFY_URL and NTFY_TOKEN environment variables instead.")
       }
 
-      config = { url: cleanUrl, token, topics: topics.length > 0 ? topics : undefined }
+      config = { url, token, topics: topics.length > 0 ? topics : undefined }
     } catch (err) {
       console.log("✗\n")
       const message = err instanceof Error ? err.message : String(err)
@@ -128,11 +181,9 @@ export async function runSetup(): Promise<void> {
   }
 
   console.log("")
-  console.log("Setup complete! Start receiving notifications:")
+  console.log("Setup complete!")
   console.log("")
+  console.log("Start the daemon:")
   console.log("  brew services start ntfy-mac")
-  console.log("")
-  console.log("To run manually:")
-  console.log("  ntfy-mac")
   console.log("")
 }
