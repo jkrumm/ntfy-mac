@@ -14,12 +14,20 @@ const SILENT_THRESHOLD_MS = 12 * 60 * 60 * 1000 // > 12h → silent
 const BACKOFF_INITIAL_MS = 5_000
 const BACKOFF_MAX_MS = 5 * 60 * 1000
 
-// Alert user after this many consecutive SSE failures (~40min at max backoff)
+// Alert user after this many consecutive server failures (~40min at max backoff).
+// Offline periods are excluded — we only count failures when internet is available.
 const FAILURE_ALERT_THRESHOLD = 12
+
+// Don't re-alert within 1h of the last alert — prevents repeated notifications
+// if the server stays down for hours.
+const ALERT_COOLDOWN_MS = 60 * 60 * 1000
 
 // Keepalive timeout: ntfy sends keepalives every ~55s. If we see nothing for
 // 90s the connection has silently stalled — abort and reconnect.
 const KEEPALIVE_TIMEOUT_MS = 90_000
+
+// When offline, check every 15s instead of applying backoff
+const OFFLINE_RETRY_MS = 15_000
 
 export type MissedMessageResult =
   | { type: "individual"; messages: NtfyMessage[] }
@@ -29,6 +37,21 @@ export type MissedMessageResult =
 interface AccountResponse {
   subscriptions?: { topic: string }[]
 }
+
+// ─── Network detection ────────────────────────────────────────────────────────
+
+// Uses scutil --nwi (macOS native, no network request) to check if any
+// network interface has a routable address. Returns true when in doubt.
+async function isNetworkAvailable(): Promise<boolean> {
+  try {
+    const result = await Bun.$`scutil --nwi`.quiet()
+    return result.stdout.toString().includes("address :")
+  } catch {
+    return true // assume online if we can't check
+  }
+}
+
+// ─── ntfy API ─────────────────────────────────────────────────────────────────
 
 export async function discoverTopics(config: Config): Promise<string[]> {
   const res = await fetch(`${config.url}/v1/account`, {
@@ -85,6 +108,8 @@ export async function pollMessages(
     .filter((m): m is NtfyMessage => m !== null)
 }
 
+// ─── SSE connection ───────────────────────────────────────────────────────────
+
 // Wraps reader.read() with a keepalive timeout. Throws if no data arrives
 // within KEEPALIVE_TIMEOUT_MS — signals a silently stalled connection.
 async function readWithTimeout(
@@ -99,12 +124,14 @@ async function readWithTimeout(
   return Promise.race([reader.read(), timeout])
 }
 
+// Returns true if the SSE stream raised a poll_request event (server asking
+// us to poll immediately — e.g. after a missed-message window).
 async function connectSSE(
   config: Config,
   topics: string[],
   since: string,
   onMessage: (msg: NtfyMessage) => Promise<void>,
-): Promise<void> {
+): Promise<{ pollRequested: boolean }> {
   const url = `${config.url}/${topics.join(",")}/sse?since=${since}`
   const res = await fetch(url, {
     headers: {
@@ -118,6 +145,8 @@ async function connectSSE(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let pollRequested = false
+  let currentEvent = ""
 
   try {
     while (true) {
@@ -127,22 +156,34 @@ async function connectSSE(
       const lines = buffer.split("\n")
       buffer = lines.pop() ?? ""
       for (const line of lines) {
-        // Track keepalives and messages equally for heartbeat purposes
-        if (line.startsWith("event: keepalive")) {
-          debug("keepalive received")
+        if (line.startsWith("event: ")) {
+          currentEvent = line.slice(7).trim()
+          if (currentEvent === "keepalive") debug("keepalive received")
+          if (currentEvent === "poll_request") {
+            debug("poll_request received — will poll after SSE ends")
+            pollRequested = true
+          }
+          continue
         }
         if (!line.startsWith("data: ")) continue
-        const msg = parseNtfyLine(line.slice(6))
-        if (msg) {
-          debug(`received ${msg.topic}/${msg.id} priority=${msg.priority ?? "default"}`)
-          await onMessage(msg)
+        if (currentEvent === "message" || currentEvent === "") {
+          const msg = parseNtfyLine(line.slice(6))
+          if (msg) {
+            debug(`received ${msg.topic}/${msg.id} priority=${msg.priority ?? "default"}`)
+            await onMessage(msg)
+          }
         }
+        currentEvent = ""
       }
     }
   } finally {
     reader.cancel().catch(() => {})
   }
+
+  return { pollRequested }
 }
+
+// ─── Listener loop ────────────────────────────────────────────────────────────
 
 export async function startListener(
   config: Config,
@@ -153,15 +194,18 @@ export async function startListener(
 ): Promise<never> {
   let backoff = BACKOFF_INITIAL_MS
   let consecutiveFailures = 0
+  let lastAlertAt = 0
   let state = await loadState()
   let since = state.lastMessageId ?? "latest"
 
   while (true) {
+    let pollRequested = false
+
     try {
       console.log(
         `connected (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
       )
-      await connectSSE(config, topics, since, async (msg) => {
+      const result = await connectSSE(config, topics, since, async (msg) => {
         state = await loadState()
         state = { ...state, lastMessageId: msg.id }
         await saveState(state)
@@ -170,21 +214,36 @@ export async function startListener(
         consecutiveFailures = 0
         await onMessage(msg)
       })
+      pollRequested = result.pollRequested
       console.log("connection closed — reconnecting")
     } catch (err) {
+      const online = await isNetworkAvailable()
+      if (!online) {
+        debug("offline — waiting for network")
+        await Bun.sleep(OFFLINE_RETRY_MS)
+        continue // skip poll + backoff, retry immediately when network is back
+      }
+
       consecutiveFailures++
       const message = err instanceof Error ? err.message : String(err)
       console.error(`connection error (attempt ${consecutiveFailures}): ${message}`)
 
-      // Alert user after sustained failure (~40min)
-      if (consecutiveFailures === FAILURE_ALERT_THRESHOLD && onConnectionFailure) {
+      // Alert user after sustained server failure, with cooldown to avoid spam
+      const cooldownExpired = Date.now() - lastAlertAt > ALERT_COOLDOWN_MS
+      if (
+        consecutiveFailures >= FAILURE_ALERT_THRESHOLD &&
+        cooldownExpired &&
+        onConnectionFailure
+      ) {
+        lastAlertAt = Date.now()
         await onConnectionFailure().catch(() => {})
       }
     }
 
-    // Poll for any messages missed during the gap
+    // Poll for missed messages — both on reconnect and when server requests it
     try {
       if (since !== "latest") {
+        if (pollRequested) console.log("poll: server requested catch-up poll")
         debug(`polling for missed messages since=${since}`)
         const missed = await pollMessages(config, topics, since)
         const unseen = missed.filter((m) => !state.seen[m.id])
@@ -204,7 +263,6 @@ export async function startListener(
     }
 
     console.log(`reconnecting in ${backoff / 1000}s`)
-    debug(`reconnecting in ${backoff}ms`)
     await Bun.sleep(backoff)
     backoff = Math.min(backoff * 2, BACKOFF_MAX_MS)
   }
