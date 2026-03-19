@@ -63,6 +63,25 @@ describe("parseNtfyLine", () => {
       expect(() => parseNtfyLine(input)).not.toThrow()
     }
   })
+
+  it("returns null when time is missing", () => {
+    expect(parseNtfyLine(JSON.stringify({ id: "x", topic: "t", message: "m" }))).toBeNull()
+  })
+
+  it("returns null when time is not a number", () => {
+    expect(
+      parseNtfyLine(JSON.stringify({ id: "x", time: "bad", topic: "t", message: "m" })),
+    ).toBeNull()
+    expect(
+      parseNtfyLine(JSON.stringify({ id: "x", time: null, topic: "t", message: "m" })),
+    ).toBeNull()
+  })
+
+  it("accepts time=0 (valid unix timestamp)", () => {
+    const result = parseNtfyLine(JSON.stringify({ id: "x", time: 0, topic: "t", message: "m" }))
+    expect(result).not.toBeNull()
+    expect(result?.time).toBe(0)
+  })
 })
 
 describe("categorizeMissedMessages", () => {

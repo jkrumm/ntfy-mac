@@ -46,10 +46,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Separated from the release job so that update-formula only runs after
+  # binaries are fully uploaded. A build failure won't orphan a released
+  # version without assets — the formula stays on the previous good version.
+  build-and-upload:
+    needs: release
+    runs-on: macos-latest
+    if: needs.release.outputs.new_release_published == 'true'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Build binaries
-        if: steps.release.outputs.new_release_published == 'true'
         env:
-          VERSION: ${{ steps.release.outputs.new_release_version }}
+          VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           mkdir -p dist
           bun build --compile --target=bun-darwin-arm64 src/index.ts \
@@ -60,17 +79,16 @@ jobs:
             --define "APP_VERSION=\"${VERSION}\""
 
       - name: Upload release assets
-        if: steps.release.outputs.new_release_published == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.release.outputs.new_release_version }}
+          VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           gh release upload "v${VERSION}" \
             dist/ntfy-mac-arm64 \
             dist/ntfy-mac-x64
 
   update-formula:
-    needs: release
+    needs: [release, build-and-upload]
     runs-on: ubuntu-latest
     if: needs.release.outputs.new_release_published == 'true'
     permissions:

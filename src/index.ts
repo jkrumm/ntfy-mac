@@ -43,7 +43,8 @@ async function checkForUpdate(): Promise<void> {
   const latest = body.tag_name
   if (!latest) return
 
-  await saveState({ ...state, lastUpdateCheck: Date.now() })
+  // Re-read state immediately before writing to avoid clobbering concurrent listener writes.
+  await saveState({ ...(await loadState()), lastUpdateCheck: Date.now() })
 
   if (isNewerVersion(latest, VERSION)) {
     await sendUpdateNotification(latest)

@@ -59,6 +59,15 @@ For CI or server deployments where Keychain is unavailable:
 | `NTFY_TOKEN`  | ntfy access token                                 |
 | `NTFY_TOPICS` | Comma-separated topic list (skips auto-discovery) |
 
+**Credential precedence:** Keychain is always checked first. Environment variables are the fallback — used when no Keychain entry exists. This means `NTFY_URL` / `NTFY_TOKEN` cannot override credentials saved via `ntfy-mac setup`. To switch servers, run `ntfy-mac setup` again, or delete the Keychain entries:
+
+```bash
+security delete-generic-password -s ntfy-mac -a url
+security delete-generic-password -s ntfy-mac -a token
+```
+
+> **Development note:** `bun src/index.ts` (interpreted mode) reads Keychain just like the compiled binary. If you ran `ntfy-mac setup`, env vars are ignored in dev mode too.
+
 ---
 
 ## Commands

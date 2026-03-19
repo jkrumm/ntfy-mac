@@ -104,9 +104,14 @@ export async function sendNotification(msg: NtfyMessage): Promise<void> {
 
   if (msg.click) {
     // Only open http/https URLs — guard against file://, terminal://, etc.
-    const protocol = new URL(msg.click).protocol
-    if (protocol === "http:" || protocol === "https:") {
-      await Bun.$`open ${msg.click}`.quiet()
+    // Wrap in try/catch: new URL() throws on malformed URLs.
+    try {
+      const protocol = new URL(msg.click).protocol
+      if (protocol === "http:" || protocol === "https:") {
+        await Bun.$`open ${msg.click}`.quiet()
+      }
+    } catch {
+      console.error(`notify: invalid click URL — ${msg.click}`)
     }
   }
 }

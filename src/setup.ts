@@ -91,17 +91,27 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
   }
 
   process.stdout.write("Testing connection... ")
+  let topics: string[]
   try {
-    const topics = await testConnection(normalized, token)
+    topics = await testConnection(normalized, token)
     console.log("✓")
-    await saveToKeychain(normalized, token)
-    console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
   } catch (err) {
     console.log("✗")
     const message = err instanceof Error ? err.message : String(err)
     console.error(`Connection failed: ${message}`)
     process.exit(1)
   }
+
+  try {
+    await saveToKeychain(normalized, token)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`Error: could not save credentials to Keychain — ${message}`)
+    console.error("Set NTFY_URL and NTFY_TOKEN environment variables instead.")
+    process.exit(1)
+  }
+
+  console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
 }
 
 // ─── Interactive setup wizard ─────────────────────────────────────────────────

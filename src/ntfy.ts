@@ -67,7 +67,8 @@ export function parseNtfyLine(line: string): NtfyMessage | null {
   if (!line.trim()) return null
   try {
     const parsed = JSON.parse(line) as NtfyMessage
-    if (!parsed.id || !parsed.topic || !parsed.message) return null
+    if (!parsed.id || !parsed.topic || !parsed.message || typeof parsed.time !== "number")
+      return null
     return parsed
   } catch {
     return null

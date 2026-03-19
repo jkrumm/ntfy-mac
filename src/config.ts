@@ -45,5 +45,5 @@ export async function loadConfig(): Promise<Config | null> {
         .filter(Boolean)
     : undefined
 
-  return { url: url.replace(/\/$/, ""), token, topics }
+  return { url: url.replace(/\/$/, ""), token: token.trim(), topics }
 }

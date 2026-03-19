@@ -89,6 +89,17 @@ describe("buildOsaScript", () => {
     const script = buildOsaScript({ title: "T", body: 'He said "bye"' })
     expect(script).toContain('\\"bye\\"')
   })
+
+  it("sanitizes backslashes in title and body", () => {
+    const script = buildOsaScript({ title: "C:\\path", body: "D:\\other" })
+    expect(script).toContain("C:\\\\path")
+    expect(script).toContain("D:\\\\other")
+  })
+
+  it("handles subtitle with special characters", () => {
+    const script = buildOsaScript({ title: "T", body: "B", subtitle: 'Sub "quoted"' })
+    expect(script).toContain('\\"quoted\\"')
+  })
 })
 
 describe("title fallback from topic", () => {
