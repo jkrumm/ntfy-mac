@@ -7,7 +7,7 @@ import {
   sendSummaryNotification,
   sendUpdateNotification,
 } from "./notify"
-import { runSetup } from "./setup"
+import { runSetup, runSetupNonInteractive } from "./setup"
 import type { NtfyMessage } from "./types"
 
 // Injected at compile time via `bun build --define APP_VERSION='"x.y.z"'`
@@ -71,13 +71,48 @@ async function handleMissed(result: MissedMessageResult): Promise<void> {
 
 const command = process.argv[2]
 
-if (command === "setup") {
-  await runSetup()
+if (command === "--version" || command === "-v") {
+  console.log(`ntfy-mac ${VERSION}`)
   process.exit(0)
 }
 
-if (command === "--version" || command === "-v") {
-  console.log(`ntfy-mac ${VERSION}`)
+if (command === "--help" || command === "-h") {
+  console.log(`ntfy-mac ${VERSION}
+
+Forward ntfy notifications to macOS Notification Center.
+
+Usage:
+  ntfy-mac                          Start the daemon (default)
+  ntfy-mac setup                    Interactive setup wizard
+  ntfy-mac setup --url <url>        Non-interactive setup
+               --token <token>
+  ntfy-mac --version                Print version
+  ntfy-mac --help                   Print this help
+
+Environment variables (alternative to Keychain):
+  NTFY_URL      ntfy server URL
+  NTFY_TOKEN    Access token
+  NTFY_TOPICS   Comma-separated topic list (overrides auto-discovery)
+`)
+  process.exit(0)
+}
+
+if (command === "setup") {
+  // Non-interactive mode: ntfy-mac setup --url <url> --token <token>
+  const args = process.argv.slice(3)
+  const urlIdx = args.indexOf("--url")
+  const tokenIdx = args.indexOf("--token")
+  if (urlIdx !== -1 && tokenIdx !== -1) {
+    const url = args[urlIdx + 1]
+    const token = args[tokenIdx + 1]
+    if (!url || !token) {
+      console.error("Error: --url and --token require values")
+      process.exit(1)
+    }
+    await runSetupNonInteractive(url, token)
+  } else {
+    await runSetup()
+  }
   process.exit(0)
 }
 
