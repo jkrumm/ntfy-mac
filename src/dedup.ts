@@ -1,6 +1,7 @@
+import { homedir } from "os"
 import type { AppState } from "./types"
 
-const STATE_DIR = `${process.env.HOME}/.local/share/ntfy-mac`
+const STATE_DIR = `${homedir()}/.local/share/ntfy-mac`
 const STATE_FILE = `${STATE_DIR}/state.json`
 
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000

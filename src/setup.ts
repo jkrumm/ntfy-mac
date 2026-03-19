@@ -16,8 +16,10 @@ function ask(question: string, defaultValue?: string): Promise<string> {
 
 async function askSecret(question: string): Promise<string> {
   process.stdout.write(question + ": ")
-  // Disable terminal echo so the token is not visible while typing
-  await Bun.$`stty -echo`.quiet()
+  // Disable terminal echo so the token is not visible while typing.
+  // Guard: stty only works on a real TTY; skip silently in piped contexts.
+  const isTTY = process.stdin.isTTY === true
+  if (isTTY) await Bun.$`stty -echo`.quiet()
   try {
     const answer = await new Promise<string>((resolve) => {
       const rl = createInterface({ input: process.stdin })
@@ -28,7 +30,7 @@ async function askSecret(question: string): Promise<string> {
     })
     return answer
   } finally {
-    await Bun.$`stty echo`.quiet()
+    if (isTTY) await Bun.$`stty echo`.quiet()
     process.stdout.write("\n")
   }
 }
