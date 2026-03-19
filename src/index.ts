@@ -11,8 +11,8 @@ import { runSetup } from "./setup"
 import type { NtfyMessage } from "./types"
 
 // Injected at compile time via `bun build --define APP_VERSION='"x.y.z"'`
-// Falls back to "0.0.0" in dev (bun run src/index.ts)
-declare const APP_VERSION: string
+// Declared as string | undefined so the typeof guard works at runtime in dev mode.
+declare const APP_VERSION: string | undefined
 const VERSION: string = typeof APP_VERSION !== "undefined" ? APP_VERSION : "0.0.0"
 
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
