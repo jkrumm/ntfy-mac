@@ -1,0 +1,106 @@
+import { loadConfig } from "./config"
+import { isSeen, loadState, markSeen, saveState } from "./dedup"
+import {
+  discoverTopics,
+  startListener,
+  type MissedMessageResult,
+} from "./ntfy"
+import {
+  sendNotification,
+  sendSetupNotification,
+  sendSummaryNotification,
+  sendUpdateNotification,
+} from "./notify"
+import { runSetup } from "./setup"
+import type { NtfyMessage } from "./types"
+
+// Injected at compile time via `bun build --define APP_VERSION='"x.y.z"'`
+// Falls back to "0.0.0" in dev (bun run src/index.ts)
+declare const APP_VERSION: string
+const VERSION: string = typeof APP_VERSION !== "undefined" ? APP_VERSION : "0.0.0"
+
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+// ─── Update check ─────────────────────────────────────────────────────────────
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number)
+  const [la, lb, lc] = parse(latest)
+  const [ca, cb, cc] = parse(current)
+  if (la !== ca) return la > ca
+  if (lb !== cb) return lb > cb
+  return lc > cc
+}
+
+async function checkForUpdate(): Promise<void> {
+  const state = await loadState()
+  const lastCheck = state.lastUpdateCheck ?? 0
+  if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
+
+  const res = await fetch("https://api.github.com/repos/jkrumm/homebrew-ntfy-mac/releases/latest", {
+    headers: { "User-Agent": "ntfy-mac" },
+  })
+  if (!res.ok) return
+
+  const body = (await res.json()) as { tag_name?: string }
+  const latest = body.tag_name
+  if (!latest) return
+
+  await saveState({ ...state, lastUpdateCheck: Date.now() })
+
+  if (isNewerVersion(latest, VERSION)) {
+    await sendUpdateNotification(latest)
+  }
+}
+
+// ─── Message handler ──────────────────────────────────────────────────────────
+
+async function handleMessage(msg: NtfyMessage): Promise<void> {
+  const state = await loadState()
+  if (isSeen(state, msg.id)) return
+  await sendNotification(msg)
+  await saveState(markSeen(state, msg.id))
+}
+
+async function handleMissed(result: MissedMessageResult): Promise<void> {
+  if (result.type === "individual") {
+    for (const msg of result.messages) await handleMessage(msg)
+  } else if (result.type === "summary") {
+    await sendSummaryNotification(result.count, result.oldestTopic)
+  }
+  // silent → do nothing
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
+const command = process.argv[2]
+
+if (command === "setup") {
+  await runSetup()
+  process.exit(0)
+}
+
+if (command === "--version" || command === "-v") {
+  console.log(`ntfy-mac ${VERSION}`)
+  process.exit(0)
+}
+
+const config = await loadConfig()
+if (!config) {
+  await sendSetupNotification()
+  console.error("ntfy-mac is not configured. Run: ntfy-mac setup")
+  process.exit(1)
+}
+
+// Non-blocking update check — never throws
+checkForUpdate().catch(() => {})
+
+const topics = config.topics ?? (await discoverTopics(config))
+if (topics.length === 0) {
+  console.error("No subscribed topics found. Subscribe to topics in ntfy first.")
+  process.exit(1)
+}
+
+console.log(`ntfy-mac ${VERSION} — listening on: ${topics.join(", ")}`)
+
+await startListener(config, topics, handleMessage, handleMissed)
