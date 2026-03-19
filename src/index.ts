@@ -1,10 +1,6 @@
 import { loadConfig } from "./config"
 import { isSeen, loadState, markSeen, saveState } from "./dedup"
-import {
-  discoverTopics,
-  startListener,
-  type MissedMessageResult,
-} from "./ntfy"
+import { discoverTopics, startListener, type MissedMessageResult } from "./ntfy"
 import {
   sendNotification,
   sendSetupNotification,
