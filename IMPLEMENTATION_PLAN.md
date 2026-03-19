@@ -167,7 +167,10 @@ export interface AppState {
 
 **`config.ts`** — load credentials:
 
-1. Try `Bun.secrets.get("ntfy-mac:url")` + `Bun.secrets.get("ntfy-mac:token")`
+> **Note:** `Bun.secrets` API uses `{ service, name }` objects, not plain strings.
+> Confirmed against `@types/bun` 1.3.x.
+
+1. Try `Bun.secrets.get({ service: "ntfy-mac", name: "url" })` + `...name: "token"`
 2. Fall back to `process.env.NTFY_URL` + `process.env.NTFY_TOKEN`
 3. If `NTFY_TOPICS` env var set → parse as comma-separated list
 4. If no config found → return `null` (caller handles setup notification)
@@ -324,8 +327,9 @@ Flow:
 Keychain keys:
 
 ```ts
-await Bun.secrets.set("ntfy-mac:url", url)
-await Bun.secrets.set("ntfy-mac:token", token)
+// Bun.secrets API uses { service, name } objects (not plain strings)
+await Bun.secrets.set({ service: "ntfy-mac", name: "url" }, url)
+await Bun.secrets.set({ service: "ntfy-mac", name: "token" }, token)
 ```
 
 ---
