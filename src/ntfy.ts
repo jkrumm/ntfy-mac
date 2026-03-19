@@ -14,10 +14,12 @@ const SILENT_THRESHOLD_MS = 12 * 60 * 60 * 1000 // > 12h → silent
 const BACKOFF_INITIAL_MS = 5_000
 const BACKOFF_MAX_MS = 5 * 60 * 1000
 
-// Alert user after this many consecutive SSE failures (~30min at max backoff)
-// Math: failures 1-5 burn through short backoffs (5+10+20+40+80s = ~2.5min),
-// then each failure waits 5min. Threshold 12 ≈ 5min ramp + 7×5min ≈ 40min offline.
+// Alert user after this many consecutive SSE failures (~40min at max backoff)
 const FAILURE_ALERT_THRESHOLD = 12
+
+// Keepalive timeout: ntfy sends keepalives every ~55s. If we see nothing for
+// 90s the connection has silently stalled — abort and reconnect.
+const KEEPALIVE_TIMEOUT_MS = 90_000
 
 export type MissedMessageResult =
   | { type: "individual"; messages: NtfyMessage[] }
@@ -83,6 +85,20 @@ export async function pollMessages(
     .filter((m): m is NtfyMessage => m !== null)
 }
 
+// Wraps reader.read() with a keepalive timeout. Throws if no data arrives
+// within KEEPALIVE_TIMEOUT_MS — signals a silently stalled connection.
+async function readWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<{ done: boolean; value?: Uint8Array }> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error("SSE keepalive timeout — connection stalled")),
+      KEEPALIVE_TIMEOUT_MS,
+    ),
+  )
+  return Promise.race([reader.read(), timeout])
+}
+
 async function connectSSE(
   config: Config,
   topics: string[],
@@ -103,20 +119,28 @@ async function connectSSE(
   const decoder = new TextDecoder()
   let buffer = ""
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split("\n")
-    buffer = lines.pop() ?? ""
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue
-      const msg = parseNtfyLine(line.slice(6))
-      if (msg) {
-        debug(`received ${msg.topic}/${msg.id} priority=${msg.priority ?? "default"}`)
-        await onMessage(msg)
+  try {
+    while (true) {
+      const { done, value } = await readWithTimeout(reader)
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
+      for (const line of lines) {
+        // Track keepalives and messages equally for heartbeat purposes
+        if (line.startsWith("event: keepalive")) {
+          debug("keepalive received")
+        }
+        if (!line.startsWith("data: ")) continue
+        const msg = parseNtfyLine(line.slice(6))
+        if (msg) {
+          debug(`received ${msg.topic}/${msg.id} priority=${msg.priority ?? "default"}`)
+          await onMessage(msg)
+        }
       }
     }
+  } finally {
+    reader.cancel().catch(() => {})
   }
 }
 
@@ -134,7 +158,9 @@ export async function startListener(
 
   while (true) {
     try {
-      debug(`connecting since=${since}`)
+      console.log(
+        `connected (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
+      )
       await connectSSE(config, topics, since, async (msg) => {
         state = await loadState()
         state = { ...state, lastMessageId: msg.id }
@@ -144,15 +170,13 @@ export async function startListener(
         consecutiveFailures = 0
         await onMessage(msg)
       })
-      debug("SSE stream ended cleanly")
+      console.log("connection closed — reconnecting")
     } catch (err) {
       consecutiveFailures++
-      console.error(
-        `ntfy connection error (attempt ${consecutiveFailures}):`,
-        err instanceof Error ? err.message : err,
-      )
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`connection error (attempt ${consecutiveFailures}): ${message}`)
 
-      // Alert user after sustained failure
+      // Alert user after sustained failure (~40min)
       if (consecutiveFailures === FAILURE_ALERT_THRESHOLD && onConnectionFailure) {
         await onConnectionFailure().catch(() => {})
       }
@@ -165,7 +189,7 @@ export async function startListener(
         const missed = await pollMessages(config, topics, since)
         const unseen = missed.filter((m) => !state.seen[m.id])
         if (unseen.length > 0) {
-          debug(`${unseen.length} missed message(s) found`)
+          console.log(`poll: ${unseen.length} missed message(s)`)
           await onMissed(categorizeMissedMessages(unseen))
           for (const m of unseen) {
             state = markSeen(state, m.id)
@@ -176,9 +200,10 @@ export async function startListener(
         }
       }
     } catch (pollErr) {
-      console.error("ntfy poll error:", pollErr instanceof Error ? pollErr.message : pollErr)
+      console.error("poll error:", pollErr instanceof Error ? pollErr.message : pollErr)
     }
 
+    console.log(`reconnecting in ${backoff / 1000}s`)
     debug(`reconnecting in ${backoff}ms`)
     await Bun.sleep(backoff)
     backoff = Math.min(backoff * 2, BACKOFF_MAX_MS)
