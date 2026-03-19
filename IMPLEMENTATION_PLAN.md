@@ -24,6 +24,17 @@ Forward ntfy notifications to macOS Notification Center via a native daemon.
 - Works reliably from a binary without code signing (for now)
 - Limitation: no custom icon, no click callbacks — acceptable tradeoff
 
+### ntfy API quirks (discovered during E2E testing)
+
+- **SSE URL format**: Multi-topic SSE is `/<topic1>,<topic2>/sse`, NOT `/sse?topics=...`.
+  The query-param form returns the ntfy web UI (HTML). Same pattern for polling:
+  `/<topics>/json?since=<id>&poll=1`.
+- **Accept header required**: SSE requests need `Accept: text/event-stream` or some
+  reverse proxies may not stream correctly.
+- **dedup ownership**: `startListener` must NOT call `markSeen()` — only update
+  `lastMessageId` for reconnect. The caller's `onMessage` handler owns dedup,
+  otherwise messages are marked seen before the notification fires.
+
 ### Credential storage
 
 - macOS Keychain via `Bun.secrets` (native, no plaintext files)
