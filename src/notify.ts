@@ -96,7 +96,11 @@ export async function sendNotification(msg: NtfyMessage): Promise<void> {
   await Bun.$`osascript -e ${script}`.quiet()
 
   if (msg.click) {
-    await Bun.$`open ${msg.click}`.quiet()
+    // Only open http/https URLs — guard against file://, terminal://, etc.
+    const protocol = new URL(msg.click).protocol
+    if (protocol === "http:" || protocol === "https:") {
+      await Bun.$`open ${msg.click}`.quiet()
+    }
   }
 }
 
