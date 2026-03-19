@@ -126,7 +126,14 @@ if (command === "setup") {
   const args = process.argv.slice(3)
   const urlIdx = args.indexOf("--url")
   const tokenIdx = args.indexOf("--token")
-  if (urlIdx !== -1 && tokenIdx !== -1) {
+  const hasAnyFlag = urlIdx !== -1 || tokenIdx !== -1
+  if (hasAnyFlag) {
+    // Partial flags → error instead of silently falling back to interactive
+    if (urlIdx === -1 || tokenIdx === -1) {
+      console.error("Error: --url and --token must both be provided")
+      console.error("Usage: ntfy-mac setup --url <url> --token <token>")
+      process.exit(1)
+    }
     const url = args[urlIdx + 1]
     const token = args[tokenIdx + 1]
     if (!url || !token) {
