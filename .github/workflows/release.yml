@@ -1,8 +1,14 @@
 name: Release
 
 on:
-  push:
-    branches: [master]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type (leave blank for auto from commits)"
+        required: false
+        type: choice
+        default: ""
+        options: ["", patch, minor, major]
 
 jobs:
   release:
@@ -43,6 +49,7 @@ jobs:
             @semantic-release/changelog
             @semantic-release/git
             @semantic-release/github
+          extra_args: ${{ inputs.release_type != '' && format('--release-as {0}', inputs.release_type) || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -92,20 +99,21 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.release.outputs.new_release_published == 'true'
     permissions:
-      contents: write
+      contents: read # no longer needs write to own repo
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: master
-          fetch-depth: 0
+          repository: jkrumm/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Download release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           gh release download "v${VERSION}" \
+            --repo jkrumm/ntfy-mac \
             --pattern "ntfy-mac-*" \
             --dir dist/
 
@@ -122,13 +130,12 @@ jobs:
           sed -i "s/sha256 \".*\" # arm64/sha256 \"${SHA256_ARM64}\" # arm64/" Formula/ntfy-mac.rb
           sed -i "s/sha256 \".*\" # x64/sha256 \"${SHA256_X64}\" # x64/" Formula/ntfy-mac.rb
 
-      - name: Commit formula update
+      - name: Commit and push
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/ntfy-mac.rb
-          git commit -m "chore(formula): update to v${VERSION}"
-          git pull --rebase origin master
+          git commit -m "chore(ntfy-mac): update to v${VERSION}"
           git push

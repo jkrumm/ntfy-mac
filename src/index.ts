@@ -34,7 +34,7 @@ async function checkForUpdate(): Promise<void> {
   const lastCheck = state.lastUpdateCheck ?? 0
   if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
 
-  const res = await fetch("https://api.github.com/repos/jkrumm/homebrew-ntfy-mac/releases/latest", {
+  const res = await fetch("https://api.github.com/repos/jkrumm/ntfy-mac/releases/latest", {
     headers: { "User-Agent": "ntfy-mac" },
   })
   if (!res.ok) return

@@ -4,7 +4,7 @@ Forward [ntfy](https://ntfy.sh) notifications to macOS Notification Center.
 
 Runs as a background daemon via `brew services`. Streams messages in real time over SSE, stores credentials securely in macOS Keychain, and handles reconnects, missed messages, and offline periods gracefully.
 
-[![Release](https://github.com/jkrumm/homebrew-ntfy-mac/actions/workflows/release.yml/badge.svg)](https://github.com/jkrumm/homebrew-ntfy-mac/actions/workflows/release.yml)
+[![Release](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml/badge.svg)](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -20,7 +20,7 @@ Runs as a background daemon via `brew services`. Streams messages in real time o
 ## Install
 
 ```bash
-brew install jkrumm/ntfy-mac/ntfy-mac
+brew install jkrumm/tap/ntfy-mac
 ntfy-mac setup
 brew services start ntfy-mac
 ```
@@ -206,7 +206,7 @@ Usually a network error during topic discovery. Check `ntfy-mac logs --error` an
 ## Upgrade
 
 ```bash
-brew upgrade jkrumm/ntfy-mac/ntfy-mac
+brew upgrade jkrumm/tap/ntfy-mac
 brew services restart ntfy-mac
 ```
 
@@ -238,8 +238,8 @@ rm -rf ~/.local/share/ntfy-mac
 ### Setup
 
 ```bash
-git clone https://github.com/jkrumm/homebrew-ntfy-mac.git
-cd homebrew-ntfy-mac
+git clone https://github.com/jkrumm/ntfy-mac.git
+cd ntfy-mac
 bun install
 ```
 
@@ -263,12 +263,13 @@ Binaries are fully self-contained — no Bun runtime needed on the target machin
 
 ### Release process
 
-Releases are automated via semantic-release on every push to `master`:
+Releases are triggered manually via the **Run workflow** button in the Actions tab:
 
-1. Commit messages following [Conventional Commits](https://www.conventionalcommits.org) determine the version bump
-2. A GitHub Release is created with the changelog
-3. arm64 and x64 binaries are compiled and attached
-4. `Formula/ntfy-mac.rb` is updated automatically with new version and sha256 checksums
+1. Go to Actions → Release → Run workflow, optionally choose a release type
+2. Commit messages following [Conventional Commits](https://www.conventionalcommits.org) determine the version bump (or the chosen type overrides it)
+3. A GitHub Release is created with the changelog
+4. arm64 and x64 binaries are compiled and attached
+5. `Formula/ntfy-mac.rb` in `jkrumm/homebrew-tap` is updated automatically with new version and sha256 checksums
 
 ---
 
