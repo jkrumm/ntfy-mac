@@ -1,3 +1,32 @@
+# 1.0.0 (2026-03-19)
+
+
+### Bug Fixes
+
+* address CodeRabbit findings and improve test coverage ([11fe467](https://github.com/jkrumm/homebrew-ntfy-mac/commit/11fe467764a0beb5bc2045da6c1f1d461f00d4f4))
+* **ci:** fix semantic-release action version and add PR validation ([e86f1b1](https://github.com/jkrumm/homebrew-ntfy-mac/commit/e86f1b1d6df0fd1ada920be1c7cb773d875514e5))
+* **ntfy:** fix SSE URL format, dedup race, and silent osascript errors ([ae252bc](https://github.com/jkrumm/homebrew-ntfy-mac/commit/ae252bc1c1d50e518e592df4680b17589f8f0e0f))
+* **ntfy:** raise failure alert threshold and guard startup network error ([2770c36](https://github.com/jkrumm/homebrew-ntfy-mac/commit/2770c365095dcbef59ead3b56862387717d763b9))
+* **runtime:** harden dedup, notify, and setup edge cases ([9b57133](https://github.com/jkrumm/homebrew-ntfy-mac/commit/9b571333e87c61c58258256fed755b8a31004698))
+* **setup:** error on partial flags instead of falling back to interactive ([8e562e7](https://github.com/jkrumm/homebrew-ntfy-mac/commit/8e562e7ee391c19842bbec839e6727591c2a6fa4))
+
+
+### Features
+
+* **config:** add types and config loader with Keychain fallback ([5851911](https://github.com/jkrumm/homebrew-ntfy-mac/commit/585191157085688fdda97f7fcee3efc1b7c38544))
+* **debug:** add NTFY_DEBUG=1 env var for verbose logging ([30ea6c0](https://github.com/jkrumm/homebrew-ntfy-mac/commit/30ea6c01fb0bf67079528bc03e3169445d5d32be))
+* **dedup:** add state persistence with deduplication and cleanup ([63162cf](https://github.com/jkrumm/homebrew-ntfy-mac/commit/63162cf04f07acc0dbf5d632952c64c7720e46eb))
+* **formula:** add Homebrew tap formula and fix release workflow ([1efbc8d](https://github.com/jkrumm/homebrew-ntfy-mac/commit/1efbc8de8858db42afc0556b60cb5a08300baf9a))
+* **index:** add entry point with update check and daemon loop ([cb05a65](https://github.com/jkrumm/homebrew-ntfy-mac/commit/cb05a6597c43d29304759f483b779671f060b22b))
+* **logs:** add ntfy-mac logs command and update README ([30da78f](https://github.com/jkrumm/homebrew-ntfy-mac/commit/30da78f029fb955c2bacc45d1151604c0c05d594))
+* **notify:** add macOS notification delivery via osascript ([7f05cef](https://github.com/jkrumm/homebrew-ntfy-mac/commit/7f05cef32b62add85d1bd9ba69d5323137d452c0))
+* **ntfy:** add connection failure alert and clean up logging ([31879ae](https://github.com/jkrumm/homebrew-ntfy-mac/commit/31879aeed1e2209fc12bda215fc879d7b2c1aca2))
+* **ntfy:** add SSE listener, polling fallback, and topic discovery ([088188d](https://github.com/jkrumm/homebrew-ntfy-mac/commit/088188d04b2df48ef4a33184e807beea527aa1b8))
+* **ntfy:** improve logging and add keepalive stall detection ([bb06097](https://github.com/jkrumm/homebrew-ntfy-mac/commit/bb0609714abe5b473da3d72843fdfc4220474728))
+* **ntfy:** network-aware reconnect, poll_request handling, alert cooldown ([aa216bd](https://github.com/jkrumm/homebrew-ntfy-mac/commit/aa216bd86123bd75792af1d894d6daabac87fc61))
+* **setup:** add interactive CLI setup wizard ([02a5a7c](https://github.com/jkrumm/homebrew-ntfy-mac/commit/02a5a7c398a8a570399ba73d67878675fb1dadb5))
+* **setup:** improve UX and add non-interactive mode ([4aab780](https://github.com/jkrumm/homebrew-ntfy-mac/commit/4aab78013df88b65940d690e43af57e7d82f9a3b))
+
 # Changelog
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for commit guidelines.
