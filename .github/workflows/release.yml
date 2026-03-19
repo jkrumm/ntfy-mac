@@ -34,9 +34,15 @@ jobs:
       # cycjimmy/semantic-release-action wraps semantic-release and correctly
       # exposes new_release_published + new_release_version as step outputs.
       # Plain `bunx semantic-release` does NOT write to $GITHUB_OUTPUT.
+      # extra_plugins required: action does not auto-discover from package.json.
       - name: Release
         id: release
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+            @semantic-release/github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

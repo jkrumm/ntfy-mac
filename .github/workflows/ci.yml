@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  validate:
+    runs-on: macos-latest # macOS required: Bun.secrets types + osascript-adjacent tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate
+        run: bun run validate
+
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needed to read all commits in the PR
+
+      - uses: wagoid/commitlint-github-action@v6
