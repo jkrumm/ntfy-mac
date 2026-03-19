@@ -1,6 +1,11 @@
 import type { Config, NtfyMessage } from "./types"
 import { loadState, saveState, markSeen } from "./dedup"
 
+const DEBUG = process.env.NTFY_DEBUG === "1"
+function debug(...args: unknown[]): void {
+  if (DEBUG) console.log("[debug]", ...args)
+}
+
 // Missed-message categorization thresholds
 const INDIVIDUAL_THRESHOLD_MS = 1 * 60 * 60 * 1000 // < 1h → show individually
 const SILENT_THRESHOLD_MS = 12 * 60 * 60 * 1000 // > 12h → silent
@@ -107,7 +112,10 @@ async function connectSSE(
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue
       const msg = parseNtfyLine(line.slice(6))
-      if (msg) await onMessage(msg)
+      if (msg) {
+        debug(`received ${msg.topic}/${msg.id} priority=${msg.priority ?? "default"}`)
+        await onMessage(msg)
+      }
     }
   }
 }
@@ -126,6 +134,7 @@ export async function startListener(
 
   while (true) {
     try {
+      debug(`connecting since=${since}`)
       await connectSSE(config, topics, since, async (msg) => {
         state = await loadState()
         state = { ...state, lastMessageId: msg.id }
@@ -135,7 +144,7 @@ export async function startListener(
         consecutiveFailures = 0
         await onMessage(msg)
       })
-      // SSE ended cleanly — reconnect immediately at current backoff
+      debug("SSE stream ended cleanly")
     } catch (err) {
       consecutiveFailures++
       console.error(
@@ -152,9 +161,11 @@ export async function startListener(
     // Poll for any messages missed during the gap
     try {
       if (since !== "latest") {
+        debug(`polling for missed messages since=${since}`)
         const missed = await pollMessages(config, topics, since)
         const unseen = missed.filter((m) => !state.seen[m.id])
         if (unseen.length > 0) {
+          debug(`${unseen.length} missed message(s) found`)
           await onMissed(categorizeMissedMessages(unseen))
           for (const m of unseen) {
             state = markSeen(state, m.id)
@@ -168,6 +179,7 @@ export async function startListener(
       console.error("ntfy poll error:", pollErr instanceof Error ? pollErr.message : pollErr)
     }
 
+    debug(`reconnecting in ${backoff}ms`)
     await Bun.sleep(backoff)
     backoff = Math.min(backoff * 2, BACKOFF_MAX_MS)
   }

@@ -1,5 +1,7 @@
 import type { NtfyMessage } from "./types"
 
+const DEBUG = process.env.NTFY_DEBUG === "1"
+
 const SOUND: Record<number, string | null> = {
   5: "Sosumi",
   4: "Ping",
@@ -94,6 +96,7 @@ export async function sendNotification(msg: NtfyMessage): Promise<void> {
 
   const script = buildOsaScript({ title, subtitle, body: msg.message, sound })
   console.log(`notify: [${msg.topic}] ${title}`)
+  if (DEBUG) console.log(`[debug] script: ${script}`)
   const result = await Bun.$`osascript -e ${script}`.quiet()
   if (result.exitCode !== 0) {
     console.error(`notify: osascript failed (exit ${result.exitCode}):`, result.stderr.toString())
