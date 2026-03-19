@@ -127,7 +127,15 @@ if (!config) {
 // Non-blocking update check — never throws
 checkForUpdate().catch(() => {})
 
-const topics = config.topics ?? (await discoverTopics(config))
+let topics: string[]
+try {
+  topics = config.topics ?? (await discoverTopics(config))
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err)
+  console.error(`ntfy-mac: failed to discover topics — ${message}`)
+  console.error("Check your connection and credentials, then restart.")
+  process.exit(1)
+}
 if (topics.length === 0) {
   console.error("No subscribed topics found. Subscribe to topics in ntfy first.")
   process.exit(1)

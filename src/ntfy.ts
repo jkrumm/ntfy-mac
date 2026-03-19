@@ -10,7 +10,9 @@ const BACKOFF_INITIAL_MS = 5_000
 const BACKOFF_MAX_MS = 5 * 60 * 1000
 
 // Alert user after this many consecutive SSE failures (~30min at max backoff)
-const FAILURE_ALERT_THRESHOLD = 6
+// Math: failures 1-5 burn through short backoffs (5+10+20+40+80s = ~2.5min),
+// then each failure waits 5min. Threshold 12 ≈ 5min ramp + 7×5min ≈ 40min offline.
+const FAILURE_ALERT_THRESHOLD = 12
 
 export type MissedMessageResult =
   | { type: "individual"; messages: NtfyMessage[] }
