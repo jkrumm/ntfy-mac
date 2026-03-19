@@ -9,6 +9,9 @@ const SILENT_THRESHOLD_MS = 12 * 60 * 60 * 1000 // > 12h → silent
 const BACKOFF_INITIAL_MS = 5_000
 const BACKOFF_MAX_MS = 5 * 60 * 1000
 
+// Alert user after this many consecutive SSE failures (~30min at max backoff)
+const FAILURE_ALERT_THRESHOLD = 6
+
 export type MissedMessageResult =
   | { type: "individual"; messages: NtfyMessage[] }
   | { type: "summary"; count: number; oldestTopic: string }
@@ -102,10 +105,7 @@ async function connectSSE(
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue
       const msg = parseNtfyLine(line.slice(6))
-      if (msg) {
-        console.log(`[sse] received: ${msg.topic} / ${msg.id}`)
-        await onMessage(msg)
-      }
+      if (msg) await onMessage(msg)
     }
   }
 }
@@ -115,25 +115,36 @@ export async function startListener(
   topics: string[],
   onMessage: (msg: NtfyMessage) => Promise<void>,
   onMissed: (result: MissedMessageResult) => Promise<void>,
+  onConnectionFailure?: () => Promise<void>,
 ): Promise<never> {
   let backoff = BACKOFF_INITIAL_MS
+  let consecutiveFailures = 0
   let state = await loadState()
   let since = state.lastMessageId ?? "latest"
 
   while (true) {
     try {
-      console.log(`[sse] connecting since=${since}`)
       await connectSSE(config, topics, since, async (msg) => {
         state = await loadState()
         state = { ...state, lastMessageId: msg.id }
         await saveState(state)
         since = msg.id
         backoff = BACKOFF_INITIAL_MS
+        consecutiveFailures = 0
         await onMessage(msg)
       })
-      console.log(`[sse] stream ended cleanly, reconnecting in ${backoff}ms`)
+      // SSE ended cleanly — reconnect immediately at current backoff
     } catch (err) {
-      console.error("[sse] error:", err instanceof Error ? err.message : err)
+      consecutiveFailures++
+      console.error(
+        `ntfy connection error (attempt ${consecutiveFailures}):`,
+        err instanceof Error ? err.message : err,
+      )
+
+      // Alert user after sustained failure
+      if (consecutiveFailures === FAILURE_ALERT_THRESHOLD && onConnectionFailure) {
+        await onConnectionFailure().catch(() => {})
+      }
     }
 
     // Poll for any messages missed during the gap

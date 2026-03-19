@@ -93,10 +93,10 @@ export async function sendNotification(msg: NtfyMessage): Promise<void> {
   const sound = getSound(msg.priority)
 
   const script = buildOsaScript({ title, subtitle, body: msg.message, sound })
-  console.log(`[notify] ${title}: ${msg.message}`)
+  console.log(`notify: [${msg.topic}] ${title}`)
   const result = await Bun.$`osascript -e ${script}`.quiet()
   if (result.exitCode !== 0) {
-    console.error(`[notify] osascript failed (exit ${result.exitCode}):`, result.stderr.toString())
+    console.error(`notify: osascript failed (exit ${result.exitCode}):`, result.stderr.toString())
   }
 
   if (msg.click) {
@@ -123,6 +123,15 @@ export async function sendSetupNotification(): Promise<void> {
     title: "ntfy-mac setup required",
     body: "Run: ntfy-mac setup",
     sound: "Ping",
+  })
+  await Bun.$`osascript -e ${script}`.quiet()
+}
+
+export async function sendConnectionFailureNotification(): Promise<void> {
+  const script = buildOsaScript({
+    title: "ntfy-mac: connection lost",
+    body: "Failed to connect to ntfy server. Check logs or run ntfy-mac setup.",
+    sound: "Sosumi",
   })
   await Bun.$`osascript -e ${script}`.quiet()
 }
