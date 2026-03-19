@@ -87,6 +87,8 @@ Usage:
   ntfy-mac setup                    Interactive setup wizard
   ntfy-mac setup --url <url>        Non-interactive setup
                --token <token>
+  ntfy-mac logs                     Tail the daemon log (stdout)
+  ntfy-mac logs --error             Tail the error log (stderr)
   ntfy-mac --version                Print version
   ntfy-mac --help                   Print this help
 
@@ -96,6 +98,27 @@ Environment variables (alternative to Keychain):
   NTFY_TOPICS   Comma-separated topic list (overrides auto-discovery)
 `)
   process.exit(0)
+}
+
+if (command === "logs") {
+  const errorMode = process.argv[3] === "--error"
+  let prefix = "/opt/homebrew" // Apple Silicon default
+  try {
+    prefix = (await Bun.$`brew --prefix`.text()).trim()
+  } catch {
+    // brew not in PATH or not installed — fall back to default
+  }
+  const logFile = errorMode
+    ? `${prefix}/var/log/ntfy-mac-error.log`
+    : `${prefix}/var/log/ntfy-mac.log`
+  console.log(`→ ${logFile}\n`)
+  try {
+    await Bun.$`tail -f ${logFile}`
+  } catch {
+    console.error(`Log file not found: ${logFile}`)
+    console.error("Is the daemon running? Start it with: brew services start ntfy-mac")
+    process.exit(1)
+  }
 }
 
 if (command === "setup") {
