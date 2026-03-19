@@ -2,6 +2,7 @@ import { loadConfig } from "./config"
 import { isSeen, loadState, markSeen, saveState } from "./dedup"
 import { discoverTopics, startListener, type MissedMessageResult } from "./ntfy"
 import {
+  sendConnectionFailureNotification,
   sendNotification,
   sendSetupNotification,
   sendSummaryNotification,
@@ -134,4 +135,4 @@ if (topics.length === 0) {
 
 console.log(`ntfy-mac ${VERSION} — listening on: ${topics.join(", ")}`)
 
-await startListener(config, topics, handleMessage, handleMissed)
+await startListener(config, topics, handleMessage, handleMissed, sendConnectionFailureNotification)
