@@ -302,7 +302,14 @@ if (command === "setup") {
 
 const config = await loadConfig()
 if (!config) {
-  await sendSetupNotification()
+  // Rate-limit to once per hour — launchd restarts on exit-1 which would
+  // otherwise fire a new "Ping" notification on every rapid restart cycle.
+  const setupState = await loadState()
+  const lastNotified = setupState.lastSetupNotification ?? 0
+  if (Date.now() - lastNotified > 60 * 60 * 1000) {
+    await sendSetupNotification()
+    await saveState({ ...setupState, lastSetupNotification: Date.now() })
+  }
   console.error("ntfy-mac is not configured. Run: ntfy-mac setup")
   process.exit(1)
 }
