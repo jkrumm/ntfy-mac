@@ -13,7 +13,8 @@
     "lint": "find src -name '*.ts' | xargs bunx oxlint",
     "format": "bunx prettier --write .",
     "format:check": "bunx prettier --check .",
-    "validate": "bun run format:check && bun run typecheck && bun run lint && bun run test"
+    "validate": "bun run format:check && bun run typecheck && bun run lint && bun run test",
+    "generate:emojis": "bun scripts/generate-emojis.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
