@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/jkrumm/ntfy-mac/compare/v1.0.0...v1.1.0) (2026-03-20)
+
+
+### Features
+
+* add curl install script with auto-update support ([f0eac2e](https://github.com/jkrumm/ntfy-mac/commit/f0eac2ef8066610a962c46077c9a68970446791e))
+
 # 1.0.0 (2026-03-19)
 
 
