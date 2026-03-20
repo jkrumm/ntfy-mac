@@ -1,6 +1,7 @@
 import { dirname } from "path"
 import { createInterface } from "readline"
 import { CONFIG_PATH } from "./config"
+import { sendNotificationPayload } from "./notifications"
 import { detectInstallMethod } from "./updater"
 import type { Config } from "./types"
 
@@ -66,13 +67,24 @@ function validateUrl(url: string): string | null {
 // ─── Connection test ─────────────────────────────────────────────────────────
 
 async function testConnection(url: string, token: string): Promise<string[]> {
-  const res = await fetch(`${url}/v1/account`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${url}/v1/account`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`Could not reach server — ${msg}`)
+  }
   if (res.status === 401) throw new Error("Authentication failed (401) — check your token")
   if (res.status === 404) throw new Error("Endpoint not found (404) — is this a ntfy server?")
   if (!res.ok) throw new Error(`Server returned ${res.status}`)
-  const body = (await res.json()) as { subscriptions?: { topic: string }[] }
+  let body: { subscriptions?: { topic: string }[] }
+  try {
+    body = (await res.json()) as { subscriptions?: { topic: string }[] }
+  } catch {
+    throw new Error("Server did not return valid JSON — is this a ntfy server?")
+  }
   return (body.subscriptions ?? []).map((s) => s.topic)
 }
 
@@ -140,6 +152,13 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
   if (detectInstallMethod() === "brew") {
     await startBrewService()
   }
+
+  await sendNotificationPayload({
+    title: "ntfy-mac is ready",
+    body: `Listening on ${topics.length} topic(s). Notifications are active.`,
+    sound: "Pop",
+    interruptionLevel: "active",
+  })
 }
 
 // ─── Interactive setup wizard ─────────────────────────────────────────────────
@@ -149,14 +168,13 @@ export async function runSetup(): Promise<void> {
   console.log("ntfy-mac setup")
   console.log("═".repeat(40))
   console.log("Configure your ntfy server credentials.")
-  console.log(`Credentials are stored in ~/.config/ntfy-mac/config.json`)
   console.log("")
 
   let config: Config | null = null
 
   while (!config) {
     // Step 1: URL (validated before asking for token)
-    const rawUrl = await ask("ntfy server URL", "https://ntfy.example.com")
+    const rawUrl = await ask("ntfy server URL", "ntfy.example.com")
     if (!rawUrl) {
       console.log("URL is required.\n")
       continue
@@ -187,7 +205,8 @@ export async function runSetup(): Promise<void> {
       console.log("✓\n")
 
       if (topics.length > 0) {
-        console.log(`Found ${topics.length} subscribed topic(s):`)
+        const noun = topics.length === 1 ? "topic" : "topics"
+        console.log(`Subscribed to ${topics.length} ${noun}:`)
         for (const t of topics) console.log(`  • ${t}`)
       } else {
         console.log("No subscribed topics found.")
@@ -197,7 +216,6 @@ export async function runSetup(): Promise<void> {
 
       try {
         await saveConfig(url, token)
-        console.log("Credentials saved to ~/.config/ntfy-mac/config.json")
       } catch {
         console.log("Warning: could not save credentials.")
         console.log("Set NTFY_URL and NTFY_TOKEN environment variables instead.")
@@ -218,16 +236,35 @@ export async function runSetup(): Promise<void> {
     }
   }
 
-  console.log("")
-  console.log("Setup complete!")
-  console.log("")
-
   if (detectInstallMethod() === "brew") {
     const started = await startBrewService()
-    if (started) console.log("ntfy-mac is running and will auto-start at login.")
+    console.log(started ? "\nSetup complete! ntfy-mac is running." : "\nSetup complete!")
   } else {
-    console.log("Start the daemon:")
-    console.log("  launchctl load -w ~/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist")
+    const plist = `${process.env.HOME}/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist`
+    try {
+      await Bun.$`launchctl load -w ${plist}`.quiet()
+      console.log("\nSetup complete! ntfy-mac is running.")
+    } catch {
+      console.log("\nSetup complete!")
+      console.log("Start the daemon:")
+      console.log("  launchctl load -w ~/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist")
+    }
   }
+
   console.log("")
+  console.log("┌─────────────────────────────────────────────────────┐")
+  console.log("│  A macOS permission dialog will appear now.         │")
+  console.log("│  Click Allow to enable ntfy-mac notifications.      │")
+  console.log("│                                                     │")
+  console.log("│  If you miss it: System Settings → Notifications    │")
+  console.log("│  → ntfy-mac → enable                                │")
+  console.log("└─────────────────────────────────────────────────────┘")
+  console.log("")
+
+  await sendNotificationPayload({
+    title: "ntfy-mac is ready",
+    body: `Listening on ${config.topics?.length ?? 0} topic(s). Notifications are active.`,
+    sound: "Pop",
+    interruptionLevel: "active",
+  })
 }
