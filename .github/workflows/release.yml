@@ -78,13 +78,7 @@ jobs:
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
-          mkdir -p dist
-          bun build --compile --target=bun-darwin-arm64 src/index.ts \
-            --outfile dist/ntfy-mac-arm64 \
-            --define "APP_VERSION=\"${VERSION}\""
-          bun build --compile --target=bun-darwin-x64 src/index.ts \
-            --outfile dist/ntfy-mac-x64 \
-            --define "APP_VERSION=\"${VERSION}\""
+          npm_package_version="${VERSION}" bun run build
 
       - name: Upload release assets
         env:
@@ -92,8 +86,8 @@ jobs:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           gh release upload "v${VERSION}" \
-            dist/ntfy-mac-arm64 \
-            dist/ntfy-mac-x64
+            dist/ntfy-mac \
+            dist/ntfy-notify.app.tar.gz
 
   update-formula:
     needs: [release, build-and-upload]
@@ -115,21 +109,22 @@ jobs:
         run: |
           gh release download "v${VERSION}" \
             --repo jkrumm/ntfy-mac \
-            --pattern "ntfy-mac-*" \
+            --pattern "ntfy-mac" \
+            --pattern "ntfy-notify.app.tar.gz" \
             --dir dist/
 
       - name: Compute checksums
         run: |
-          echo "SHA256_ARM64=$(sha256sum dist/ntfy-mac-arm64 | cut -d' ' -f1)" >> $GITHUB_ENV
-          echo "SHA256_X64=$(sha256sum dist/ntfy-mac-x64 | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "SHA256_BIN=$(sha256sum dist/ntfy-mac | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "SHA256_HELPER=$(sha256sum dist/ntfy-notify.app.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
 
       - name: Update formula
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/ntfy-mac.rb
-          sed -i "s/sha256 \".*\" # arm64/sha256 \"${SHA256_ARM64}\" # arm64/" Formula/ntfy-mac.rb
-          sed -i "s/sha256 \".*\" # x64/sha256 \"${SHA256_X64}\" # x64/" Formula/ntfy-mac.rb
+          sed -i "s/sha256 \".*\" # ntfy-mac/sha256 \"${SHA256_BIN}\" # ntfy-mac/" Formula/ntfy-mac.rb
+          sed -i "s/sha256 \".*\" # ntfy-notify/sha256 \"${SHA256_HELPER}\" # ntfy-notify/" Formula/ntfy-mac.rb
 
       - name: Commit and push
         env:

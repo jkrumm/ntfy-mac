@@ -1,3 +1,12 @@
 node_modules/
 dist/
 *.tmp
+*.bun-build
+
+# Compiled Swift helper (built by `bun run build:helper`)
+assets/ntfy-notify-arm64
+assets/ntfy-notify.app/Contents/MacOS/ntfy-notify
+assets/ntfy-notify.app/Contents/_CodeSignature/
+
+# Icon build intermediates (iconutil source — .icns is committed)
+assets/AppIcon.iconset/
