@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/jkrumm/ntfy-mac/compare/v1.1.0...v1.2.0) (2026-03-20)
+
+
+### Features
+
+* **setup:** auto-start brew service after successful setup ([ad6feb3](https://github.com/jkrumm/ntfy-mac/commit/ad6feb3e43cd154e5f9ad33e85e408eb5bf7c0b4))
+
 # [1.1.0](https://github.com/jkrumm/ntfy-mac/compare/v1.0.0...v1.1.0) (2026-03-20)
 
 
