@@ -1,3 +1,17 @@
+# [1.5.0](https://github.com/jkrumm/ntfy-mac/compare/v1.4.0...v1.5.0) (2026-03-20)
+
+
+### Bug Fixes
+
+* harden edge cases across notification pipeline ([9057e34](https://github.com/jkrumm/ntfy-mac/commit/9057e340b754953e94a28ed04d5201cee1e5c628))
+
+
+### Features
+
+* **notify:** map NTFY message fields to macOS notification capabilities ([accef70](https://github.com/jkrumm/ntfy-mac/commit/accef70df609aaaac460be9734bff69846c5e076))
+* **notify:** migrate from osascript to Swift UserNotifications helper ([0f0c649](https://github.com/jkrumm/ntfy-mac/commit/0f0c6494664b28fe101fa01d57842b66d1da9066))
+* **setup:** improve UX and notification permission prompt ([ac7bb91](https://github.com/jkrumm/ntfy-mac/commit/ac7bb91e9d4f501f286d836d6cda90e6203b9770))
+
 # [1.4.0](https://github.com/jkrumm/ntfy-mac/compare/v1.3.1...v1.4.0) (2026-03-20)
 
 
