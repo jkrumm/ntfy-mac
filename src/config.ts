@@ -1,7 +1,8 @@
+import { homedir } from "os"
 import { join } from "path"
 import type { Config } from "./types"
 
-export const CONFIG_PATH = join(process.env.HOME ?? "~", ".config", "ntfy-mac", "config.json")
+export const CONFIG_PATH = join(homedir(), ".config", "ntfy-mac", "config.json")
 
 type StoredConfig = { url: string; token: string }
 

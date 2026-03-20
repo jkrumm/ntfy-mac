@@ -1,4 +1,4 @@
-import { join } from "path"
+import { dirname } from "path"
 import { createInterface } from "readline"
 import { CONFIG_PATH } from "./config"
 import { detectInstallMethod } from "./updater"
@@ -95,10 +95,11 @@ async function startBrewService(): Promise<boolean> {
 // ─── Config file save ─────────────────────────────────────────────────────────
 
 async function saveConfig(url: string, token: string): Promise<void> {
-  const dir = join(process.env.HOME ?? "~", ".config", "ntfy-mac")
+  const dir = dirname(CONFIG_PATH)
   await Bun.$`mkdir -p ${dir}`.quiet()
+  const prevUmask = process.umask(0o077)
   await Bun.write(CONFIG_PATH, JSON.stringify({ url, token }, null, 2))
-  await Bun.$`chmod 600 ${CONFIG_PATH}`.quiet()
+  process.umask(prevUmask)
 }
 
 // ─── Non-interactive setup ────────────────────────────────────────────────────
