@@ -98,6 +98,7 @@ Usage:
   ntfy-mac setup --url <url>        Non-interactive setup
                --token <token>
   ntfy-mac update                   Update to the latest version (curl installs)
+  ntfy-mac uninstall                Remove all ntfy-mac files and credentials
   ntfy-mac logs                     Tail the daemon log (stdout)
   ntfy-mac logs --error             Tail the error log (stderr)
   ntfy-mac --version                Print version
@@ -180,6 +181,94 @@ if (command === "update") {
     console.error(`\nUpdate failed: ${err instanceof Error ? err.message : String(err)}`)
     process.exit(1)
   }
+}
+
+if (command === "uninstall") {
+  const { homedir } = await import("os")
+  const method = detectInstallMethod()
+  const plistPath = `${homedir()}/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist`
+  const stateDir = `${homedir()}/.local/share/ntfy-mac`
+  const binaryPath = `${homedir()}/.local/bin/ntfy-mac`
+
+  console.log("")
+  console.log("ntfy-mac uninstall")
+  console.log("═".repeat(40))
+
+  if (method === "brew") {
+    console.log("Managed by Homebrew — run:")
+    console.log("  brew uninstall ntfy-mac")
+    console.log("")
+    console.log("Then clean up remaining files:")
+    console.log(`  rm -rf ${stateDir}`)
+    console.log(`  security delete-generic-password -s ntfy-mac -a url 2>/dev/null`)
+    console.log(`  security delete-generic-password -s ntfy-mac -a token 2>/dev/null`)
+    process.exit(0)
+  }
+
+  // curl install: perform full uninstall
+  let errors = 0
+
+  // 1. Stop and unload LaunchAgent
+  process.stdout.write("Stopping daemon... ")
+  try {
+    await Bun.$`launchctl unload -w ${plistPath}`.quiet()
+    console.log("✓")
+  } catch {
+    console.log("(not running)")
+  }
+
+  // 2. Remove plist
+  process.stdout.write("Removing LaunchAgent... ")
+  try {
+    await Bun.$`rm -f ${plistPath}`.quiet()
+    console.log("✓")
+  } catch (err) {
+    console.log("✗")
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`)
+    errors++
+  }
+
+  // 3. Delete Keychain credentials
+  process.stdout.write("Removing Keychain credentials... ")
+  try {
+    await Bun.$`security delete-generic-password -s ntfy-mac -a url`.quiet()
+    await Bun.$`security delete-generic-password -s ntfy-mac -a token`.quiet()
+    console.log("✓")
+  } catch {
+    // Credentials may not exist if setup was never completed
+    console.log("(none found)")
+  }
+
+  // 4. Remove state directory (logs, state.json)
+  process.stdout.write("Removing state and logs... ")
+  try {
+    await Bun.$`rm -rf ${stateDir}`.quiet()
+    console.log("✓")
+  } catch (err) {
+    console.log("✗")
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`)
+    errors++
+  }
+
+  // 5. Remove binary (last — so we can still run to this point)
+  process.stdout.write("Removing binary... ")
+  try {
+    await Bun.$`rm -f ${binaryPath}`.quiet()
+    console.log("✓")
+  } catch (err) {
+    console.log("✗")
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`)
+    errors++
+  }
+
+  console.log("")
+  if (errors === 0) {
+    console.log("ntfy-mac has been uninstalled.")
+  } else {
+    console.log(`Uninstall completed with ${errors} error(s). Some files may need manual cleanup.`)
+    process.exit(1)
+  }
+  process.exit(0)
 }
 
 if (command === "setup") {
