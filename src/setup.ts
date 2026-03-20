@@ -241,11 +241,17 @@ export async function runSetup(): Promise<void> {
     console.log(started ? "\nSetup complete! ntfy-mac is running." : "\nSetup complete!")
   } else {
     const plist = `${process.env.HOME}/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist`
-    try {
-      await Bun.$`launchctl load -w ${plist}`.quiet()
-      console.log("\nSetup complete! ntfy-mac is running.")
-    } catch {
-      console.log("\nSetup complete!")
+    let running = false
+    if (await Bun.file(plist).exists()) {
+      try {
+        await Bun.$`launchctl load -w ${plist}`.quiet()
+        running = true
+      } catch {
+        // launchctl failed — fall through to manual instructions
+      }
+    }
+    console.log(running ? "\nSetup complete! ntfy-mac is running." : "\nSetup complete!")
+    if (!running) {
       console.log("Start the daemon:")
       console.log("  launchctl load -w ~/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist")
     }

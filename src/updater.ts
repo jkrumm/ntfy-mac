@@ -46,13 +46,12 @@ async function downloadAndReplace(latestVersion: string): Promise<void> {
   // ── Swift notification helper ──────────────────────────────────────────────
   const helperUrl = `${BASE_URL}/${latestVersion}/ntfy-notify.app.tar.gz`
   const helperRes = await fetch(helperUrl, { headers: { "User-Agent": "ntfy-mac" } })
-  if (helperRes.ok) {
-    const tmpTar = `${STATE_DIR}/ntfy-notify.app.tar.gz`
-    await Bun.write(tmpTar, await helperRes.arrayBuffer())
-    // Extract into STATE_DIR — replaces existing ntfy-notify.app
-    await Bun.$`tar -xzf ${tmpTar} -C ${STATE_DIR}`.quiet()
-    await Bun.$`rm -f ${tmpTar}`.quiet()
-  }
+  if (!helperRes.ok) throw new Error(`Failed to download helper (${helperRes.status})`)
+  const tmpTar = `${STATE_DIR}/ntfy-notify.app.tar.gz`
+  await Bun.write(tmpTar, await helperRes.arrayBuffer())
+  // Extract into STATE_DIR — replaces existing ntfy-notify.app
+  await Bun.$`tar -xzf ${tmpTar} -C ${STATE_DIR}`.quiet()
+  await Bun.$`rm -f ${tmpTar}`.quiet()
 }
 
 // Called from the daemon's update check — exits so launchd restarts with new binary

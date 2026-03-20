@@ -47,10 +47,16 @@ export function capitalize(text: string): string {
 export function mapActions(msg: NtfyMessage): NotificationAction[] {
   if (!msg.actions) return []
   const result: NotificationAction[] = []
+  const seenIds = new Set<string>()
   for (const a of msg.actions) {
     if (a.action !== "view" && a.action !== "http") continue
+    const base = `${a.action}-${a.label.toLowerCase().replace(/\s+/g, "-")}`
+    let id = base
+    let n = 1
+    while (seenIds.has(id)) id = `${base}-${n++}`
+    seenIds.add(id)
     const action: NotificationAction = {
-      identifier: `${a.action}-${a.label.toLowerCase().replace(/\s+/g, "-")}`,
+      identifier: id,
       title: a.label,
     }
     if (a.action === "view" && a.url) {

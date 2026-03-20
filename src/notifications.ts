@@ -178,6 +178,15 @@ const DEBUG = process.env.NTFY_DEBUG === "1"
 export async function sendNotificationPayload(payload: NotificationPayload): Promise<void> {
   const helperPath = resolveHelperPath()
 
+  if (!(await Bun.file(helperPath).exists())) {
+    if (DEBUG) console.error(`[debug] notify: helper not found: ${helperPath}`)
+    else
+      console.error(
+        `ntfy-notify helper not found at ${helperPath} — run 'bun run build:helper' to build it`,
+      )
+    return
+  }
+
   // Strip undefined/null values (Swift Decodable treats missing keys as nil)
   const json = JSON.stringify(payload, (_key, value) => (value === undefined ? undefined : value))
 
@@ -216,20 +225,22 @@ export async function sendNotificationPayload(payload: NotificationPayload): Pro
  * )
  */
 export class NotificationBuilder {
-  private readonly _payload: NotificationPayload
+  private readonly _p: { title: string; body: string } & Partial<
+    Omit<NotificationPayload, "title" | "body">
+  >
 
   constructor(title: string, body: string) {
-    this._payload = { title, body }
+    this._p = { title, body }
   }
 
   subtitle(text: string): this {
-    ;(this._payload as { subtitle?: string }).subtitle = text
+    this._p.subtitle = text
     return this
   }
 
   /** Pass null for a silent (no sound) notification. */
   sound(name: SystemSound | null): this {
-    ;(this._payload as { sound?: SystemSound | null }).sound = name
+    this._p.sound = name
     return this
   }
 
@@ -238,42 +249,42 @@ export class NotificationBuilder {
    * Use the ntfy topic name to stack topic messages together.
    */
   thread(id: string): this {
-    ;(this._payload as { threadId?: string }).threadId = id
+    this._p.threadId = id
     return this
   }
 
   interruptionLevel(level: InterruptionLevel): this {
-    ;(this._payload as { interruptionLevel?: InterruptionLevel }).interruptionLevel = level
+    this._p.interruptionLevel = level
     return this
   }
 
   /** 0.0–1.0 sort score within a thread. Higher = shown first. */
   relevanceScore(score: number): this {
-    ;(this._payload as { relevanceScore?: number }).relevanceScore = Math.max(0, Math.min(1, score))
+    this._p.relevanceScore = Math.max(0, Math.min(1, score))
     return this
   }
 
   /** URL to open when the user clicks the notification body (not on delivery). */
   clickUrl(url: string): this {
-    ;(this._payload as { clickUrl?: string }).clickUrl = url
+    this._p.clickUrl = url
     return this
   }
 
   /** Remote image URL — downloaded by the Swift helper and shown inline. */
   imageUrl(url: string): this {
-    ;(this._payload as { imageUrl?: string }).imageUrl = url
+    this._p.imageUrl = url
     return this
   }
 
   /** Action buttons (view/http). Pass categoryId linking to the registered category. */
   actions(items: NotificationAction[], categoryId: string): this {
-    ;(this._payload as { actions?: NotificationAction[] }).actions = items
-    ;(this._payload as { categoryId?: string }).categoryId = categoryId
+    this._p.actions = items
+    this._p.categoryId = categoryId
     return this
   }
 
   build(): NotificationPayload {
-    return { ...this._payload }
+    return { ...this._p } as NotificationPayload
   }
 
   /** Convenience: build and send in one call. */

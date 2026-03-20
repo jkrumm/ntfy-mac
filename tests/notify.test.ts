@@ -161,6 +161,7 @@ describe("mapActions", () => {
     }
     const result = mapActions(msg)
     expect(result).toHaveLength(1)
+    expect(result[0].identifier).toBe("view-open-link")
     expect(result[0].title).toBe("Open Link")
     expect(result[0].url).toBe("https://example.com")
     expect(result[0].httpUrl).toBeUndefined()
@@ -182,6 +183,7 @@ describe("mapActions", () => {
     }
     const result = mapActions(msg)
     expect(result).toHaveLength(1)
+    expect(result[0].identifier).toBe("http-ack")
     expect(result[0].httpUrl).toBe("https://api.example.com/ack")
     expect(result[0].httpMethod).toBe("PUT")
     expect(result[0].httpHeaders).toEqual({ "X-Token": "abc" })
@@ -209,6 +211,20 @@ describe("mapActions", () => {
       actions: [{ action: "http" as const, label: "Fire", url: "https://example.com/hook" }],
     }
     expect(mapActions(msg)[0].httpMethod).toBe("POST")
+  })
+
+  it("duplicate action labels get unique identifiers", () => {
+    const msg = {
+      ...base,
+      actions: [
+        { action: "view" as const, label: "Open", url: "https://a.example.com" },
+        { action: "view" as const, label: "Open", url: "https://b.example.com" },
+      ],
+    }
+    const result = mapActions(msg)
+    expect(result).toHaveLength(2)
+    expect(result[0].identifier).toBe("view-open")
+    expect(result[1].identifier).toBe("view-open-1")
   })
 })
 

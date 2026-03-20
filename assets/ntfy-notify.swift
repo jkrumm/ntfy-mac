@@ -70,23 +70,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
           return
         }
 
-        // Register action category before posting, so the system knows the buttons
-        if let actions = payload.actions, !actions.isEmpty {
-          let unActions = actions.map { a -> UNNotificationAction in
-            var opts: UNNotificationActionOptions = a.url != nil ? [.foreground] : []
-            if a.destructive == true { opts.insert(.destructive) }
-            return UNNotificationAction(identifier: a.identifier, title: a.title, options: opts)
-          }
-          let categoryId = payload.categoryId ?? "ntfy-default"
-          let category = UNNotificationCategory(
-            identifier: categoryId,
-            actions: unActions,
-            intentIdentifiers: [],
-            options: []
-          )
-          center.setNotificationCategories([category])
-        }
-
         let content = UNMutableNotificationContent()
         content.title = payload.title
         if let subtitle = payload.subtitle { content.subtitle = subtitle }
@@ -126,30 +109,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         if !userInfo.isEmpty { content.userInfo = userInfo }
 
-        // Download and attach image synchronously before posting
-        if let urlString = payload.imageUrl,
-           let url = URL(string: urlString),
-           let imageData = try? Data(contentsOf: url) {
-          let ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
-          let tmpUrl = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-          if (try? imageData.write(to: tmpUrl)) != nil,
-             let attachment = try? UNNotificationAttachment(identifier: "image", url: tmpUrl) {
-            content.attachments = [attachment]
+        // Download and attach image with a 10 s timeout — skip silently on failure
+        if let urlString = payload.imageUrl, let imgUrl = URL(string: urlString) {
+          let imgSem = DispatchSemaphore(value: 0)
+          var imageData: Data?
+          let imgTask = URLSession.shared.dataTask(with: imgUrl) { data, _, _ in
+            imageData = data
+            imgSem.signal()
+          }
+          imgTask.resume()
+          if imgSem.wait(timeout: .now() + 10) == .timedOut {
+            imgTask.cancel()
+          } else if let data = imageData {
+            let ext = imgUrl.pathExtension.isEmpty ? "jpg" : imgUrl.pathExtension
+            let tmpUrl = URL(fileURLWithPath: NSTemporaryDirectory())
+              .appendingPathComponent(UUID().uuidString)
+              .appendingPathExtension(ext)
+            if (try? data.write(to: tmpUrl)) != nil,
+               let attachment = try? UNNotificationAttachment(identifier: "image", url: tmpUrl) {
+              content.attachments = [attachment]
+            }
           }
         }
 
-        let request = UNNotificationRequest(
-          identifier: UUID().uuidString,
-          content: content,
-          trigger: nil
-        )
-
-        center.add(request) { _ in
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            exit(0)
+        // Post the notification, merging the action category with any existing ones
+        let post: () -> Void = {
+          let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+          )
+          center.add(request) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
           }
+        }
+
+        if let actions = payload.actions, !actions.isEmpty {
+          let categoryId = payload.categoryId ?? "ntfy-default"
+          let unActions = actions.map { a -> UNNotificationAction in
+            var opts: UNNotificationActionOptions = a.url != nil ? [.foreground] : []
+            if a.destructive == true { opts.insert(.destructive) }
+            return UNNotificationAction(identifier: a.identifier, title: a.title, options: opts)
+          }
+          let category = UNNotificationCategory(
+            identifier: categoryId,
+            actions: unActions,
+            intentIdentifiers: [],
+            options: []
+          )
+          // Merge with existing categories rather than overwriting them
+          center.getNotificationCategories { existing in
+            var updated = existing.filter { $0.identifier != categoryId }
+            updated.insert(category)
+            center.setNotificationCategories(updated)
+            post()
+          }
+        } else {
+          post()
         }
       }
     }
@@ -206,13 +222,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
 func fireHttpAction(urlStr: String, method: String, headers: [String: String]?, body: String?) {
   guard let url = URL(string: urlStr) else { return }
-  var req = URLRequest(url: url)
+  var req = URLRequest(url: url, timeoutInterval: 10)
   req.httpMethod = method
   headers?.forEach { req.setValue($1, forHTTPHeaderField: $0) }
   if let body { req.httpBody = body.data(using: .utf8) }
   let sem = DispatchSemaphore(value: 0)
-  URLSession.shared.dataTask(with: req) { _, _, _ in sem.signal() }.resume()
-  sem.wait()
+  let task = URLSession.shared.dataTask(with: req) { _, _, _ in sem.signal() }
+  task.resume()
+  if sem.wait(timeout: .now() + 10) == .timedOut { task.cancel() }
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
