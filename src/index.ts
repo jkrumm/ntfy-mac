@@ -204,6 +204,12 @@ if (command === "uninstall") {
     process.exit(0)
   }
 
+  if (method === "dev") {
+    console.log("Running in dev mode — uninstall is not supported.")
+    console.log("To uninstall a curl installation, run the compiled binary directly.")
+    process.exit(0)
+  }
+
   // curl install: perform full uninstall
   let errors = 0
 
