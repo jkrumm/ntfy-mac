@@ -74,6 +74,22 @@ async function testConnection(url: string, token: string): Promise<string[]> {
   return (body.subscriptions ?? []).map((s) => s.topic)
 }
 
+// ─── Brew service start ───────────────────────────────────────────────────────
+
+async function startBrewService(): Promise<boolean> {
+  process.stdout.write("Starting service... ")
+  try {
+    await Bun.$`brew services start jkrumm/tap/ntfy-mac`.quiet()
+    console.log("✓")
+    return true
+  } catch {
+    console.log("✗")
+    console.log("Could not start service automatically. Run manually:")
+    console.log("  brew services start jkrumm/tap/ntfy-mac")
+    return false
+  }
+}
+
 // ─── Keychain save ────────────────────────────────────────────────────────────
 
 async function saveToKeychain(url: string, token: string): Promise<void> {
@@ -113,6 +129,10 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
   }
 
   console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
+
+  if (detectInstallMethod() === "brew") {
+    await startBrewService()
+  }
 }
 
 // ─── Interactive setup wizard ─────────────────────────────────────────────────
@@ -194,10 +214,12 @@ export async function runSetup(): Promise<void> {
   console.log("")
   console.log("Setup complete!")
   console.log("")
-  console.log("Start the daemon:")
+
   if (detectInstallMethod() === "brew") {
-    console.log("  brew services start ntfy-mac")
+    const started = await startBrewService()
+    if (started) console.log("ntfy-mac is running and will auto-start at login.")
   } else {
+    console.log("Start the daemon:")
     console.log("  launchctl load -w ~/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist")
   }
   console.log("")
