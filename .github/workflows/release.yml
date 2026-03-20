@@ -123,6 +123,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/ntfy-mac.rb
+          sed -i "s|/download/v[^/]*/ntfy-notify|/download/v${VERSION}/ntfy-notify|" Formula/ntfy-mac.rb
           sed -i "s/sha256 \".*\" # ntfy-mac/sha256 \"${SHA256_BIN}\" # ntfy-mac/" Formula/ntfy-mac.rb
           sed -i "s/sha256 \".*\" # ntfy-notify/sha256 \"${SHA256_HELPER}\" # ntfy-notify/" Formula/ntfy-mac.rb
 
