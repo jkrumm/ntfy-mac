@@ -1,123 +1,175 @@
 import { EMOJI_MAP } from "./emojis"
+import {
+  NotificationBuilder,
+  sendNotificationPayload,
+  type NotificationAction,
+  type SystemSound,
+  type InterruptionLevel,
+} from "./notifications"
 import type { NtfyMessage } from "./types"
 
-const DEBUG = process.env.NTFY_DEBUG === "1"
+// ─── Priority config ──────────────────────────────────────────────────────────
 
-const SOUND: Record<number, string | null> = {
-  5: "Sosumi",
-  4: "Ping",
-  3: "Pop",
-  2: null,
-  1: null,
+interface PriorityConfig {
+  sound: SystemSound | null
+  interruptionLevel: InterruptionLevel
+  relevanceScore: number
 }
 
-export function getSound(priority?: number): string | null {
-  if (priority === undefined) return SOUND[3]
-  return SOUND[priority] ?? null
+export const PRIORITY_CONFIG: Record<number, PriorityConfig> = {
+  5: { sound: "Sosumi", interruptionLevel: "time-sensitive", relevanceScore: 1.0 },
+  4: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 0.75 },
+  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5 },
+  2: { sound: null, interruptionLevel: "active", relevanceScore: 0.25 },
+  1: { sound: null, interruptionLevel: "passive", relevanceScore: 0.0 },
 }
+
+export function getSound(priority?: number): SystemSound | null {
+  return (PRIORITY_CONFIG[priority ?? 3] ?? PRIORITY_CONFIG[3]).sound
+}
+
+// ─── Tag rendering ────────────────────────────────────────────────────────────
 
 export function renderTags(tags?: string[]): string {
   if (!tags || tags.length === 0) return ""
   return tags.map((t) => EMOJI_MAP[t] ?? t).join(" ")
 }
 
+// ─── Text helpers ─────────────────────────────────────────────────────────────
+
 export function capitalize(text: string): string {
   if (!text) return text
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-function sanitize(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+// ─── Action mapping ───────────────────────────────────────────────────────────
+
+export function mapActions(msg: NtfyMessage): NotificationAction[] {
+  if (!msg.actions) return []
+  const result: NotificationAction[] = []
+  for (const a of msg.actions) {
+    if (a.action !== "view" && a.action !== "http") continue
+    const action: NotificationAction = {
+      identifier: `${a.action}-${a.label.toLowerCase().replace(/\s+/g, "-")}`,
+      title: a.label,
+    }
+    if (a.action === "view" && a.url) {
+      action.url = a.url
+    } else if (a.action === "http" && a.url) {
+      action.httpUrl = a.url
+      action.httpMethod = a.method ?? "POST"
+      if (a.headers) action.httpHeaders = a.headers
+      if (a.body) action.httpBody = a.body
+    }
+    result.push(action)
+  }
+  return result
 }
 
-interface OsaParams {
+// ─── Image URL selection ──────────────────────────────────────────────────────
+
+export function selectImageUrl(msg: NtfyMessage): string | undefined {
+  if (msg.attachment?.url && msg.attachment.type?.startsWith("image/")) {
+    return msg.attachment.url
+  }
+  return msg.icon
+}
+
+// ─── Payload builder (exported for tests) ────────────────────────────────────
+
+export interface NtfyNotificationPayload {
   title: string
-  subtitle?: string
+  subtitle: string
   body: string
-  sound?: string | null
+  sound: SystemSound | null
+  threadId: string
+  interruptionLevel: InterruptionLevel
+  relevanceScore: number
+  clickUrl?: string
+  imageUrl?: string
+  actions?: NotificationAction[]
+  categoryId?: string
 }
 
-export function buildOsaScript(params: OsaParams): string {
-  const title = sanitize(params.title)
-  const body = sanitize(params.body)
-  let script = `display notification "${body}" with title "${title}"`
-  if (params.subtitle) script += ` subtitle "${sanitize(params.subtitle)}"`
-  if (params.sound) script += ` sound name "${params.sound}"`
-  return script
-}
-
-export async function sendNotification(msg: NtfyMessage): Promise<void> {
+export function buildNtfyPayload(msg: NtfyMessage): NtfyNotificationPayload {
   const title = msg.title ?? capitalize(msg.topic)
   const tags = renderTags(msg.tags)
   const subtitle = tags ? `${msg.topic} • ${tags}` : msg.topic
-  const sound = getSound(msg.priority)
+  const { sound, interruptionLevel, relevanceScore } =
+    PRIORITY_CONFIG[msg.priority ?? 3] ?? PRIORITY_CONFIG[3]
 
-  const script = buildOsaScript({ title, subtitle, body: msg.message, sound })
-  console.log(`notify: [${msg.topic}] ${title}`)
-  if (DEBUG) console.log(`[debug] script: ${script}`)
-  const result = await Bun.$`osascript -e ${script}`.quiet()
-  if (result.exitCode !== 0) {
-    console.error(`notify: osascript failed (exit ${result.exitCode}):`, result.stderr.toString())
+  const payload: NtfyNotificationPayload = {
+    title,
+    subtitle,
+    body: msg.message,
+    sound,
+    threadId: msg.topic,
+    interruptionLevel,
+    relevanceScore,
   }
 
-  if (msg.click) {
-    // Only open http/https URLs — guard against file://, terminal://, etc.
-    // Wrap in try/catch: new URL() throws on malformed URLs.
-    try {
-      const protocol = new URL(msg.click).protocol
-      if (protocol === "http:" || protocol === "https:") {
-        await Bun.$`open ${msg.click}`.quiet()
-      }
-    } catch {
-      console.error(`notify: invalid click URL — ${msg.click}`)
-    }
+  if (msg.click) payload.clickUrl = msg.click
+
+  const imageUrl = selectImageUrl(msg)
+  if (imageUrl) payload.imageUrl = imageUrl
+
+  const actions = mapActions(msg)
+  if (actions.length > 0) {
+    payload.actions = actions
+    payload.categoryId = `ntfy-${msg.id.slice(0, 8)}`
   }
+
+  return payload
+}
+
+// ─── Notification senders ─────────────────────────────────────────────────────
+
+export async function sendNotification(msg: NtfyMessage): Promise<void> {
+  const payload = buildNtfyPayload(msg)
+  console.log(`notify: [${msg.topic}] ${payload.title}`)
+  await sendNotificationPayload(payload)
 }
 
 export async function sendSummaryNotification(count: number, oldestTopic: string): Promise<void> {
-  const script = buildOsaScript({
-    title: "ntfy-mac",
-    subtitle: "Open ntfy to review",
-    body: `${count} notifications while you were away (${oldestTopic})`,
-    sound: "Pop",
-  })
-  await Bun.$`osascript -e ${script}`.quiet()
+  await new NotificationBuilder(
+    "ntfy-mac",
+    `${count} notifications while you were away (${oldestTopic})`,
+  )
+    .subtitle("Open ntfy to review")
+    .sound("Pop")
+    .send()
 }
 
 export async function sendSetupNotification(): Promise<void> {
-  const script = buildOsaScript({
-    title: "ntfy-mac setup required",
-    body: "Run: ntfy-mac setup",
-    sound: "Ping",
-  })
-  await Bun.$`osascript -e ${script}`.quiet()
+  await new NotificationBuilder("ntfy-mac setup required", "Run: ntfy-mac setup")
+    .sound("Ping")
+    .interruptionLevel("time-sensitive")
+    .send()
 }
 
 export async function sendConnectionFailureNotification(): Promise<void> {
-  const script = buildOsaScript({
-    title: "ntfy-mac: connection lost",
-    body: "Failed to connect to ntfy server. Check logs or run ntfy-mac setup.",
-    sound: "Sosumi",
-  })
-  await Bun.$`osascript -e ${script}`.quiet()
+  await new NotificationBuilder(
+    "ntfy-mac: connection lost",
+    "Failed to connect to ntfy server. Check logs or run ntfy-mac setup.",
+  )
+    .sound("Sosumi")
+    .interruptionLevel("time-sensitive")
+    .send()
 }
 
 export async function sendUpdateAvailableNotification(
   version: string,
   upgradeCommand: string,
 ): Promise<void> {
-  const script = buildOsaScript({
-    title: `ntfy-mac ${version} available`,
-    body: upgradeCommand,
-  })
-  await Bun.$`osascript -e ${script}`.quiet()
+  await new NotificationBuilder(`ntfy-mac ${version} available`, upgradeCommand)
+    .sound(null)
+    .interruptionLevel("passive")
+    .send()
 }
 
 export async function sendUpdateSuccessNotification(version: string): Promise<void> {
-  const script = buildOsaScript({
-    title: `ntfy-mac updated to ${version}`,
-    body: "Restarted automatically.",
-    sound: "Pop",
-  })
-  await Bun.$`osascript -e ${script}`.quiet()
+  await new NotificationBuilder(`ntfy-mac updated to ${version}`, "Restarted automatically.")
+    .sound("Pop")
+    .interruptionLevel("passive")
+    .send()
 }
