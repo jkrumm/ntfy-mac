@@ -1,4 +1,6 @@
+import { join } from "path"
 import { createInterface } from "readline"
+import { CONFIG_PATH } from "./config"
 import { detectInstallMethod } from "./updater"
 import type { Config } from "./types"
 
@@ -90,11 +92,13 @@ async function startBrewService(): Promise<boolean> {
   }
 }
 
-// ─── Keychain save ────────────────────────────────────────────────────────────
+// ─── Config file save ─────────────────────────────────────────────────────────
 
-async function saveToKeychain(url: string, token: string): Promise<void> {
-  await Bun.secrets.set({ service: "ntfy-mac", name: "url", value: url })
-  await Bun.secrets.set({ service: "ntfy-mac", name: "token", value: token })
+async function saveConfig(url: string, token: string): Promise<void> {
+  const dir = join(process.env.HOME ?? "~", ".config", "ntfy-mac")
+  await Bun.$`mkdir -p ${dir}`.quiet()
+  await Bun.write(CONFIG_PATH, JSON.stringify({ url, token }, null, 2))
+  await Bun.$`chmod 600 ${CONFIG_PATH}`.quiet()
 }
 
 // ─── Non-interactive setup ────────────────────────────────────────────────────
@@ -120,10 +124,10 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
   }
 
   try {
-    await saveToKeychain(normalized, token)
+    await saveConfig(normalized, token)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`Error: could not save credentials to Keychain — ${message}`)
+    console.error(`Error: could not save credentials — ${message}`)
     console.error("Set NTFY_URL and NTFY_TOKEN environment variables instead.")
     process.exit(1)
   }
@@ -142,7 +146,7 @@ export async function runSetup(): Promise<void> {
   console.log("ntfy-mac setup")
   console.log("═".repeat(40))
   console.log("Configure your ntfy server credentials.")
-  console.log("Credentials are stored in macOS Keychain.")
+  console.log(`Credentials are stored in ~/.config/ntfy-mac/config.json`)
   console.log("")
 
   let config: Config | null = null
@@ -189,10 +193,10 @@ export async function runSetup(): Promise<void> {
       console.log("")
 
       try {
-        await saveToKeychain(url, token)
-        console.log("Credentials saved to macOS Keychain.")
+        await saveConfig(url, token)
+        console.log("Credentials saved to ~/.config/ntfy-mac/config.json")
       } catch {
-        console.log("Warning: could not save to Keychain.")
+        console.log("Warning: could not save credentials.")
         console.log("Set NTFY_URL and NTFY_TOKEN environment variables instead.")
       }
 

@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { loadConfig } from "../src/config"
 
-// loadConfig reads Keychain first, then env vars as fallback.
-// In test environments, Keychain entries for "ntfy-mac" may or may not exist.
-// These tests rely on env vars only — if Keychain entries ARE present on the
-// test machine, the Keychain values take precedence and some assertions may
+// loadConfig reads ~/.config/ntfy-mac/config.json first, then env vars as fallback.
+// In test environments, the config file may or may not exist.
+// These tests rely on env vars only — if a config file IS present on the
+// test machine, its values take precedence and some assertions may
 // need adjustment.  Run tests on a machine without ntfy-mac configured, or
-// delete the Keychain entries first:
-//   security delete-generic-password -s ntfy-mac -a url
-//   security delete-generic-password -s ntfy-mac -a token
+// remove the config file first:
+//   rm -f ~/.config/ntfy-mac/config.json
 
 const SAVED_ENV: Record<string, string | undefined> = {}
 
@@ -32,9 +31,9 @@ describe("loadConfig — URL validation", () => {
 
   it("returns null when URL and token are both missing", async () => {
     setEnv({ NTFY_URL: undefined, NTFY_TOKEN: undefined })
-    // Only meaningful if Keychain is empty; we can at least ensure no crash
+    // Only meaningful if no config file exists; we can at least ensure no crash
     const result = await loadConfig()
-    // If Keychain is configured, this will return a config — that's OK.
+    // If a config file is present, this will return a config — that's OK.
     // The important thing: it never throws.
     expect(result === null || typeof result === "object").toBe(true)
   })
@@ -42,7 +41,7 @@ describe("loadConfig — URL validation", () => {
   it("returns null for invalid URL protocol", async () => {
     setEnv({ NTFY_URL: "ftp://bad.host", NTFY_TOKEN: "token" })
     const result = await loadConfig()
-    // Keychain may override env vars; only assert when we know Keychain is empty
+    // Config file may override env vars; only assert when we know config file is absent
     if (result !== null && result.url.startsWith("ftp:")) {
       expect(result).toBeNull()
     }

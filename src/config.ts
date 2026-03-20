@@ -1,15 +1,24 @@
+import { join } from "path"
 import type { Config } from "./types"
+
+export const CONFIG_PATH = join(process.env.HOME ?? "~", ".config", "ntfy-mac", "config.json")
+
+type StoredConfig = { url: string; token: string }
 
 export async function loadConfig(): Promise<Config | null> {
   let url: string | null = null
   let token: string | null = null
 
-  // Try Keychain first via Bun.secrets
+  // Try config file first
   try {
-    url = (await Bun.secrets.get({ service: "ntfy-mac", name: "url" })) ?? null
-    token = (await Bun.secrets.get({ service: "ntfy-mac", name: "token" })) ?? null
+    const file = Bun.file(CONFIG_PATH)
+    if (await file.exists()) {
+      const stored = (await file.json()) as StoredConfig
+      url = stored.url ?? null
+      token = stored.token ?? null
+    }
   } catch {
-    // Bun.secrets unavailable (e.g. not running as a compiled binary on macOS)
+    // Config file unreadable or malformed
   }
 
   // Fall back to environment variables

@@ -1,4 +1,4 @@
-import { loadConfig } from "./config"
+import { CONFIG_PATH, loadConfig } from "./config"
 import { isSeen, loadState, markSeen, saveState } from "./dedup"
 import { discoverTopics, startListener, type MissedMessageResult } from "./ntfy"
 import {
@@ -104,7 +104,7 @@ Usage:
   ntfy-mac --version                Print version
   ntfy-mac --help                   Print this help
 
-Environment variables (alternative to Keychain):
+Environment variables (alternative to config file):
   NTFY_URL      ntfy server URL
   NTFY_TOKEN    Access token
   NTFY_TOPICS   Comma-separated topic list (overrides auto-discovery)
@@ -200,8 +200,7 @@ if (command === "uninstall") {
     console.log("")
     console.log("Then clean up remaining files:")
     console.log(`  rm -rf ${stateDir}`)
-    console.log(`  security delete-generic-password -s ntfy-mac -a url 2>/dev/null`)
-    console.log(`  security delete-generic-password -s ntfy-mac -a token 2>/dev/null`)
+    console.log(`  rm -f ${CONFIG_PATH}`)
     process.exit(0)
   }
 
@@ -228,14 +227,12 @@ if (command === "uninstall") {
     errors++
   }
 
-  // 3. Delete Keychain credentials
-  process.stdout.write("Removing Keychain credentials... ")
+  // 3. Delete config file
+  process.stdout.write("Removing credentials... ")
   try {
-    await Bun.$`security delete-generic-password -s ntfy-mac -a url`.quiet()
-    await Bun.$`security delete-generic-password -s ntfy-mac -a token`.quiet()
+    await Bun.$`rm -f ${CONFIG_PATH}`.quiet()
     console.log("✓")
   } catch {
-    // Credentials may not exist if setup was never completed
     console.log("(none found)")
   }
 
