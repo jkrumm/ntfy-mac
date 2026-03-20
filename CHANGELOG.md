@@ -1,3 +1,11 @@
+## [1.3.1](https://github.com/jkrumm/ntfy-mac/compare/v1.3.0...v1.3.1) (2026-03-20)
+
+
+### Bug Fixes
+
+* **notify:** rate-limit setup notification to once per hour ([67f9b42](https://github.com/jkrumm/ntfy-mac/commit/67f9b4272eb1763bd3413dae0b01aa031d7e0103))
+* **setup:** use brew services restart instead of start ([9adcdec](https://github.com/jkrumm/ntfy-mac/commit/9adcdecf720ae012951f7a252cc0caa812f7e251))
+
 # [1.3.0](https://github.com/jkrumm/ntfy-mac/compare/v1.2.0...v1.3.0) (2026-03-20)
 
 
