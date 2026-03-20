@@ -82,32 +82,26 @@ async function handleMissed(result: MissedMessageResult): Promise<void> {
 
 const command = process.argv[2]
 
-if (command === "--version" || command === "-v") {
+if (command === "version" || command === "--version" || command === "-v") {
   console.log(`ntfy-mac ${VERSION}`)
   process.exit(0)
 }
 
-if (command === "--help" || command === "-h") {
+if (command === "help" || command === "--help" || command === "-h") {
   console.log(`ntfy-mac ${VERSION}
 
 Forward ntfy notifications to macOS Notification Center.
 
 Usage:
-  ntfy-mac                          Start the daemon (default)
   ntfy-mac setup                    Interactive setup wizard
   ntfy-mac setup --url <url>        Non-interactive setup
                --token <token>
-  ntfy-mac update                   Update to the latest version (curl installs)
+  ntfy-mac update                   Update to the latest version
   ntfy-mac uninstall                Remove all ntfy-mac files and credentials
   ntfy-mac logs                     Tail the daemon log (stdout)
   ntfy-mac logs --error             Tail the error log (stderr)
-  ntfy-mac --version                Print version
-  ntfy-mac --help                   Print this help
-
-Environment variables (alternative to config file):
-  NTFY_URL      ntfy server URL
-  NTFY_TOKEN    Access token
-  NTFY_TOPICS   Comma-separated topic list (overrides auto-discovery)
+  ntfy-mac version                  Print version
+  ntfy-mac help                     Print this help
 `)
   process.exit(0)
 }
@@ -146,8 +140,15 @@ if (command === "logs") {
 if (command === "update") {
   const updateMethod = detectInstallMethod()
   if (updateMethod === "brew") {
-    console.log("Managed by Homebrew — run:")
-    console.log("  brew upgrade jkrumm/tap/ntfy-mac && brew services restart ntfy-mac")
+    console.log("Upgrading via Homebrew...")
+    try {
+      await Bun.$`brew upgrade jkrumm/tap/ntfy-mac`
+      await Bun.$`brew services restart ntfy-mac`
+      console.log("Done.")
+    } catch (err) {
+      console.error(`Upgrade failed: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    }
     process.exit(0)
   }
   if (updateMethod === "dev") {

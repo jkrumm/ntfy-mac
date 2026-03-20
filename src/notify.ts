@@ -1,3 +1,4 @@
+import { EMOJI_MAP } from "./emojis"
 import type { NtfyMessage } from "./types"
 
 const DEBUG = process.env.NTFY_DEBUG === "1"
@@ -10,49 +11,6 @@ const SOUND: Record<number, string | null> = {
   1: null,
 }
 
-// Common ntfy tag → emoji mappings
-const TAG_EMOJI: Record<string, string> = {
-  "+1": "👍",
-  "-1": "👎",
-  warning: "⚠️",
-  rotating_light: "🚨",
-  fire: "🔥",
-  white_check_mark: "✅",
-  x: "❌",
-  loudspeaker: "📢",
-  bell: "🔔",
-  no_bell: "🔕",
-  mega: "📣",
-  thinking: "🤔",
-  skull: "💀",
-  tada: "🎉",
-  robot: "🤖",
-  computer: "💻",
-  cd: "💿",
-  inbox_tray: "📥",
-  outbox_tray: "📤",
-  heart: "❤️",
-  broken_heart: "💔",
-  eyes: "👀",
-  hammer: "🔨",
-  wrench: "🔧",
-  lock: "🔒",
-  unlock: "🔓",
-  key: "🔑",
-  rotating_arrows: "🔄",
-  arrow_up: "⬆️",
-  arrow_down: "⬇️",
-  stopwatch: "⏱️",
-  calendar: "📅",
-  chart_with_upwards_trend: "📈",
-  chart_with_downwards_trend: "📉",
-  package: "📦",
-  mailbox: "📬",
-  phone: "📱",
-  email: "📧",
-  sos: "🆘",
-}
-
 export function getSound(priority?: number): string | null {
   if (priority === undefined) return SOUND[3]
   return SOUND[priority] ?? null
@@ -60,7 +18,7 @@ export function getSound(priority?: number): string | null {
 
 export function renderTags(tags?: string[]): string {
   if (!tags || tags.length === 0) return ""
-  return tags.map((t) => TAG_EMOJI[t] ?? t).join(" ")
+  return tags.map((t) => EMOJI_MAP[t] ?? t).join(" ")
 }
 
 export function capitalize(text: string): string {
