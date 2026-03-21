@@ -1,3 +1,16 @@
+# [1.6.0](https://github.com/jkrumm/ntfy-mac/compare/v1.5.0...v1.6.0) (2026-03-21)
+
+
+### Bug Fixes
+
+* **release:** also update resource URL in Homebrew formula ([63c0be9](https://github.com/jkrumm/ntfy-mac/commit/63c0be93ccf1b16a774460799887045e4b5bf113)), closes [Resource#version](https://github.com/Resource/issues/version)
+
+
+### Features
+
+* add comprehensive CLI features and diagnostics ([a68a4e3](https://github.com/jkrumm/ntfy-mac/commit/a68a4e37a5f721c0f92ae397edc90fe5383a36fe))
+* **notify:** add local notification command ([f85f7e2](https://github.com/jkrumm/ntfy-mac/commit/f85f7e26b9cc8988626c2691d74f7b33aea8d79c))
+
 # [1.5.0](https://github.com/jkrumm/ntfy-mac/compare/v1.4.0...v1.5.0) (2026-03-20)
 
 
