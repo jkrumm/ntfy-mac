@@ -15,9 +15,9 @@ import type { NtfyMessage } from "../src/types"
 // ─── PRIORITY_CONFIG ──────────────────────────────────────────────────────────
 
 describe("PRIORITY_CONFIG", () => {
-  it("priority 5 → Sosumi + time-sensitive + relevanceScore 1.0 + never dismiss", () => {
+  it("priority 5 → Ping + time-sensitive + relevanceScore 1.0 + never dismiss", () => {
     expect(PRIORITY_CONFIG[5]).toEqual({
-      sound: "Sosumi",
+      sound: "Ping",
       interruptionLevel: "time-sensitive",
       relevanceScore: 1.0,
       dismissAfter: 0,
@@ -42,18 +42,18 @@ describe("PRIORITY_CONFIG", () => {
     })
   })
 
-  it("priority 2 → null + active + relevanceScore 0.25 + dismiss 5s", () => {
+  it("priority 2 → Tink + active + relevanceScore 0.25 + dismiss 5s", () => {
     expect(PRIORITY_CONFIG[2]).toEqual({
-      sound: null,
+      sound: "Tink",
       interruptionLevel: "active",
       relevanceScore: 0.25,
       dismissAfter: 5,
     })
   })
 
-  it("priority 1 → null + active + relevanceScore 0.0 + dismiss 3s", () => {
+  it("priority 1 → Tink + active + relevanceScore 0.0 + dismiss 3s", () => {
     expect(PRIORITY_CONFIG[1]).toEqual({
-      sound: null,
+      sound: "Tink",
       interruptionLevel: "active",
       relevanceScore: 0.0,
       dismissAfter: 3,
@@ -64,11 +64,11 @@ describe("PRIORITY_CONFIG", () => {
 // ─── getSound ─────────────────────────────────────────────────────────────────
 
 describe("getSound", () => {
-  it("priority 5 → Sosumi", () => expect(getSound(5)).toBe("Sosumi"))
+  it("priority 5 → Ping", () => expect(getSound(5)).toBe("Ping"))
   it("priority 4 → Ping", () => expect(getSound(4)).toBe("Ping"))
   it("priority 3 → Pop", () => expect(getSound(3)).toBe("Pop"))
-  it("priority 2 → null (silent)", () => expect(getSound(2)).toBeNull())
-  it("priority 1 → null (silent)", () => expect(getSound(1)).toBeNull())
+  it("priority 2 → Tink", () => expect(getSound(2)).toBe("Tink"))
+  it("priority 1 → Tink", () => expect(getSound(1)).toBe("Tink"))
   it("undefined priority defaults to Pop (priority 3)", () => expect(getSound()).toBe("Pop"))
 
   it("respects sound overrides", () => {
@@ -331,9 +331,9 @@ describe("buildNtfyPayload", () => {
     expect(p.dismissAfter).toBe(7)
   })
 
-  it("priority 5 → Sosumi + time-sensitive + 1.0 + no dismiss", () => {
+  it("priority 5 → Ping + time-sensitive + 1.0 + no dismiss", () => {
     const p = buildNtfyPayload({ ...base, priority: 5 })
-    expect(p.sound).toBe("Sosumi")
+    expect(p.sound).toBe("Ping")
     expect(p.interruptionLevel).toBe("time-sensitive")
     expect(p.relevanceScore).toBe(1.0)
     expect(p.dismissAfter).toBeUndefined()
@@ -347,17 +347,17 @@ describe("buildNtfyPayload", () => {
     expect(p.dismissAfter).toBeUndefined()
   })
 
-  it("priority 2 → null + active + 0.25 + dismiss 5s", () => {
+  it("priority 2 → Tink + active + 0.25 + dismiss 5s", () => {
     const p = buildNtfyPayload({ ...base, priority: 2 })
-    expect(p.sound).toBeNull()
+    expect(p.sound).toBe("Tink")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.25)
     expect(p.dismissAfter).toBe(5)
   })
 
-  it("priority 1 → null + active + 0.0 + dismiss 3s", () => {
+  it("priority 1 → Tink + active + 0.0 + dismiss 3s", () => {
     const p = buildNtfyPayload({ ...base, priority: 1 })
-    expect(p.sound).toBeNull()
+    expect(p.sound).toBe("Tink")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.0)
     expect(p.dismissAfter).toBe(3)
