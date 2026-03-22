@@ -133,24 +133,129 @@ async function handleSoundsCommand(args: string[]): Promise<void> {
   process.exit(1)
 }
 
+// ─── Config dismiss show ─────────────────────────────────────────────────────
+
+async function showDismissConfig(): Promise<void> {
+  const stored = await loadStoredConfig()
+  const userDismiss = (stored.dismiss ?? {}) as Record<string, number>
+
+  console.log("Auto-dismiss timing\n")
+  console.log("  Priority      Dismiss       Source")
+  console.log("  ────────────  ────────────  ──────")
+
+  for (let p = 5; p >= 1; p--) {
+    const userValue = userDismiss[String(p)]
+    const defaultValue = PRIORITY_CONFIG[p]?.dismissAfter ?? 0
+    const effective = userValue !== undefined ? userValue : defaultValue
+    const source = userValue !== undefined ? "custom" : "default"
+    const display = effective === 0 ? "never" : `${effective}s`
+    const label = `${p} (${priorityLabel(p)})`
+    console.log(`  ${label.padEnd(14)}${display.padEnd(14)}${source}`)
+  }
+
+  console.log("")
+  console.log("Change with: ntfy-mac config dismiss set <priority> <seconds|never>")
+  console.log("Reset all:   ntfy-mac config dismiss reset")
+  console.log('Test:        ntfy-mac notify -m "test" -p <priority>')
+}
+
+// ─── Config dismiss subcommands ──────────────────────────────────────────────
+
+async function handleDismissCommand(args: string[]): Promise<void> {
+  const sub = args[0]
+
+  if (!sub || sub === "show") {
+    await showDismissConfig()
+    return
+  }
+
+  if (sub === "set") {
+    const priority = Number(args[1])
+    const value = args[2]
+
+    if (!args[1] || !value) {
+      console.error("Usage: ntfy-mac config dismiss set <priority 1-5> <seconds|never>")
+      console.error("Example: ntfy-mac config dismiss set 3 10")
+      console.error("Example: ntfy-mac config dismiss set 5 never")
+      process.exit(1)
+    }
+    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
+      console.error("Priority must be 1-5.")
+      process.exit(1)
+    }
+
+    const seconds = value === "never" ? 0 : Number(value)
+    if (value !== "never" && (!Number.isFinite(seconds) || seconds < 0)) {
+      console.error("Value must be a positive number (seconds) or 'never'.")
+      process.exit(1)
+    }
+
+    const stored = await loadStoredConfig()
+    const existing = (stored.dismiss ?? {}) as Record<string, number>
+    existing[String(priority)] = seconds
+    await updateStoredConfig({ dismiss: existing })
+
+    const display = seconds === 0 ? "never" : `${seconds}s`
+    console.log(`Priority ${priority} (${priorityLabel(priority)}) → ${display}`)
+    console.log('Test it: ntfy-mac notify -m "test" -p ' + priority)
+    return
+  }
+
+  if (sub === "reset") {
+    await updateStoredConfig({ dismiss: undefined })
+    console.log("Dismiss configuration reset to defaults.")
+    await showDismissConfig()
+    return
+  }
+
+  console.error(`Unknown dismiss subcommand: ${sub}`)
+  console.error("Available: show, set, reset")
+  process.exit(1)
+}
+
 // ─── Config entry point ──────────────────────────────────────────────────────
+
+async function showConfigOverview(): Promise<void> {
+  const stored = await loadStoredConfig()
+  const userSounds = (stored.sounds ?? {}) as Record<string, string | null>
+  const userDismiss = (stored.dismiss ?? {}) as Record<string, number>
+
+  console.log("Notification configuration\n")
+  console.log("  Priority      Sound         Dismiss")
+  console.log("  ────────────  ────────────  ────────────")
+
+  for (let p = 5; p >= 1; p--) {
+    const config = PRIORITY_CONFIG[p]
+    const label = `${p} (${priorityLabel(p)})`
+
+    const userSound = userSounds[String(p)]
+    const effectiveSound = userSound !== undefined ? userSound : (config?.sound ?? null)
+    const soundDisplay = effectiveSound ?? "(silent)"
+    const soundStr = userSound !== undefined ? `${soundDisplay}*` : soundDisplay
+
+    const userDismissVal = userDismiss[String(p)]
+    const effectiveDismiss =
+      userDismissVal !== undefined ? userDismissVal : (config?.dismissAfter ?? 0)
+    const dismissDisplay = effectiveDismiss === 0 ? "never" : `${effectiveDismiss}s`
+    const dismissStr = userDismissVal !== undefined ? `${dismissDisplay}*` : dismissDisplay
+
+    console.log(`  ${label.padEnd(14)}${soundStr.padEnd(14)}${dismissStr}`)
+  }
+
+  console.log("")
+  console.log("  * = custom override")
+  console.log("")
+  console.log("Commands:")
+  console.log("  ntfy-mac config sounds              Manage notification sounds")
+  console.log("  ntfy-mac config dismiss              Manage auto-dismiss timing")
+  console.log('  ntfy-mac notify -m "test" -p <1-5>   Test a priority level')
+}
 
 export async function handleConfigCommand(args: string[]): Promise<void> {
   const sub = args[0]
 
   if (!sub) {
-    console.log(`ntfy-mac config
-
-Manage ntfy-mac configuration.
-
-Subcommands:
-  ntfy-mac config sounds              Show sound configuration
-  ntfy-mac config sounds list         List available system sounds
-  ntfy-mac config sounds set <p> <s>  Set sound for priority (1-5)
-  ntfy-mac config sounds reset        Reset sounds to defaults
-
-Test changes with: ntfy-mac notify -m "test" -p <priority>
-`)
+    await showConfigOverview()
     return
   }
 
@@ -159,7 +264,12 @@ Test changes with: ntfy-mac notify -m "test" -p <priority>
     return
   }
 
+  if (sub === "dismiss") {
+    await handleDismissCommand(args.slice(1))
+    return
+  }
+
   console.error(`Unknown config subcommand: ${sub}`)
-  console.error("Available: sounds")
+  console.error("Available: sounds, dismiss")
   process.exit(1)
 }

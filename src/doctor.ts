@@ -3,6 +3,7 @@ import { homedir } from "os"
 import { CONFIG_PATH, loadConfig } from "./config"
 import { loadState } from "./dedup"
 import { discoverTopics } from "./ntfy"
+import { PRIORITY_CONFIG } from "./notify"
 import { detectInstallMethod, isNewerVersion } from "./updater"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -257,12 +258,21 @@ async function checkUpdate(version: string): Promise<CheckResult> {
   }
 }
 
-function checkNotificationStyle(): CheckResult {
+function checkDismissConfig(): CheckResult {
+  const stored = loadStoredConfigSync()
+  const dismiss = stored?.dismiss as Record<string, number> | undefined
+  const hasOverrides = dismiss && Object.keys(dismiss).length > 0
+  const parts: string[] = []
+  for (let p = 5; p >= 1; p--) {
+    const override = dismiss?.[String(p)]
+    const effective = override !== undefined ? override : (PRIORITY_CONFIG[p]?.dismissAfter ?? 0)
+    parts.push(`p${p}: ${effective === 0 ? "never" : effective + "s"}`)
+  }
   return {
-    name: "notifications",
+    name: "dismiss",
     status: "ok",
-    message: "Tip: Set notification style to 'Alerts' for persistent notifications",
-    detail: "System Settings → Notifications → ntfy-notify → Alert style → Alerts",
+    message: `${hasOverrides ? "Custom" : "Defaults"}: ${parts.join(", ")}`,
+    detail: "Configure with: ntfy-mac config dismiss",
   }
 }
 
@@ -305,7 +315,7 @@ export async function runDoctor(version: string, jsonMode: boolean): Promise<voi
     checkState(),
     Promise.resolve(checkLogs(installMethod)),
     checkUpdate(version),
-    Promise.resolve(checkNotificationStyle()),
+    Promise.resolve(checkDismissConfig()),
     Promise.resolve(checkSounds()),
   ])
 

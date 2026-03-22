@@ -36,11 +36,16 @@ export interface SoundConfig {
   [priority: string]: string | null // priority "1"-"5" → sound name or null (silent)
 }
 
+export interface DismissConfig {
+  [priority: string]: number // priority "1"-"5" → seconds (0 = never auto-dismiss)
+}
+
 export interface Config {
   url: string // e.g. https://ntfy.jkrumm.com
   token: string
   topics?: string[] // override auto-discovery
   sounds?: SoundConfig // per-priority sound overrides
+  dismiss?: DismissConfig // per-priority auto-dismiss timing
 }
 
 export interface AppState {

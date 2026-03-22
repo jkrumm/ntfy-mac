@@ -27,6 +27,7 @@ struct Payload: Decodable {
   var imageUrl: String?           // remote image URL, downloaded and attached inline
   var actions: [PayloadAction]?   // action buttons (view/http)
   var categoryId: String?         // links notification to its UNNotificationCategory
+  var dismissAfter: Double?       // seconds to wait before auto-removing the notification
 }
 
 // ─── App delegate ─────────────────────────────────────────────────────────────
@@ -133,14 +134,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         // Post the notification, merging the action category with any existing ones
+        let notificationId = UUID().uuidString
         let post: () -> Void = {
           let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: notificationId,
             content: content,
             trigger: nil
           )
           center.add(request) { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
+            if let dismissAfter = payload.dismissAfter, dismissAfter > 0 {
+              // Stay alive and auto-remove the notification after N seconds
+              DispatchQueue.main.asyncAfter(deadline: .now() + dismissAfter) {
+                center.removeDeliveredNotifications(withIdentifiers: [notificationId])
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { exit(0) }
+              }
+            } else {
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
+            }
           }
         }
 
