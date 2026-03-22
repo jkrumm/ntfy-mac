@@ -23,7 +23,7 @@ jobs:
       new_release_version: ${{ steps.release.outputs.new_release_version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # semantic-release needs full history
           token: ${{ secrets.RELEASE_TOKEN }} # PAT as jkrumm — bypasses branch protection ruleset
@@ -65,7 +65,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -97,7 +97,7 @@ jobs:
       contents: read # no longer needs write to own repo
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: jkrumm/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
