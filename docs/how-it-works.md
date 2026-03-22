@@ -21,27 +21,27 @@ Each ntfy message becomes a native macOS notification via a Swift helper app (`n
 
 ### Field mapping
 
-| ntfy field   | macOS notification |
-|-|-|
-| `title`      | Title (bold). Falls back to capitalized topic name |
-| `message`    | Body |
-| `topic`      | Subtitle (with emoji tags if present), thread grouping |
-| `priority`   | Sound, interruption level, relevance score, auto-dismiss |
+| ntfy field   | macOS notification                                                        |
+| ------------ | ------------------------------------------------------------------------- |
+| `title`      | Title (bold). Falls back to capitalized topic name                        |
+| `message`    | Body                                                                      |
+| `topic`      | Subtitle (with emoji tags if present), thread grouping                    |
+| `priority`   | Sound, interruption level, relevance score, auto-dismiss                  |
 | `tags`       | Rendered as emoji in the subtitle (`warning` → ⚠️, `rotating_light` → 🚨) |
-| `click`      | URL opened on notification click |
-| `attachment`  | Inline image (if image/* mime type) |
-| `icon`       | Fallback thumbnail |
-| `actions`    | Action buttons (view/http — up to 3 on macOS) |
+| `click`      | URL opened on notification click                                          |
+| `attachment` | Inline image (if image/\* mime type)                                      |
+| `icon`       | Fallback thumbnail                                                        |
+| `actions`    | Action buttons (view/http — up to 3 on macOS)                             |
 
 ### Priority behavior
 
-| Priority | Sound | Interruption | Auto-dismiss | Relevance |
-|-|-|-|-|-|
-| 5 (urgent) | Ping | time-sensitive | never | 1.0 |
-| 4 (high) | Ping | time-sensitive | never | 0.75 |
-| 3 (default) | Pop | active | 7 s | 0.5 |
-| 2 (low) | Tink | active | 5 s | 0.25 |
-| 1 (min) | Tink | active | 3 s | 0.0 |
+| Priority    | Sound | Interruption   | Auto-dismiss | Relevance |
+| ----------- | ----- | -------------- | ------------ | --------- |
+| 5 (urgent)  | Ping  | time-sensitive | never        | 1.0       |
+| 4 (high)    | Ping  | time-sensitive | never        | 0.75      |
+| 3 (default) | Pop   | active         | 5 s          | 0.5       |
+| 2 (low)     | Tink  | active         | 3 s          | 0.25      |
+| 1 (min)     | Tink  | active         | 2 s          | 0.0       |
 
 Priority 4–5 notifications break through Focus/Do Not Disturb. All sounds and dismiss timings are configurable via `ntfy-mac config`.
 
@@ -49,11 +49,11 @@ Priority 4–5 notifications break through Focus/Do Not Disturb. All sounds and 
 
 When reconnecting after a gap, messages are categorized by age:
 
-| Age of oldest missed message | Behavior |
-|-|-|
-| < 1 hour | Deliver each notification individually |
-| 1 – 12 hours | Single summary: "N notifications while you were away" |
-| > 12 hours | Silent — no notification storm |
+| Age of oldest missed message | Behavior                                              |
+| ---------------------------- | ----------------------------------------------------- |
+| < 1 hour                     | Deliver each notification individually                |
+| 1 – 12 hours                 | Single summary: "N notifications while you were away" |
+| > 12 hours                   | Silent — no notification storm                        |
 
 ## Deduplication
 

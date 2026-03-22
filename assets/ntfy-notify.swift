@@ -143,10 +143,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
           )
           center.add(request) { _ in
             if let dismissAfter = payload.dismissAfter, dismissAfter > 0 {
-              // Stay alive and auto-remove the notification after N seconds
+              // Stay alive, dismiss the banner after N seconds, but keep in Notification Center
               DispatchQueue.main.asyncAfter(deadline: .now() + dismissAfter) {
                 center.removeDeliveredNotifications(withIdentifiers: [notificationId])
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { exit(0) }
+                // Re-add silently (passive) so it persists in Notification Center history
+                let historyContent = UNMutableNotificationContent()
+                historyContent.title = content.title
+                if !content.subtitle.isEmpty { historyContent.subtitle = content.subtitle }
+                historyContent.body = content.body
+                historyContent.threadIdentifier = content.threadIdentifier
+                historyContent.userInfo = content.userInfo
+                // Preserve categoryIdentifier so action buttons remain available
+                historyContent.categoryIdentifier = content.categoryIdentifier
+                if #available(macOS 12.0, *) {
+                  historyContent.interruptionLevel = .passive
+                }
+                let historyRequest = UNNotificationRequest(
+                  identifier: notificationId + "-history",
+                  content: historyContent,
+                  trigger: nil
+                )
+                center.add(historyRequest) { _ in
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { exit(0) }
+                }
               }
             } else {
               DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
@@ -186,7 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     willPresent _: UNNotification,
     withCompletionHandler handler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    handler([.banner, .sound, .badge])
+    handler([.banner, .sound, .badge, .list])
   }
 
   // Called when the user interacts with a notification (click or action button).
@@ -203,6 +222,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
       // User clicked the notification body — open clickUrl
       if let urlStr = userInfo["clickUrl"] as? String, let url = URL(string: urlStr) {
         NSWorkspace.shared.open(url)
+      }
+    case "acknowledge":
+      // Just dismiss — no action needed
+      break
+    case "remind-5m", "remind-30m", "remind-tomorrow":
+      // Write a reminder file for the Bun daemon to pick up and schedule
+      let content = response.notification.request.content
+      let fireAt: Double
+      if response.actionIdentifier == "remind-tomorrow" {
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: tomorrow)
+        components.hour = 8
+        components.minute = 0
+        let fireDate = Calendar.current.date(from: components) ?? tomorrow
+        fireAt = fireDate.timeIntervalSince1970 * 1000
+      } else {
+        let seconds: Double = response.actionIdentifier == "remind-5m" ? 300 : 1800
+        fireAt = (Date().timeIntervalSince1970 + seconds) * 1000
+      }
+      var reminder: [String: Any] = [
+        "id": UUID().uuidString,
+        "fireAt": fireAt,
+        "title": content.title,
+        "body": content.body,
+      ]
+      if !content.subtitle.isEmpty { reminder["subtitle"] = content.subtitle }
+      if !content.threadIdentifier.isEmpty { reminder["threadId"] = content.threadIdentifier }
+      if let clickUrl = content.userInfo["clickUrl"] as? String { reminder["clickUrl"] = clickUrl }
+
+      if let data = try? JSONSerialization.data(withJSONObject: reminder),
+         let json = String(data: data, encoding: .utf8) {
+        let stateDir = FileManager.default.homeDirectoryForCurrentUser
+          .appendingPathComponent(".local/share/ntfy-mac")
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let filePath = stateDir.appendingPathComponent("reminder-\(UUID().uuidString).json")
+        try? json.write(to: filePath, atomically: true, encoding: .utf8)
       }
     default:
       // User tapped an action button — find and execute it

@@ -20,9 +20,9 @@ interface PriorityConfig {
 export const PRIORITY_CONFIG: Record<number, PriorityConfig> = {
   5: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 1.0, dismissAfter: 0 },
   4: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 0.75, dismissAfter: 0 },
-  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5, dismissAfter: 7 },
-  2: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.25, dismissAfter: 5 },
-  1: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.0, dismissAfter: 3 },
+  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5, dismissAfter: 5 },
+  2: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.25, dismissAfter: 3 },
+  1: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.0, dismissAfter: 2 },
 }
 
 /** Resolve the effective priority config, applying user overrides for sounds and dismiss timing. */
@@ -59,6 +59,68 @@ export function capitalize(text: string): string {
   if (!text) return text
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+
+// ─── Default actions ─────────────────────────────────────────────────────────
+
+const ACTION_LABELS: Record<string, Record<string, string>> = {
+  acknowledge: {
+    en: "Acknowledge",
+    de: "Bestätigen",
+    fr: "Confirmer",
+    es: "Confirmar",
+    ja: "確認",
+    zh: "确认",
+  },
+  "remind-5m": {
+    en: "Remind in 5 min",
+    de: "In 5 Min erinnern",
+    fr: "Rappel dans 5 min",
+    es: "Recordar en 5 min",
+    ja: "5分後に通知",
+    zh: "5分钟后提醒",
+  },
+  "remind-30m": {
+    en: "Remind in 30 min",
+    de: "In 30 Min erinnern",
+    fr: "Rappel dans 30 min",
+    es: "Recordar en 30 min",
+    ja: "30分後に通知",
+    zh: "30分钟后提醒",
+  },
+  "remind-tomorrow": {
+    en: "Remind tomorrow morning",
+    de: "Morgen früh erinnern",
+    fr: "Rappel demain matin",
+    es: "Recordar mañana por la mañana",
+    ja: "明日の朝に通知",
+    zh: "明早提醒",
+  },
+}
+
+function getSystemLanguage(): string {
+  try {
+    const result = Bun.spawnSync(["defaults", "read", "-g", "AppleLanguages"])
+    const output = result.stdout.toString()
+    const match = output.match(/"?([a-z]{2})-/i)
+    if (match) return match[1].toLowerCase()
+  } catch {}
+  return "en"
+}
+
+function localizedLabel(id: string): string {
+  const lang = getSystemLanguage()
+  return ACTION_LABELS[id]?.[lang] ?? ACTION_LABELS[id]?.en ?? id
+}
+
+/** Default action buttons shown when a notification has no custom actions. */
+export const DEFAULT_ACTIONS: NotificationAction[] = [
+  { identifier: "acknowledge", title: localizedLabel("acknowledge") },
+  { identifier: "remind-5m", title: localizedLabel("remind-5m") },
+  { identifier: "remind-30m", title: localizedLabel("remind-30m") },
+  { identifier: "remind-tomorrow", title: localizedLabel("remind-tomorrow") },
+]
+
+export const DEFAULT_CATEGORY_ID = "ntfy-default-actions"
 
 // ─── Action mapping ───────────────────────────────────────────────────────────
 
@@ -150,6 +212,9 @@ export function buildNtfyPayload(
   if (actions.length > 0) {
     payload.actions = actions
     payload.categoryId = `ntfy-${msg.id.slice(0, 8)}`
+  } else {
+    payload.actions = DEFAULT_ACTIONS
+    payload.categoryId = DEFAULT_CATEGORY_ID
   }
 
   return payload

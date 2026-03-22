@@ -11,6 +11,22 @@ Runs as a background daemon that streams messages in real time, handles reconnec
 
 ---
 
+## Why ntfy-mac?
+
+ntfy doesn't ship a native desktop client. The [recommended approach](https://docs.ntfy.sh/subscribe/pwa/) for desktop is a PWA — a browser tab that stays open and forwards notifications. In practice, this doesn't work reliably on macOS:
+
+- Notifications stop when the browser is quit, restarted, or updated
+- Background tabs get suspended — messages arrive late or not at all
+- No integration with Focus mode or Do Not Disturb
+- No way to recover messages missed while offline or asleep
+- Duplicate notifications when reconnecting
+
+ntfy-mac is a native daemon that connects via SSE, persists across reboots via launchd, recovers missed messages on reconnect, and deduplicates everything. It delivers through macOS Notification Center with proper priority mapping — urgent messages break through Focus mode, low-priority ones auto-dismiss.
+
+It's been running stable for months with zero missed notifications across sleep/wake cycles, network changes, and server restarts.
+
+---
+
 ## Install
 
 Requires macOS (Apple Silicon) and a running [ntfy](https://ntfy.sh) server.
@@ -71,19 +87,19 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 
 ## Commands
 
-| Command | Description |
-|-|-|
-| `ntfy-mac setup` | Configure server and credentials |
-| `ntfy-mac doctor` | Health check (config, server, auth, daemon, logs) |
-| `ntfy-mac config` | Show notification settings |
-| `ntfy-mac config sounds` | Manage sounds per priority |
-| `ntfy-mac config dismiss` | Manage auto-dismiss timing per priority |
-| `ntfy-mac notify -m "text"` | Send a local notification (no server needed) |
-| `ntfy-mac sounds` | Preview all macOS notification sounds |
-| `ntfy-mac logs` | Tail the daemon log |
-| `ntfy-mac logs --error` | Tail the error log |
-| `ntfy-mac update` | Update to the latest version |
-| `ntfy-mac uninstall` | Remove ntfy-mac and all its data |
+| Command                     | Description                                       |
+| --------------------------- | ------------------------------------------------- |
+| `ntfy-mac setup`            | Configure server and credentials                  |
+| `ntfy-mac doctor`           | Health check (config, server, auth, daemon, logs) |
+| `ntfy-mac config`           | Show notification settings                        |
+| `ntfy-mac config sounds`    | Manage sounds per priority                        |
+| `ntfy-mac config dismiss`   | Manage auto-dismiss timing per priority           |
+| `ntfy-mac notify -m "text"` | Send a local notification (no server needed)      |
+| `ntfy-mac sounds`           | Preview all macOS notification sounds             |
+| `ntfy-mac logs`             | Tail the daemon log                               |
+| `ntfy-mac logs --error`     | Tail the error log                                |
+| `ntfy-mac update`           | Update to the latest version                      |
+| `ntfy-mac uninstall`        | Remove ntfy-mac and all its data                  |
 
 ---
 
@@ -91,13 +107,13 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 
 Default sounds per priority:
 
-| Priority | Sound | Focus mode | Auto-dismiss |
-|-|-|-|-|
-| 5 (urgent) | Ping | breaks through | stays |
-| 4 (high) | Ping | breaks through | stays |
-| 3 (default) | Pop | normal | 7 s |
-| 2 (low) | Tink | normal | 5 s |
-| 1 (min) | Tink | normal | 3 s |
+| Priority    | Sound | Focus mode     | Auto-dismiss |
+| ----------- | ----- | -------------- | ------------ |
+| 5 (urgent)  | Ping  | breaks through | stays        |
+| 4 (high)    | Ping  | breaks through | stays        |
+| 3 (default) | Pop   | normal         | 5 s          |
+| 2 (low)     | Tink  | normal         | 3 s          |
+| 1 (min)     | Tink  | normal         | 2 s          |
 
 Override any of these:
 
@@ -133,6 +149,7 @@ echo '{"title":"T","body":"B"}' | ntfy-mac notify --json    # full payload via s
 ## Troubleshooting
 
 **No notifications appearing**
+
 1. Check notification permissions: System Settings → Notifications → ntfy-mac
 2. Check logs: `ntfy-mac logs`
 
