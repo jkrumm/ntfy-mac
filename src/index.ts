@@ -89,6 +89,7 @@ Usage:
   ntfy-mac doctor --json            Machine-readable health report
   ntfy-mac config                   Manage configuration
   ntfy-mac config sounds            Show/change notification sounds
+  ntfy-mac config dismiss           Show/change auto-dismiss timing
   ntfy-mac notify -m "message"      Send a local notification
   ntfy-mac logs                     Tail the daemon log (stdout)
   ntfy-mac logs --error             Tail the error log (stderr)
@@ -103,6 +104,7 @@ Notify (local notification, no server required):
   ntfy-mac notify -t "Title" -m "text" -p 5         Priority 1-5 (sound/urgency)
   ntfy-mac notify -m "text" --tag warning            With emoji tags (repeatable)
   ntfy-mac notify -m "text" --url https://...       Click to open URL
+  ntfy-mac notify -m "text" -d 10                   Auto-dismiss after 10 seconds
   echo '{"title":"T","body":"B"}' | ntfy-mac notify --json   Full payload via stdin
 
 The daemon is managed by launchd (brew services / LaunchAgent).
@@ -170,17 +172,42 @@ if (command === "notify") {
   const priority = priorityRaw ? Math.max(1, Math.min(5, parseInt(priorityRaw, 10) || 3)) : 3
   const tags = flagAll("--tag")
   const clickUrl = flag("--url", "--url")
+  const dismissAfterRaw = flag("-d", "--dismiss-after")
+  let dismissAfter: number | undefined
+  if (dismissAfterRaw !== undefined) {
+    const parsed = Number(dismissAfterRaw)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      console.error("Error: -d / --dismiss-after must be a number >= 0")
+      process.exit(1)
+    }
+    dismissAfter = parsed
+  }
 
-  // Load sound overrides from config (notify command doesn't require full config)
+  // Load overrides from config (notify command doesn't require full config)
   const notifyConfig = await loadStoredConfig()
   const soundOverrides = (notifyConfig.sounds ?? undefined) as
     | import("./types").SoundConfig
     | undefined
+  const dismissOverrides = (notifyConfig.dismiss ?? undefined) as
+    | import("./types").DismissConfig
+    | undefined
 
-  const { sound, interruptionLevel, relevanceScore } = resolvePriorityConfig(
-    priority,
-    soundOverrides,
-  )
+  const {
+    sound,
+    interruptionLevel,
+    relevanceScore,
+    dismissAfter: configDismiss,
+  } = resolvePriorityConfig(priority, soundOverrides, dismissOverrides)
+
+  // CLI flag overrides config; config overrides default. 0 = never auto-dismiss.
+  const effectiveDismiss =
+    dismissAfter !== undefined
+      ? dismissAfter > 0
+        ? dismissAfter
+        : undefined
+      : configDismiss > 0
+        ? configDismiss
+        : undefined
 
   const tagLine = renderTags(tags)
 
@@ -191,6 +218,7 @@ if (command === "notify") {
 
   if (tagLine) builder.subtitle(tagLine)
   if (clickUrl) builder.clickUrl(clickUrl)
+  if (effectiveDismiss) builder.dismissAfter(effectiveDismiss)
 
   await builder.send()
   process.exit(0)
@@ -457,11 +485,12 @@ checkForUpdate().catch(() => {})
 // ─── Message handlers (close over config for sound overrides) ────────────────
 
 const soundOverrides = config.sounds
+const dismissOverrides = config.dismiss
 
 async function handleMessage(msg: NtfyMessage): Promise<void> {
   const state = await loadState()
   if (isSeen(state, msg.id)) return
-  await sendNotification(msg, soundOverrides)
+  await sendNotification(msg, soundOverrides, dismissOverrides)
   await saveState(markSeen(state, msg.id))
 }
 

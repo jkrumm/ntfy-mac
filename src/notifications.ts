@@ -126,6 +126,13 @@ export interface NotificationPayload {
    * Required when actions are present. Auto-generated from message id if omitted.
    */
   categoryId?: string
+  /**
+   * Seconds to wait before auto-removing the notification from Notification Center.
+   * The Swift helper stays alive for this duration, then calls removeDeliveredNotifications.
+   * Useful with "Alerts" notification style so notifications don't persist forever.
+   * Omit or set to 0 to keep the default behavior (notification persists until user dismisses).
+   */
+  dismissAfter?: number
 }
 
 // ─── Helper path resolution ───────────────────────────────────────────────────
@@ -280,6 +287,12 @@ export class NotificationBuilder {
   actions(items: NotificationAction[], categoryId: string): this {
     this._p.actions = items
     this._p.categoryId = categoryId
+    return this
+  }
+
+  /** Auto-remove the notification after N seconds. Helper process stays alive for the duration. */
+  dismissAfter(seconds: number): this {
+    this._p.dismissAfter = seconds
     return this
   }
 

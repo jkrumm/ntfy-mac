@@ -15,43 +15,48 @@ import type { NtfyMessage } from "../src/types"
 // ─── PRIORITY_CONFIG ──────────────────────────────────────────────────────────
 
 describe("PRIORITY_CONFIG", () => {
-  it("priority 5 → Sosumi + time-sensitive + relevanceScore 1.0", () => {
+  it("priority 5 → Sosumi + time-sensitive + relevanceScore 1.0 + never dismiss", () => {
     expect(PRIORITY_CONFIG[5]).toEqual({
       sound: "Sosumi",
       interruptionLevel: "time-sensitive",
       relevanceScore: 1.0,
+      dismissAfter: 0,
     })
   })
 
-  it("priority 4 → Ping + time-sensitive + relevanceScore 0.75", () => {
+  it("priority 4 → Ping + time-sensitive + relevanceScore 0.75 + never dismiss", () => {
     expect(PRIORITY_CONFIG[4]).toEqual({
       sound: "Ping",
       interruptionLevel: "time-sensitive",
       relevanceScore: 0.75,
+      dismissAfter: 0,
     })
   })
 
-  it("priority 3 → Pop + active + relevanceScore 0.5", () => {
+  it("priority 3 → Pop + active + relevanceScore 0.5 + dismiss 7s", () => {
     expect(PRIORITY_CONFIG[3]).toEqual({
       sound: "Pop",
       interruptionLevel: "active",
       relevanceScore: 0.5,
+      dismissAfter: 7,
     })
   })
 
-  it("priority 2 → null + active + relevanceScore 0.25", () => {
+  it("priority 2 → null + active + relevanceScore 0.25 + dismiss 5s", () => {
     expect(PRIORITY_CONFIG[2]).toEqual({
       sound: null,
       interruptionLevel: "active",
       relevanceScore: 0.25,
+      dismissAfter: 5,
     })
   })
 
-  it("priority 1 → null + passive + relevanceScore 0.0", () => {
+  it("priority 1 → null + passive + relevanceScore 0.0 + dismiss 3s", () => {
     expect(PRIORITY_CONFIG[1]).toEqual({
       sound: null,
       interruptionLevel: "passive",
       relevanceScore: 0.0,
+      dismissAfter: 3,
     })
   })
 })
@@ -101,6 +106,18 @@ describe("resolvePriorityConfig", () => {
     const result = resolvePriorityConfig(3, { "3": null })
     expect(result.sound).toBeNull()
     expect(result.interruptionLevel).toBe("active")
+  })
+
+  it("overrides dismissAfter, keeps other fields", () => {
+    const result = resolvePriorityConfig(3, undefined, { "3": 20 })
+    expect(result.dismissAfter).toBe(20)
+    expect(result.sound).toBe("Pop")
+    expect(result.interruptionLevel).toBe("active")
+  })
+
+  it("dismiss override 0 means never", () => {
+    const result = resolvePriorityConfig(3, undefined, { "3": 0 })
+    expect(result.dismissAfter).toBe(0)
   })
 
   it("falls back to priority 3 for unknown priority", () => {
@@ -306,39 +323,44 @@ describe("buildNtfyPayload", () => {
     expect(buildNtfyPayload(base).threadId).toBe("alerts")
   })
 
-  it("default priority → Pop + active + 0.5", () => {
+  it("default priority → Pop + active + 0.5 + dismiss 7s", () => {
     const p = buildNtfyPayload(base)
     expect(p.sound).toBe("Pop")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.5)
+    expect(p.dismissAfter).toBe(7)
   })
 
-  it("priority 5 → Sosumi + time-sensitive + 1.0", () => {
+  it("priority 5 → Sosumi + time-sensitive + 1.0 + no dismiss", () => {
     const p = buildNtfyPayload({ ...base, priority: 5 })
     expect(p.sound).toBe("Sosumi")
     expect(p.interruptionLevel).toBe("time-sensitive")
     expect(p.relevanceScore).toBe(1.0)
+    expect(p.dismissAfter).toBeUndefined()
   })
 
-  it("priority 4 → Ping + time-sensitive + 0.75", () => {
+  it("priority 4 → Ping + time-sensitive + 0.75 + no dismiss", () => {
     const p = buildNtfyPayload({ ...base, priority: 4 })
     expect(p.sound).toBe("Ping")
     expect(p.interruptionLevel).toBe("time-sensitive")
     expect(p.relevanceScore).toBe(0.75)
+    expect(p.dismissAfter).toBeUndefined()
   })
 
-  it("priority 2 → null + active + 0.25", () => {
+  it("priority 2 → null + active + 0.25 + dismiss 5s", () => {
     const p = buildNtfyPayload({ ...base, priority: 2 })
     expect(p.sound).toBeNull()
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.25)
+    expect(p.dismissAfter).toBe(5)
   })
 
-  it("priority 1 → null + passive + 0.0", () => {
+  it("priority 1 → null + passive + 0.0 + dismiss 3s", () => {
     const p = buildNtfyPayload({ ...base, priority: 1 })
     expect(p.sound).toBeNull()
     expect(p.interruptionLevel).toBe("passive")
     expect(p.relevanceScore).toBe(0.0)
+    expect(p.dismissAfter).toBe(3)
   })
 
   it("click field → clickUrl in payload (not immediately opened)", () => {

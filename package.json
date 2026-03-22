@@ -6,7 +6,7 @@
     "start": "bun src/index.ts",
     "setup": "bun src/index.ts setup",
     "build:helper": "bash scripts/build-helper.sh",
-    "build:bun": "bun build --compile --target=bun-darwin-arm64 src/index.ts --outfile dist/ntfy-mac --define APP_VERSION='\"$npm_package_version\"'",
+    "build:bun": "bun build --compile --target=bun-darwin-arm64 src/index.ts --outfile dist/ntfy-mac --define \"APP_VERSION='${npm_package_version:-0.0.0}'\"",
     "build:package-helper": "mkdir -p dist && tar -czf dist/ntfy-notify.app.tar.gz -C assets ntfy-notify.app",
     "build": "bun run build:helper && bun run build:bun && bun run build:package-helper",
     "test": "bun test",

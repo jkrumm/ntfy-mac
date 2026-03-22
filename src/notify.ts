@@ -6,7 +6,7 @@ import {
   type SystemSound,
   type InterruptionLevel,
 } from "./notifications"
-import type { NtfyMessage, SoundConfig } from "./types"
+import type { DismissConfig, NtfyMessage, SoundConfig } from "./types"
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 
@@ -14,25 +14,32 @@ interface PriorityConfig {
   sound: SystemSound | null
   interruptionLevel: InterruptionLevel
   relevanceScore: number
+  dismissAfter: number // 0 = never auto-dismiss
 }
 
 export const PRIORITY_CONFIG: Record<number, PriorityConfig> = {
-  5: { sound: "Sosumi", interruptionLevel: "time-sensitive", relevanceScore: 1.0 },
-  4: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 0.75 },
-  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5 },
-  2: { sound: null, interruptionLevel: "active", relevanceScore: 0.25 },
-  1: { sound: null, interruptionLevel: "passive", relevanceScore: 0.0 },
+  5: { sound: "Sosumi", interruptionLevel: "time-sensitive", relevanceScore: 1.0, dismissAfter: 0 },
+  4: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 0.75, dismissAfter: 0 },
+  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5, dismissAfter: 7 },
+  2: { sound: null, interruptionLevel: "active", relevanceScore: 0.25, dismissAfter: 5 },
+  1: { sound: null, interruptionLevel: "passive", relevanceScore: 0.0, dismissAfter: 3 },
 }
 
-/** Resolve the effective priority config, applying user sound overrides if present. */
+/** Resolve the effective priority config, applying user overrides for sounds and dismiss timing. */
 export function resolvePriorityConfig(
   priority: number,
   soundOverrides?: SoundConfig,
+  dismissOverrides?: DismissConfig,
 ): PriorityConfig {
   const base = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG[3]
-  const override = soundOverrides?.[String(priority)]
-  if (override === undefined) return base
-  return { ...base, sound: override as SystemSound | null }
+  const soundOverride = soundOverrides?.[String(priority)]
+  const dismissOverride = dismissOverrides?.[String(priority)]
+  if (soundOverride === undefined && dismissOverride === undefined) return base
+  return {
+    ...base,
+    ...(soundOverride !== undefined ? { sound: soundOverride as SystemSound | null } : {}),
+    ...(dismissOverride !== undefined ? { dismissAfter: dismissOverride } : {}),
+  }
 }
 
 export function getSound(priority?: number, soundOverrides?: SoundConfig): SystemSound | null {
@@ -102,6 +109,7 @@ export interface NtfyNotificationPayload {
   threadId: string
   interruptionLevel: InterruptionLevel
   relevanceScore: number
+  dismissAfter?: number
   clickUrl?: string
   imageUrl?: string
   actions?: NotificationAction[]
@@ -111,13 +119,15 @@ export interface NtfyNotificationPayload {
 export function buildNtfyPayload(
   msg: NtfyMessage,
   soundOverrides?: SoundConfig,
+  dismissOverrides?: DismissConfig,
 ): NtfyNotificationPayload {
   const title = msg.title ?? capitalize(msg.topic)
   const tags = renderTags(msg.tags)
   const subtitle = tags ? `${msg.topic} • ${tags}` : msg.topic
-  const { sound, interruptionLevel, relevanceScore } = resolvePriorityConfig(
+  const { sound, interruptionLevel, relevanceScore, dismissAfter } = resolvePriorityConfig(
     msg.priority ?? 3,
     soundOverrides,
+    dismissOverrides,
   )
 
   const payload: NtfyNotificationPayload = {
@@ -128,6 +138,7 @@ export function buildNtfyPayload(
     threadId: msg.topic,
     interruptionLevel,
     relevanceScore,
+    ...(dismissAfter > 0 ? { dismissAfter } : {}),
   }
 
   if (msg.click) payload.clickUrl = msg.click
@@ -149,8 +160,9 @@ export function buildNtfyPayload(
 export async function sendNotification(
   msg: NtfyMessage,
   soundOverrides?: SoundConfig,
+  dismissOverrides?: DismissConfig,
 ): Promise<void> {
-  const payload = buildNtfyPayload(msg, soundOverrides)
+  const payload = buildNtfyPayload(msg, soundOverrides, dismissOverrides)
   const prio = msg.priority ?? 3
   console.log(`notify: [${msg.topic}] p${prio} ${payload.title}`)
   await sendNotificationPayload(payload)
