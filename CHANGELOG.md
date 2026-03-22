@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/jkrumm/ntfy-mac/compare/v1.7.0...v1.8.0) (2026-03-22)
+
+
+### Features
+
+* **notifications:** add sound preview command and fix p1 visibility ([b26bf21](https://github.com/jkrumm/ntfy-mac/commit/b26bf2153a12dbab924d78e8902b76b78caf767c))
+
 # [1.7.0](https://github.com/jkrumm/ntfy-mac/compare/v1.6.0...v1.7.0) (2026-03-22)
 
 
