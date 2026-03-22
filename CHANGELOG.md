@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/jkrumm/ntfy-mac/compare/v1.6.0...v1.7.0) (2026-03-22)
+
+
+### Features
+
+* **notifications:** add configurable auto-dismiss timing ([8980325](https://github.com/jkrumm/ntfy-mac/commit/898032547e5f9323d48017fc010fbb28d0321235))
+
 # [1.6.0](https://github.com/jkrumm/ntfy-mac/compare/v1.5.0...v1.6.0) (2026-03-21)
 
 
