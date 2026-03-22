@@ -51,10 +51,10 @@ describe("PRIORITY_CONFIG", () => {
     })
   })
 
-  it("priority 1 → null + passive + relevanceScore 0.0 + dismiss 3s", () => {
+  it("priority 1 → null + active + relevanceScore 0.0 + dismiss 3s", () => {
     expect(PRIORITY_CONFIG[1]).toEqual({
       sound: null,
-      interruptionLevel: "passive",
+      interruptionLevel: "active",
       relevanceScore: 0.0,
       dismissAfter: 3,
     })
@@ -355,10 +355,10 @@ describe("buildNtfyPayload", () => {
     expect(p.dismissAfter).toBe(5)
   })
 
-  it("priority 1 → null + passive + 0.0 + dismiss 3s", () => {
+  it("priority 1 → null + active + 0.0 + dismiss 3s", () => {
     const p = buildNtfyPayload({ ...base, priority: 1 })
     expect(p.sound).toBeNull()
-    expect(p.interruptionLevel).toBe("passive")
+    expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.0)
     expect(p.dismissAfter).toBe(3)
   })

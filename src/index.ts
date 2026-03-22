@@ -91,6 +91,8 @@ Usage:
   ntfy-mac config sounds            Show/change notification sounds
   ntfy-mac config dismiss           Show/change auto-dismiss timing
   ntfy-mac notify -m "message"      Send a local notification
+  ntfy-mac sounds                   Preview all macOS notification sounds
+  ntfy-mac sounds <filter>          Preview sounds matching a name (e.g. "ping")
   ntfy-mac logs                     Tail the daemon log (stdout)
   ntfy-mac logs --error             Tail the error log (stderr)
   ntfy-mac update                   Update to the latest version
@@ -221,6 +223,40 @@ if (command === "notify") {
   if (effectiveDismiss) builder.dismissAfter(effectiveDismiss)
 
   await builder.send()
+  process.exit(0)
+}
+
+if (command === "sounds") {
+  const ALL_SOUNDS: import("./notifications").SystemSound[] = [
+    "Basso",
+    "Blow",
+    "Bottle",
+    "Frog",
+    "Funk",
+    "Glass",
+    "Hero",
+    "Morse",
+    "Ping",
+    "Pop",
+    "Purr",
+    "Sosumi",
+    "Submarine",
+    "Tink",
+  ]
+
+  const filter = process.argv[3]?.toLowerCase()
+  const sounds = filter ? ALL_SOUNDS.filter((s) => s.toLowerCase().includes(filter)) : ALL_SOUNDS
+
+  if (sounds.length === 0) {
+    console.error(`No sound matching "${filter}". Available: ${ALL_SOUNDS.join(", ")}`)
+    process.exit(1)
+  }
+
+  for (const sound of sounds) {
+    console.log(`Playing: ${sound}`)
+    await new NotificationBuilder("Sound Preview", sound).sound(sound).send()
+    await Bun.sleep(2000)
+  }
   process.exit(0)
 }
 
