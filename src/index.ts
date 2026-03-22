@@ -3,6 +3,8 @@ import { isSeen, loadState, markSeen, saveState } from "./dedup"
 import { NotificationBuilder, sendNotificationPayload } from "./notifications"
 import { discoverTopics, startListener, type MissedMessageResult } from "./ntfy"
 import {
+  DEFAULT_ACTIONS,
+  DEFAULT_CATEGORY_ID,
   renderTags,
   resolvePriorityConfig,
   sendConnectionFailureNotification,
@@ -13,6 +15,7 @@ import {
   sendUpdateSuccessNotification,
 } from "./notify"
 import { handleConfigCommand } from "./config-cli"
+import { startReminderPoll } from "./reminders"
 import { runDoctor } from "./doctor"
 import { acquirePidLock, releasePidLock } from "./pidlock"
 import { runSetup, runSetupNonInteractive } from "./setup"
@@ -136,6 +139,10 @@ if (command === "notify") {
         process.exit(1)
       }
       payload.title ??= "ntfy-mac"
+      if (!payload.actions || payload.actions.length === 0) {
+        payload.actions = DEFAULT_ACTIONS
+        payload.categoryId ??= DEFAULT_CATEGORY_ID
+      }
       await sendNotificationPayload(payload)
     } catch (err) {
       console.error(`Error: invalid JSON — ${err instanceof Error ? err.message : String(err)}`)
@@ -221,6 +228,7 @@ if (command === "notify") {
   if (tagLine) builder.subtitle(tagLine)
   if (clickUrl) builder.clickUrl(clickUrl)
   if (effectiveDismiss) builder.dismissAfter(effectiveDismiss)
+  builder.actions(DEFAULT_ACTIONS, DEFAULT_CATEGORY_ID)
 
   await builder.send()
   process.exit(0)
@@ -554,5 +562,7 @@ if (topics.length === 0) {
 }
 
 console.log(`ntfy-mac ${VERSION} — listening on: ${topics.join(", ")}`)
+
+startReminderPoll()
 
 await startListener(config, topics, handleMessage, handleMissed, sendConnectionFailureNotification)

@@ -48,10 +48,21 @@ export interface Config {
   dismiss?: DismissConfig // per-priority auto-dismiss timing
 }
 
+export interface PendingReminder {
+  id: string
+  fireAt: number // unix timestamp (ms)
+  title: string
+  subtitle?: string
+  body: string
+  threadId?: string
+  clickUrl?: string
+}
+
 export interface AppState {
   seen: Record<string, number> // id → unix timestamp (ms)
   lastMessageId: string | null
   lastUpdateCheck: number | null // unix timestamp (ms)
   lastSetupNotification?: number | null // unix timestamp (ms)
   pendingUpdateNotification?: string | null // version string to notify on next startup
+  reminders?: PendingReminder[]
 }
