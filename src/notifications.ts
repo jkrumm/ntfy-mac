@@ -217,6 +217,57 @@ export async function sendNotificationPayload(payload: NotificationPayload): Pro
   }
 }
 
+/**
+ * Non-blocking send for the notification queue.
+ *
+ * Spawns the Swift helper but does NOT wait for it to exit. Instead, races
+ * proc.exited against a 500ms timeout. The helper posts the notification
+ * immediately on launch, then stays alive only for dismissAfter — so if the
+ * process is alive after 500ms, delivery succeeded.
+ *
+ * Returns true if delivery likely succeeded, false on spawn failure or non-zero exit.
+ */
+export async function sendNotificationNonBlocking(payload: NotificationPayload): Promise<boolean> {
+  const helperPath = resolveHelperPath()
+
+  if (!(await Bun.file(helperPath).exists())) {
+    console.error(`ntfy-notify helper not found at ${helperPath}`)
+    return false
+  }
+
+  const json = JSON.stringify(payload, (_key, value) => (value === undefined ? undefined : value))
+
+  if (DEBUG) {
+    console.log(`[debug] notify helper: ${helperPath}`)
+    console.log(`[debug] notify payload: ${json}`)
+  }
+
+  try {
+    const proc = Bun.spawn([helperPath], {
+      stdin: Buffer.from(json),
+      stdout: "ignore",
+      stderr: DEBUG ? "inherit" : "ignore",
+    })
+
+    // Race: either the process exits quickly (no dismissAfter) or we consider
+    // it delivered after 500ms (helper is alive, managing its own dismissAfter).
+    const result = await Promise.race([
+      proc.exited.then((code) => ({ type: "exited" as const, code })),
+      Bun.sleep(500).then(() => ({ type: "timeout" as const, code: null })),
+    ])
+
+    if (result.type === "exited" && result.code !== 0) {
+      if (DEBUG) console.error(`[debug] notify: helper exited ${result.code}`)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    if (DEBUG) console.error("[debug] notify: spawn failed:", err)
+    return false
+  }
+}
+
 // ─── Payload builder ──────────────────────────────────────────────────────────
 
 /**

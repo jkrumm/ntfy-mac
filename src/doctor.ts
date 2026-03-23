@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "fs"
 import { homedir } from "os"
 import { CONFIG_PATH, loadConfig } from "./config"
-import { loadState } from "./dedup"
+import { loadState } from "./state"
 import { discoverTopics } from "./ntfy"
 import { PRIORITY_CONFIG } from "./notify"
 import { detectInstallMethod, isNewerVersion } from "./updater"

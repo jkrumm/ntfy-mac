@@ -1,9 +1,7 @@
 import { homedir } from "os"
 import { spawnSync } from "child_process"
-import { loadState, saveState } from "./dedup"
+import { loadState, saveState, STATE_DIR } from "./state"
 import type { AppState } from "./types"
-
-const STATE_DIR = `${homedir()}/.local/share/ntfy-mac`
 const LAUNCHD_LABEL = "com.jkrumm.ntfy-mac"
 
 export type InstallMethod = "brew" | "curl" | "dev"

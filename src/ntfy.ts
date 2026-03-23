@@ -1,5 +1,11 @@
-import type { Config, NtfyMessage } from "./types"
-import { loadState, saveState, markSeen } from "./dedup"
+import type { AppState, Config, NtfyMessage } from "./types"
+import { isSeen, markSeen } from "./dedup"
+
+/** Minimal interface for state access — satisfied by StateManager. */
+export interface StateAccessor {
+  get(): AppState
+  update(fn: (s: AppState) => AppState): void
+}
 
 const DEBUG = process.env.NTFY_DEBUG === "1"
 function debug(...args: unknown[]): void {
@@ -193,6 +199,7 @@ export async function startListener(
   initialTopics: string[],
   onMessage: (msg: NtfyMessage) => Promise<void>,
   onMissed: (result: MissedMessageResult) => Promise<void>,
+  state: StateAccessor,
   onConnectionFailure?: () => Promise<void>,
 ): Promise<never> {
   let topics = initialTopics
@@ -200,8 +207,7 @@ export async function startListener(
   let consecutiveFailures = 0
   let lastAlertAt = 0
   let lastTopicCheck = Date.now()
-  let state = await loadState()
-  let since = state.lastMessageId ?? "latest"
+  let since = state.get().lastMessageId ?? "latest"
 
   while (true) {
     let pollRequested = false
@@ -228,9 +234,7 @@ export async function startListener(
         `connected (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
       )
       const result = await connectSSE(config, topics, since, async (msg) => {
-        state = await loadState()
-        state = { ...state, lastMessageId: msg.id }
-        await saveState(state)
+        state.update((s) => ({ ...s, lastMessageId: msg.id }))
         since = msg.id
         backoff = BACKOFF_INITIAL_MS
         consecutiveFailures = 0
@@ -268,16 +272,18 @@ export async function startListener(
         if (pollRequested) console.log("poll: server requested catch-up poll")
         debug(`polling for missed messages since=${since}`)
         const missed = await pollMessages(config, topics, since)
-        const unseen = missed.filter((m) => !state.seen[m.id])
+        const currentState = state.get()
+        const unseen = missed.filter((m) => !isSeen(currentState, m.id))
         if (unseen.length > 0) {
           console.log(`poll: ${unseen.length} missed message(s)`)
           await onMissed(categorizeMissedMessages(unseen))
-          for (const m of unseen) {
-            state = markSeen(state, m.id)
-            state = { ...state, lastMessageId: m.id }
-            since = m.id
-          }
-          await saveState(state)
+          const lastId = unseen[unseen.length - 1].id
+          state.update((s) => {
+            let updated = s
+            for (const m of unseen) updated = markSeen(updated, m.id)
+            return { ...updated, lastMessageId: lastId }
+          })
+          since = lastId
         }
       }
     } catch (pollErr) {

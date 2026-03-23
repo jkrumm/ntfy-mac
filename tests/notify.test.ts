@@ -33,30 +33,30 @@ describe("PRIORITY_CONFIG", () => {
     })
   })
 
-  it("priority 3 → Pop + active + relevanceScore 0.5 + dismiss 5s", () => {
+  it("priority 3 → Pop + active + relevanceScore 0.5 + dismiss 8s", () => {
     expect(PRIORITY_CONFIG[3]).toEqual({
       sound: "Pop",
       interruptionLevel: "active",
       relevanceScore: 0.5,
-      dismissAfter: 5,
+      dismissAfter: 8,
     })
   })
 
-  it("priority 2 → Tink + active + relevanceScore 0.25 + dismiss 3s", () => {
+  it("priority 2 → Tink + active + relevanceScore 0.25 + dismiss 5s", () => {
     expect(PRIORITY_CONFIG[2]).toEqual({
       sound: "Tink",
       interruptionLevel: "active",
       relevanceScore: 0.25,
-      dismissAfter: 3,
+      dismissAfter: 5,
     })
   })
 
-  it("priority 1 → Tink + active + relevanceScore 0.0 + dismiss 2s", () => {
+  it("priority 1 → Tink + active + relevanceScore 0.0 + dismiss 4s", () => {
     expect(PRIORITY_CONFIG[1]).toEqual({
       sound: "Tink",
       interruptionLevel: "active",
       relevanceScore: 0.0,
-      dismissAfter: 2,
+      dismissAfter: 4,
     })
   })
 })
@@ -323,12 +323,12 @@ describe("buildNtfyPayload", () => {
     expect(buildNtfyPayload(base).threadId).toBe("alerts")
   })
 
-  it("default priority → Pop + active + 0.5 + dismiss 5s", () => {
+  it("default priority → Pop + active + 0.5 + dismiss 8s", () => {
     const p = buildNtfyPayload(base)
     expect(p.sound).toBe("Pop")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.5)
-    expect(p.dismissAfter).toBe(5)
+    expect(p.dismissAfter).toBe(8)
   })
 
   it("priority 5 → Ping + time-sensitive + 1.0 + no dismiss", () => {
@@ -347,20 +347,20 @@ describe("buildNtfyPayload", () => {
     expect(p.dismissAfter).toBeUndefined()
   })
 
-  it("priority 2 → Tink + active + 0.25 + dismiss 3s", () => {
+  it("priority 2 → Tink + active + 0.25 + dismiss 5s", () => {
     const p = buildNtfyPayload({ ...base, priority: 2 })
     expect(p.sound).toBe("Tink")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.25)
-    expect(p.dismissAfter).toBe(3)
+    expect(p.dismissAfter).toBe(5)
   })
 
-  it("priority 1 → Tink + active + 0.0 + dismiss 2s", () => {
+  it("priority 1 → Tink + active + 0.0 + dismiss 4s", () => {
     const p = buildNtfyPayload({ ...base, priority: 1 })
     expect(p.sound).toBe("Tink")
     expect(p.interruptionLevel).toBe("active")
     expect(p.relevanceScore).toBe(0.0)
-    expect(p.dismissAfter).toBe(2)
+    expect(p.dismissAfter).toBe(4)
   })
 
   it("click field → clickUrl in payload (not immediately opened)", () => {

@@ -1,11 +1,11 @@
-import { homedir } from "os"
 import { join } from "path"
 import { readdirSync, unlinkSync } from "fs"
-import { loadState, saveState } from "./dedup"
+import { STATE_DIR } from "./state"
 import { NotificationBuilder } from "./notifications"
+import type { NotificationQueue } from "./queue"
+import type { StateAccessor } from "./ntfy"
 import type { PendingReminder } from "./types"
 
-const STATE_DIR = `${homedir()}/.local/share/ntfy-mac`
 const REMINDER_PREFIX = "reminder-"
 const POLL_INTERVAL_MS = 10_000
 
@@ -13,28 +13,28 @@ let isTickRunning = false
 
 /**
  * Scans for reminder-*.json files written by the Swift helper,
- * merges them into persistent state, and fires any that are due.
+ * merges them into persistent state, and fires any that are due
+ * by enqueuing them through the notification queue.
  * Runs every 10s in the daemon.
  */
-export function startReminderPoll(): void {
+export function startReminderPoll(queue: NotificationQueue, state: StateAccessor): void {
   // Run immediately on startup to catch reminders missed during downtime
-  tick().catch((err) => console.error("reminders: poll error:", err))
+  tick(queue, state).catch((err) => console.error("reminders: poll error:", err))
   setInterval(() => {
     // Prevent overlapping tick() calls if previous one is still running
     if (!isTickRunning) {
-      tick().catch((err) => console.error("reminders: poll error:", err))
+      tick(queue, state).catch((err) => console.error("reminders: poll error:", err))
     }
   }, POLL_INTERVAL_MS)
 }
 
-async function tick(): Promise<void> {
+async function tick(queue: NotificationQueue, stateAccessor: StateAccessor): Promise<void> {
   if (isTickRunning) return
   isTickRunning = true
 
   try {
-    const state = await loadState()
-    let reminders = (state.reminders ?? []).filter(isValidReminder)
-    let changed = reminders.length !== (state.reminders ?? []).length
+    let reminders = (stateAccessor.get().reminders ?? []).filter(isValidReminder)
+    let changed = reminders.length !== (stateAccessor.get().reminders ?? []).length
 
     // 1. Ingest new reminder files from the Swift helper
     try {
@@ -74,19 +74,30 @@ async function tick(): Promise<void> {
       }
     }
 
-    // 2. Fire any reminders that are due
+    // 2. Fire any reminders that are due — enqueue through the notification queue
     const now = Date.now()
     const due = reminders.filter((r) => r.fireAt <= now)
     const pending = reminders.filter((r) => r.fireAt > now)
 
     for (const reminder of due) {
-      await fireReminder(reminder)
+      const payload = buildReminderPayload(reminder)
+      console.log(`reminders: firing "${reminder.title}"`)
+      queue.enqueue({
+        id: `reminder-${reminder.id}`,
+        payload,
+        priority: 3,
+        source: "reminder",
+        maxAttempts: 1,
+      })
       changed = true
     }
 
     // 3. Persist if anything changed
     if (changed) {
-      await saveState({ ...state, reminders: pending.length > 0 ? pending : undefined })
+      stateAccessor.update((s) => ({
+        ...s,
+        reminders: pending.length > 0 ? pending : undefined,
+      }))
     }
   } finally {
     isTickRunning = false
@@ -106,7 +117,7 @@ function isValidReminder(obj: unknown): obj is PendingReminder {
   )
 }
 
-async function fireReminder(reminder: PendingReminder): Promise<void> {
+function buildReminderPayload(reminder: PendingReminder) {
   const builder = new NotificationBuilder(`🔁 ${reminder.title}`, reminder.body)
     .sound("Pop")
     .interruptionLevel("active")
@@ -115,6 +126,5 @@ async function fireReminder(reminder: PendingReminder): Promise<void> {
   if (reminder.threadId) builder.thread(reminder.threadId)
   if (reminder.clickUrl) builder.clickUrl(reminder.clickUrl)
 
-  console.log(`reminders: firing "${reminder.title}"`)
-  await builder.send()
+  return builder.build()
 }
