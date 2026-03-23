@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
-import { cleanup, isSeen, loadState, markSeen, saveState } from "../src/dedup"
+import { cleanup, isSeen, markSeen } from "../src/dedup"
+import { loadState } from "../src/state"
 import type { AppState } from "../src/types"
 
 // Override state file location for tests

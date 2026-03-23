@@ -20,9 +20,9 @@ interface PriorityConfig {
 export const PRIORITY_CONFIG: Record<number, PriorityConfig> = {
   5: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 1.0, dismissAfter: 0 },
   4: { sound: "Ping", interruptionLevel: "time-sensitive", relevanceScore: 0.75, dismissAfter: 0 },
-  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5, dismissAfter: 5 },
-  2: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.25, dismissAfter: 3 },
-  1: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.0, dismissAfter: 2 },
+  3: { sound: "Pop", interruptionLevel: "active", relevanceScore: 0.5, dismissAfter: 8 },
+  2: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.25, dismissAfter: 5 },
+  1: { sound: "Tink", interruptionLevel: "active", relevanceScore: 0.0, dismissAfter: 4 },
 }
 
 /** Resolve the effective priority config, applying user overrides for sounds and dismiss timing. */

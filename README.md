@@ -51,7 +51,7 @@ The daemon starts on login automatically after installation.
 
 ## Features
 
-**Real-time delivery** — SSE streaming with automatic reconnect, offline detection, and missed-message recovery. No polling, no delays.
+**Reliable real-time delivery** — SSE streaming with automatic reconnect, offline detection, and missed-message recovery. Notifications are paced to ensure every message gets a visible banner, even during bursts. No polling, no missed alerts.
 
 **Full ntfy support** — Priorities, emoji tags, titles, images, click-to-open URLs, and action buttons (view/http) — all mapped to native macOS notification capabilities.
 
@@ -111,9 +111,9 @@ Default sounds per priority:
 | ----------- | ----- | -------------- | ------------ |
 | 5 (urgent)  | Ping  | breaks through | stays        |
 | 4 (high)    | Ping  | breaks through | stays        |
-| 3 (default) | Pop   | normal         | 5 s          |
-| 2 (low)     | Tink  | normal         | 3 s          |
-| 1 (min)     | Tink  | normal         | 2 s          |
+| 3 (default) | Pop   | normal         | 8 s          |
+| 2 (low)     | Tink  | normal         | 5 s          |
+| 1 (min)     | Tink  | normal         | 4 s          |
 
 Override any of these:
 

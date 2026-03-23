@@ -17,7 +17,9 @@ ntfy-mac uses `scutil --nwi` to detect whether the Mac has a network connection 
 
 ## Notifications
 
-Each ntfy message becomes a native macOS notification via a Swift helper app (`ntfy-notify.app`) that uses `UNUserNotificationCenter`. The helper is a minimal `.app` bundle so macOS can attribute notifications to ntfy-mac and persist permission state.
+All notifications are delivered through a unified queue that paces sends ~1.5 s apart. This prevents macOS from suppressing banners during bursts (e.g., 9 uptime alerts at once). Higher-priority messages drain first. Failed deliveries are retried automatically.
+
+Each notification is sent via a Swift helper app (`ntfy-notify.app`) that uses `UNUserNotificationCenter`. The helper is a minimal `.app` bundle so macOS can attribute notifications to ntfy-mac and persist permission state.
 
 ### Field mapping
 
@@ -39,9 +41,9 @@ Each ntfy message becomes a native macOS notification via a Swift helper app (`n
 | ----------- | ----- | -------------- | ------------ | --------- |
 | 5 (urgent)  | Ping  | time-sensitive | never        | 1.0       |
 | 4 (high)    | Ping  | time-sensitive | never        | 0.75      |
-| 3 (default) | Pop   | active         | 5 s          | 0.5       |
-| 2 (low)     | Tink  | active         | 3 s          | 0.25      |
-| 1 (min)     | Tink  | active         | 2 s          | 0.0       |
+| 3 (default) | Pop   | active         | 8 s          | 0.5       |
+| 2 (low)     | Tink  | active         | 5 s          | 0.25      |
+| 1 (min)     | Tink  | active         | 4 s          | 0.0       |
 
 Priority 4–5 notifications break through Focus/Do Not Disturb. All sounds and dismiss timings are configurable via `ntfy-mac config`.
 
@@ -57,7 +59,7 @@ When reconnecting after a gap, messages are categorized by age:
 
 ## Deduplication
 
-All delivered message IDs are persisted to `~/.local/share/ntfy-mac/state.json`. On restart, already-seen IDs are skipped. State is written atomically (write to `.tmp`, then rename) and cleaned on load: entries older than 48 h are dropped, capped at 1 000 entries.
+All delivered message IDs are persisted to `~/.local/share/ntfy-mac/state.json`. On restart, already-seen IDs are skipped. State is managed by a centralized state owner that coalesces rapid writes (e.g., a burst of 9 messages results in 1–2 disk writes, not 9). Writes are atomic (write to `.tmp`, then rename). On load, entries older than 48 h are dropped and capped at 1 000.
 
 ## Topic auto-discovery
 

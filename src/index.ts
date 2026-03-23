@@ -1,19 +1,25 @@
 import { CONFIG_PATH, loadConfig, loadStoredConfig } from "./config"
-import { isSeen, loadState, markSeen, saveState } from "./dedup"
-import { NotificationBuilder, sendNotificationPayload } from "./notifications"
+import { isSeen, markSeen } from "./dedup"
+import { loadState, saveState, StateManager } from "./state"
+import {
+  NotificationBuilder,
+  sendNotificationPayload,
+  sendNotificationNonBlocking,
+} from "./notifications"
 import { discoverTopics, startListener, type MissedMessageResult } from "./ntfy"
 import {
+  buildNtfyPayload,
   DEFAULT_ACTIONS,
   DEFAULT_CATEGORY_ID,
   renderTags,
   resolvePriorityConfig,
   sendConnectionFailureNotification,
-  sendNotification,
   sendSetupNotification,
   sendSummaryNotification,
   sendUpdateAvailableNotification,
   sendUpdateSuccessNotification,
 } from "./notify"
+import { NotificationQueue } from "./queue"
 import { handleConfigCommand } from "./config-cli"
 import { startReminderPoll } from "./reminders"
 import { runDoctor } from "./doctor"
@@ -37,9 +43,8 @@ const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 // ─── Update check ─────────────────────────────────────────────────────────────
 
-async function checkForUpdate(): Promise<void> {
-  const state = await loadState()
-  const lastCheck = state.lastUpdateCheck ?? 0
+async function checkForUpdate(stateManager: StateManager): Promise<void> {
+  const lastCheck = stateManager.get().lastUpdateCheck ?? 0
   if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
 
   const res = await fetch("https://api.github.com/repos/jkrumm/ntfy-mac/releases/latest", {
@@ -51,8 +56,7 @@ async function checkForUpdate(): Promise<void> {
   const latest = body.tag_name
   if (!latest) return
 
-  // Re-read state immediately before writing to avoid clobbering concurrent listener writes.
-  await saveState({ ...(await loadState()), lastUpdateCheck: Date.now() })
+  stateManager.update((s) => ({ ...s, lastUpdateCheck: Date.now() }))
 
   if (!isNewerVersion(latest, VERSION)) return
 
@@ -493,14 +497,6 @@ if (!acquirePidLock()) {
   console.error("ntfy-mac: another instance is already running")
   process.exit(1)
 }
-process.on("SIGINT", () => {
-  releasePidLock()
-  process.exit(0)
-})
-process.on("SIGTERM", () => {
-  releasePidLock()
-  process.exit(0)
-})
 
 const config = await loadConfig()
 if (!config) {
@@ -512,9 +508,28 @@ if (!config) {
     await sendSetupNotification()
     await saveState({ ...setupState, lastSetupNotification: Date.now() })
   }
+  releasePidLock()
   console.error("ntfy-mac is not configured. Run: ntfy-mac setup")
   process.exit(1)
 }
+
+// ─── State + Queue initialization ────────────────────────────────────────────
+
+const stateManager = new StateManager()
+await stateManager.load()
+
+const queue = new NotificationQueue(sendNotificationNonBlocking)
+
+process.on("SIGINT", () => {
+  queue.destroy()
+  releasePidLock()
+  process.exit(0)
+})
+process.on("SIGTERM", () => {
+  queue.destroy()
+  releasePidLock()
+  process.exit(0)
+})
 
 // Send success notification if a previous auto-update wrote a pending version
 takePendingUpdateNotification()
@@ -524,7 +539,7 @@ takePendingUpdateNotification()
   .catch(() => {})
 
 // Non-blocking update check — never throws
-checkForUpdate().catch(() => {})
+checkForUpdate(stateManager).catch(() => {})
 
 // ─── Message handlers (close over config for sound overrides) ────────────────
 
@@ -532,10 +547,17 @@ const soundOverrides = config.sounds
 const dismissOverrides = config.dismiss
 
 async function handleMessage(msg: NtfyMessage): Promise<void> {
-  const state = await loadState()
-  if (isSeen(state, msg.id)) return
-  await sendNotification(msg, soundOverrides, dismissOverrides)
-  await saveState(markSeen(state, msg.id))
+  if (isSeen(stateManager.get(), msg.id)) return
+  stateManager.update((s) => markSeen(s, msg.id))
+  const payload = buildNtfyPayload(msg, soundOverrides, dismissOverrides)
+  console.log(`notify: [${msg.topic}] p${msg.priority ?? 3} ${payload.title}`)
+  queue.enqueue({
+    id: msg.id,
+    payload,
+    priority: msg.priority ?? 3,
+    source: "sse",
+    maxAttempts: 3,
+  })
 }
 
 async function handleMissed(result: MissedMessageResult): Promise<void> {
@@ -563,6 +585,13 @@ if (topics.length === 0) {
 
 console.log(`ntfy-mac ${VERSION} — listening on: ${topics.join(", ")}`)
 
-startReminderPoll()
+startReminderPoll(queue, stateManager)
 
-await startListener(config, topics, handleMessage, handleMissed, sendConnectionFailureNotification)
+await startListener(
+  config,
+  topics,
+  handleMessage,
+  handleMissed,
+  stateManager,
+  sendConnectionFailureNotification,
+)
