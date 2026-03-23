@@ -1,3 +1,11 @@
+# [1.9.0](https://github.com/jkrumm/ntfy-mac/compare/v1.8.0...v1.9.0) (2026-03-23)
+
+
+### Features
+
+* **notifications:** add default action buttons with daemon-side reminders ([d821836](https://github.com/jkrumm/ntfy-mac/commit/d8218361772375c7bf4edfeb02073aca52a34295))
+* **notifications:** revise default sounds per priority level ([68f2e55](https://github.com/jkrumm/ntfy-mac/commit/68f2e5510ea22be7440789a853f4bbf0f86edc5f))
+
 # [1.8.0](https://github.com/jkrumm/ntfy-mac/compare/v1.7.0...v1.8.0) (2026-03-22)
 
 
