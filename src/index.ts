@@ -513,6 +513,22 @@ if (!config) {
   process.exit(1)
 }
 
+// ─── Clean up stale notification helpers ──────────────────────────────────────
+// The dev build script syncs ntfy-notify.app to ~/Applications/ which registers
+// a second notification source in macOS. When users switch to Homebrew or curl,
+// the stale copy causes duplicate entries in System Settings → Notifications.
+if (detectInstallMethod() !== "dev") {
+  const { existsSync } = await import("fs")
+  const { homedir: home } = await import("os")
+  const devHelper = `${home()}/Applications/ntfy-notify.app`
+  if (existsSync(devHelper)) {
+    try {
+      await Bun.$`rm -rf ${devHelper}`.quiet()
+      console.log("cleaned up stale notification helper from ~/Applications/")
+    } catch {}
+  }
+}
+
 // ─── State + Queue initialization ────────────────────────────────────────────
 
 const stateManager = new StateManager()
