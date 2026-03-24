@@ -87,19 +87,22 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 
 ## Commands
 
-| Command                     | Description                                       |
-| --------------------------- | ------------------------------------------------- |
-| `ntfy-mac setup`            | Configure server and credentials                  |
-| `ntfy-mac doctor`           | Health check (config, server, auth, daemon, logs) |
-| `ntfy-mac config`           | Show notification settings                        |
-| `ntfy-mac config sounds`    | Manage sounds per priority                        |
-| `ntfy-mac config dismiss`   | Manage auto-dismiss timing per priority           |
-| `ntfy-mac notify -m "text"` | Send a local notification (no server needed)      |
-| `ntfy-mac sounds`           | Preview all macOS notification sounds             |
-| `ntfy-mac logs`             | Tail the daemon log                               |
-| `ntfy-mac logs --error`     | Tail the error log                                |
-| `ntfy-mac update`           | Update to the latest version                      |
-| `ntfy-mac uninstall`        | Remove ntfy-mac and all its data                  |
+| Command                        | Description                                       |
+| ------------------------------ | ------------------------------------------------- |
+| `ntfy-mac setup`               | Configure server and credentials                  |
+| `ntfy-mac doctor`              | Health check (config, server, auth, daemon, logs) |
+| `ntfy-mac subscribe`           | Show subscribed topics                            |
+| `ntfy-mac subscribe <topic>`   | Add a topic (merged with auto-discovered)         |
+| `ntfy-mac unsubscribe <topic>` | Remove a locally added topic                      |
+| `ntfy-mac config`              | Show notification settings                        |
+| `ntfy-mac config sounds`       | Manage sounds per priority                        |
+| `ntfy-mac config dismiss`      | Manage auto-dismiss timing per priority           |
+| `ntfy-mac notify -m "text"`    | Send a local notification (no server needed)      |
+| `ntfy-mac sounds`              | Preview all macOS notification sounds             |
+| `ntfy-mac logs`                | Tail the daemon log                               |
+| `ntfy-mac logs --error`        | Tail the error log                                |
+| `ntfy-mac update`              | Update to the latest version                      |
+| `ntfy-mac uninstall`           | Remove ntfy-mac and all its data                  |
 
 ---
 

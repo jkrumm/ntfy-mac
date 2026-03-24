@@ -43,7 +43,8 @@ export interface DismissConfig {
 export interface Config {
   url: string // e.g. https://ntfy.jkrumm.com
   token: string
-  topics?: string[] // override auto-discovery
+  topics?: string[] // override auto-discovery entirely
+  extraTopics?: string[] // merged with auto-discovered topics
   sounds?: SoundConfig // per-priority sound overrides
   dismiss?: DismissConfig // per-priority auto-dismiss timing
 }

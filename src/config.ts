@@ -4,21 +4,23 @@ import type { Config } from "./types"
 
 export const CONFIG_PATH = join(homedir(), ".config", "ntfy-mac", "config.json")
 
-type StoredConfig = { url: string; token: string; sounds?: Record<string, string | null> }
-
 export async function loadConfig(): Promise<Config | null> {
   let url: string | null = null
   let token: string | null = null
   let sounds: Config["sounds"]
+  let dismiss: Config["dismiss"]
+  let extraTopics: Config["extraTopics"]
 
   // Try config file first
   try {
     const file = Bun.file(CONFIG_PATH)
     if (await file.exists()) {
-      const stored = (await file.json()) as StoredConfig
-      url = stored.url ?? null
-      token = stored.token ?? null
-      sounds = stored.sounds ?? undefined
+      const stored = (await file.json()) as Record<string, unknown>
+      url = (stored.url as string) ?? null
+      token = (stored.token as string) ?? null
+      sounds = (stored.sounds as Config["sounds"]) ?? undefined
+      dismiss = (stored.dismiss as Config["dismiss"]) ?? undefined
+      extraTopics = (stored.extraTopics as string[]) ?? undefined
     }
   } catch {
     // Config file unreadable or malformed
@@ -57,7 +59,7 @@ export async function loadConfig(): Promise<Config | null> {
         .filter(Boolean)
     : undefined
 
-  return { url: url.replace(/\/$/, ""), token: token.trim(), topics, sounds }
+  return { url: url.replace(/\/$/, ""), token: token.trim(), topics, extraTopics, sounds, dismiss }
 }
 
 /** Read the raw stored config from disk (returns empty object if missing/malformed). */

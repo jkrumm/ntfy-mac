@@ -94,6 +94,9 @@ Usage:
                --token <token>
   ntfy-mac doctor                   Check health and configuration
   ntfy-mac doctor --json            Machine-readable health report
+  ntfy-mac subscribe                Show subscribed topics
+  ntfy-mac subscribe <topic>        Add a topic (merged with auto-discovered)
+  ntfy-mac unsubscribe <topic>      Remove a locally added topic
   ntfy-mac config                   Manage configuration
   ntfy-mac config sounds            Show/change notification sounds
   ntfy-mac config dismiss           Show/change auto-dismiss timing
@@ -441,6 +444,92 @@ if (command === "uninstall") {
   process.exit(0)
 }
 
+if (command === "subscribe" || command === "unsubscribe") {
+  const {
+    loadConfig: loadCfg,
+    loadStoredConfig: loadStored,
+    updateStoredConfig: updateStored,
+  } = await import("./config")
+  const { discoverTopics: discover } = await import("./ntfy")
+
+  const topic = process.argv[3]
+
+  if (command === "subscribe" && topic === "reset") {
+    await updateStored({ extraTopics: undefined })
+    console.log("Local topic additions cleared. Daemon will use auto-discovery only.")
+    console.log("Restart the daemon to apply: brew services restart ntfy-mac")
+    process.exit(0)
+  }
+
+  if (command === "subscribe" && !topic) {
+    // Show current topics
+    const cfg = await loadCfg()
+    if (!cfg) {
+      console.error("Not configured. Run: ntfy-mac setup")
+      process.exit(1)
+    }
+    const stored = await loadStored()
+    const extra = (stored.extraTopics as string[]) ?? []
+
+    let discovered: string[] = []
+    if (!cfg.topics) {
+      try {
+        discovered = await discover(cfg)
+      } catch (err) {
+        console.error(`Could not discover topics: ${err instanceof Error ? err.message : err}`)
+      }
+    }
+
+    const effective = cfg.topics ?? [...new Set([...discovered, ...extra])]
+
+    console.log("Subscribed topics\n")
+    if (cfg.topics) {
+      console.log("  Source: NTFY_TOPICS environment variable (full override)")
+    } else {
+      console.log("  Source: auto-discovery + local additions")
+    }
+    console.log("")
+    for (const t of effective) {
+      const isExtra = extra.includes(t) && !discovered.includes(t)
+      console.log(`  ${t}${isExtra ? " (local)" : ""}`)
+    }
+    if (effective.length === 0) console.log("  (none)")
+    console.log("")
+    console.log("Add a topic:    ntfy-mac subscribe <topic>")
+    console.log("Remove a topic: ntfy-mac unsubscribe <topic>")
+    console.log("Reset to auto:  ntfy-mac subscribe reset")
+    process.exit(0)
+  }
+
+  if (!topic) {
+    console.error("Usage: ntfy-mac unsubscribe <topic>")
+    process.exit(1)
+  }
+
+  const stored = await loadStored()
+  const extra = (stored.extraTopics as string[]) ?? []
+
+  if (command === "subscribe") {
+    if (extra.includes(topic)) {
+      console.log(`Topic "${topic}" is already subscribed.`)
+      process.exit(0)
+    }
+    await updateStored({ extraTopics: [...extra, topic] })
+    console.log(`Subscribed to "${topic}".`)
+    console.log("Restart the daemon to apply: brew services restart ntfy-mac")
+  } else {
+    if (!extra.includes(topic)) {
+      console.log(`Topic "${topic}" is not in local additions.`)
+      console.log("Server-side subscriptions are managed in the ntfy web UI.")
+      process.exit(1)
+    }
+    await updateStored({ extraTopics: extra.filter((t) => t !== topic) })
+    console.log(`Unsubscribed from "${topic}".`)
+    console.log("Restart the daemon to apply: brew services restart ntfy-mac")
+  }
+  process.exit(0)
+}
+
 if (command === "config") {
   await handleConfigCommand(process.argv.slice(3))
   process.exit(0)
@@ -587,7 +676,13 @@ async function handleMissed(result: MissedMessageResult): Promise<void> {
 
 let topics: string[]
 try {
-  topics = config.topics ?? (await discoverTopics(config))
+  if (config.topics) {
+    topics = config.topics
+  } else {
+    const discovered = await discoverTopics(config)
+    const extra = config.extraTopics ?? []
+    topics = [...new Set([...discovered, ...extra])]
+  }
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err)
   console.error(`ntfy-mac: failed to discover topics — ${message}`)

@@ -215,7 +215,9 @@ export async function startListener(
     // Periodic topic re-check: if 30 min have passed, re-discover topics
     if (Date.now() - lastTopicCheck >= TOPIC_RECHECK_INTERVAL_MS) {
       try {
-        const freshTopics = config.topics ?? (await discoverTopics(config))
+        const discovered = config.topics ?? (await discoverTopics(config))
+        const extra = config.extraTopics ?? []
+        const freshTopics = [...new Set([...discovered, ...extra])]
         const added = freshTopics.filter((t) => !topics.includes(t))
         const removed = topics.filter((t) => !freshTopics.includes(t))
         if (added.length > 0 || removed.length > 0) {
