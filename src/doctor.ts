@@ -135,19 +135,22 @@ async function checkTopics(): Promise<CheckResult> {
     return { name: "topics", status: "fail", message: "Skipped (no config)" }
   }
   try {
-    const topics = config.topics ?? (await discoverTopics(config))
+    const discovered = config.topics ?? (await discoverTopics(config))
+    const extra = config.extraTopics ?? []
+    const topics = [...new Set([...discovered, ...extra])]
     if (topics.length === 0) {
       return {
         name: "topics",
         status: "warn",
         message: "No subscribed topics",
-        detail: "Subscribe to topics in the ntfy web UI first",
+        detail: "Subscribe via: ntfy-mac subscribe <topic>",
       }
     }
+    const extraNote = extra.length > 0 ? ` (+${extra.length} local)` : ""
     return {
       name: "topics",
       status: "ok",
-      message: `${topics.length} topic(s): ${topics.join(", ")}`,
+      message: `${topics.length} topic(s)${extraNote}: ${topics.join(", ")}`,
     }
   } catch (err) {
     return {
