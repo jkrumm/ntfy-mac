@@ -312,6 +312,9 @@ if (command === "update") {
     console.log("Upgrading via Homebrew...")
     try {
       await Bun.$`brew upgrade jkrumm/tap/ntfy-mac`
+      const { ensureCleanInstallation } = await import("./launchservices")
+      const actions = await ensureCleanInstallation()
+      if (actions.length > 0) console.log(`Cleaned: ${actions.join(", ")}`)
       await Bun.$`brew services restart ntfy-mac`
       console.log("Done.")
     } catch (err) {
@@ -423,7 +426,21 @@ if (command === "uninstall") {
     errors++
   }
 
-  // 5. Remove binary (last — so we can still run to this point)
+  // 5. Deregister from macOS and clean all stale artifacts
+  process.stdout.write("Deregistering from macOS... ")
+  try {
+    const { ensureCleanInstallation, resolveHelperAppPath } = await import("./launchservices")
+    // Clean everything first, then deregister current
+    await ensureCleanInstallation()
+    const LS =
+      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    await Bun.$`${LS} -u ${resolveHelperAppPath()}`.quiet()
+    console.log("✓")
+  } catch {
+    console.log("(skipped)")
+  }
+
+  // 6. Remove binary (last — so we can still run to this point)
   process.stdout.write("Removing binary... ")
   try {
     await Bun.$`rm -f ${binaryPath}`.quiet()
@@ -602,20 +619,11 @@ if (!config) {
   process.exit(1)
 }
 
-// ─── Clean up stale notification helpers ──────────────────────────────────────
-// The dev build script syncs ntfy-notify.app to ~/Applications/ which registers
-// a second notification source in macOS. When users switch to Homebrew or curl,
-// the stale copy causes duplicate entries in System Settings → Notifications.
-if (detectInstallMethod() !== "dev") {
-  const { existsSync } = await import("fs")
-  const { homedir: home } = await import("os")
-  const devHelper = `${home()}/Applications/ntfy-notify.app`
-  if (existsSync(devHelper)) {
-    try {
-      await Bun.$`rm -rf ${devHelper}`.quiet()
-      console.log("cleaned up stale notification helper from ~/Applications/")
-    } catch {}
-  }
+// ─── Clean installation — active method wins, stale artifacts removed ────────
+{
+  const { ensureCleanInstallation } = await import("./launchservices")
+  const actions = await ensureCleanInstallation()
+  if (actions.length > 0) console.log(`cleanup: ${actions.join(", ")}`)
 }
 
 // ─── State + Queue initialization ────────────────────────────────────────────

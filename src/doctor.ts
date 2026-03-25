@@ -1,6 +1,8 @@
 import { existsSync, statSync } from "fs"
 import { homedir } from "os"
 import { CONFIG_PATH, loadConfig } from "./config"
+import { ensureCleanInstallation, resolveHelperAppPath } from "./launchservices"
+import { resolveHelperPath } from "./notifications"
 import { loadState } from "./state"
 import { discoverTopics } from "./ntfy"
 import { PRIORITY_CONFIG } from "./notify"
@@ -261,6 +263,31 @@ async function checkUpdate(version: string): Promise<CheckResult> {
   }
 }
 
+async function checkHelper(): Promise<CheckResult> {
+  const helperPath = resolveHelperPath()
+  if (!existsSync(helperPath)) {
+    return {
+      name: "helper",
+      status: "fail",
+      message: "Notification helper not found",
+      detail: `Expected: ${resolveHelperAppPath()}`,
+    }
+  }
+
+  // Run full installation cleanup — removes stale helpers, LaunchAgents,
+  // binaries, and LS registrations from other install methods
+  const actions = await ensureCleanInstallation()
+  if (actions.length > 0) {
+    return {
+      name: "helper",
+      status: "warn",
+      message: `Fixed: ${actions.join(", ")}`,
+    }
+  }
+
+  return { name: "helper", status: "ok", message: "Clean, no stale artifacts" }
+}
+
 function checkDismissConfig(): CheckResult {
   const stored = loadStoredConfigSync()
   const dismiss = stored?.dismiss as Record<string, number> | undefined
@@ -315,6 +342,7 @@ export async function runDoctor(version: string, jsonMode: boolean): Promise<voi
     checkAuth(),
     checkTopics(),
     checkDaemon(installMethod),
+    checkHelper(),
     checkState(),
     Promise.resolve(checkLogs(installMethod)),
     checkUpdate(version),

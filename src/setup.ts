@@ -1,6 +1,7 @@
 import { dirname } from "path"
 import { createInterface } from "readline"
 import { CONFIG_PATH } from "./config"
+import { ensureCleanInstallation } from "./launchservices"
 import { sendNotificationPayload } from "./notifications"
 import { detectInstallMethod } from "./updater"
 import type { Config } from "./types"
@@ -149,6 +150,9 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
 
   console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
 
+  // Active install method wins — remove stale artifacts from other methods
+  await ensureCleanInstallation()
+
   if (detectInstallMethod() === "brew") {
     await startBrewService()
   }
@@ -256,6 +260,9 @@ export async function runSetup(): Promise<void> {
       console.log("  launchctl load -w ~/Library/LaunchAgents/com.jkrumm.ntfy-mac.plist")
     }
   }
+
+  // Active install method wins — remove stale artifacts from other methods
+  await ensureCleanInstallation()
 
   console.log("")
   console.log("┌─────────────────────────────────────────────────────┐")

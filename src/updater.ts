@@ -55,6 +55,9 @@ async function downloadAndReplace(latestVersion: string): Promise<void> {
 // Called from the daemon's update check — exits so launchd restarts with new binary
 export async function performAutoUpdate(latestVersion: string): Promise<void> {
   await downloadAndReplace(latestVersion)
+  // Active install method wins — clean stale artifacts
+  const { ensureCleanInstallation } = await import("./launchservices")
+  await ensureCleanInstallation()
   // Re-read state immediately before writing to avoid clobbering concurrent listener writes
   await saveState({ ...(await loadState()), pendingUpdateNotification: latestVersion })
   process.exit(0)
