@@ -57,7 +57,10 @@ export async function performAutoUpdate(latestVersion: string): Promise<void> {
   await downloadAndReplace(latestVersion)
   // Active install method wins — clean stale artifacts
   const { ensureCleanInstallation } = await import("./launchservices")
-  await ensureCleanInstallation()
+  const result = await ensureCleanInstallation()
+  if (result.errors.length > 0) {
+    for (const err of result.errors) console.error(`cleanup warning: ${err}`)
+  }
   // Re-read state immediately before writing to avoid clobbering concurrent listener writes
   await saveState({ ...(await loadState()), pendingUpdateNotification: latestVersion })
   process.exit(0)

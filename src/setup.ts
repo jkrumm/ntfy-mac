@@ -151,7 +151,11 @@ export async function runSetupNonInteractive(url: string, token: string): Promis
   console.log(`Configured: ${normalized} (${topics.length} topic(s))`)
 
   // Active install method wins — remove stale artifacts from other methods
-  await ensureCleanInstallation()
+  const result = await ensureCleanInstallation()
+  if (result.errors.length > 0) {
+    console.warn("Setup completed with some cleanup warnings (non-critical):")
+    for (const err of result.errors) console.warn(`  - ${err}`)
+  }
 
   if (detectInstallMethod() === "brew") {
     await startBrewService()
@@ -262,7 +266,11 @@ export async function runSetup(): Promise<void> {
   }
 
   // Active install method wins — remove stale artifacts from other methods
-  await ensureCleanInstallation()
+  const result = await ensureCleanInstallation()
+  if (result.errors.length > 0) {
+    console.warn("Setup completed with some cleanup warnings (non-critical):")
+    for (const err of result.errors) console.warn(`  - ${err}`)
+  }
 
   console.log("")
   console.log("┌─────────────────────────────────────────────────────┐")
