@@ -1,3 +1,15 @@
+# [1.10.0](https://github.com/jkrumm/ntfy-mac/compare/v1.9.0...v1.10.0) (2026-03-25)
+
+
+### Bug Fixes
+
+* **notifications:** prevent duplicate app registration and dock bounce ([71a6e22](https://github.com/jkrumm/ntfy-mac/commit/71a6e227c25d72853b1c1366f37d4738fe42c822))
+
+
+### Features
+
+* **topics:** add subscribe/unsubscribe CLI commands ([454baca](https://github.com/jkrumm/ntfy-mac/commit/454bacac662a9deb73475852afa8cbb25dffa525))
+
 # [1.9.0](https://github.com/jkrumm/ntfy-mac/compare/v1.8.0...v1.9.0) (2026-03-23)
 
 
