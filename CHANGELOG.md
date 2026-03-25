@@ -1,3 +1,11 @@
+## [1.10.1](https://github.com/jkrumm/ntfy-mac/compare/v1.10.0...v1.10.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* **stability:** address CodeRabbit review feedback on cleanup logic ([6b1a5c4](https://github.com/jkrumm/ntfy-mac/commit/6b1a5c4fae1d0bb2c35621c927b9c2a2d51126f5))
+* **stability:** unified installation cleanup and SSE error logging ([83be0bc](https://github.com/jkrumm/ntfy-mac/commit/83be0bc50b5922e0fe313b3cea3cd681eceae969))
+
 # [1.10.0](https://github.com/jkrumm/ntfy-mac/compare/v1.9.0...v1.10.0) (2026-03-25)
 
 
