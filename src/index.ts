@@ -313,8 +313,11 @@ if (command === "update") {
     try {
       await Bun.$`brew upgrade jkrumm/tap/ntfy-mac`
       const { ensureCleanInstallation } = await import("./launchservices")
-      const actions = await ensureCleanInstallation()
-      if (actions.length > 0) console.log(`Cleaned: ${actions.join(", ")}`)
+      const result = await ensureCleanInstallation()
+      if (result.actions.length > 0) console.log(`Cleaned: ${result.actions.join(", ")}`)
+      if (result.errors.length > 0) {
+        for (const err of result.errors) console.error(`Cleanup warning: ${err}`)
+      }
       await Bun.$`brew services restart ntfy-mac`
       console.log("Done.")
     } catch (err) {
@@ -415,7 +418,27 @@ if (command === "uninstall") {
     console.log("(none found)")
   }
 
-  // 4. Remove state directory (logs, state.json)
+  // 4. Deregister from macOS and clean all stale artifacts (before removing state dir,
+  //    since curl installs place the helper app under stateDir)
+  process.stdout.write("Deregistering from macOS... ")
+  try {
+    const { ensureCleanInstallation, resolveHelperAppPath } = await import("./launchservices")
+    // Clean everything first, then deregister current
+    const result = await ensureCleanInstallation()
+    if (result.errors.length > 0) {
+      for (const err of result.errors) console.error(`Cleanup warning: ${err}`)
+    }
+    const LS =
+      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    await Bun.$`${LS} -u ${resolveHelperAppPath()}`.quiet()
+    console.log("✓")
+  } catch (err) {
+    console.log("✗")
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`)
+    errors++
+  }
+
+  // 5. Remove state directory (logs, state.json, helper bundle)
   process.stdout.write("Removing state and logs... ")
   try {
     await Bun.$`rm -rf ${stateDir}`.quiet()
@@ -424,20 +447,6 @@ if (command === "uninstall") {
     console.log("✗")
     console.error(`  ${err instanceof Error ? err.message : String(err)}`)
     errors++
-  }
-
-  // 5. Deregister from macOS and clean all stale artifacts
-  process.stdout.write("Deregistering from macOS... ")
-  try {
-    const { ensureCleanInstallation, resolveHelperAppPath } = await import("./launchservices")
-    // Clean everything first, then deregister current
-    await ensureCleanInstallation()
-    const LS =
-      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-    await Bun.$`${LS} -u ${resolveHelperAppPath()}`.quiet()
-    console.log("✓")
-  } catch {
-    console.log("(skipped)")
   }
 
   // 6. Remove binary (last — so we can still run to this point)
@@ -598,6 +607,16 @@ if (!isDaemon) {
   process.exit(command === undefined ? 0 : 1)
 }
 
+// ─── Clean installation — BEFORE pid lock to evict stale daemons ──────────────
+{
+  const { ensureCleanInstallation } = await import("./launchservices")
+  const result = await ensureCleanInstallation()
+  if (result.actions.length > 0) console.log(`cleanup: ${result.actions.join(", ")}`)
+  if (result.errors.length > 0) {
+    for (const err of result.errors) console.error(`cleanup warning: ${err}`)
+  }
+}
+
 // Prevent concurrent daemon instances
 if (!acquirePidLock()) {
   console.error("ntfy-mac: another instance is already running")
@@ -617,13 +636,6 @@ if (!config) {
   releasePidLock()
   console.error("ntfy-mac is not configured. Run: ntfy-mac setup")
   process.exit(1)
-}
-
-// ─── Clean installation — active method wins, stale artifacts removed ────────
-{
-  const { ensureCleanInstallation } = await import("./launchservices")
-  const actions = await ensureCleanInstallation()
-  if (actions.length > 0) console.log(`cleanup: ${actions.join(", ")}`)
 }
 
 // ─── State + Queue initialization ────────────────────────────────────────────

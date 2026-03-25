@@ -276,12 +276,24 @@ async function checkHelper(): Promise<CheckResult> {
 
   // Run full installation cleanup — removes stale helpers, LaunchAgents,
   // binaries, and LS registrations from other install methods
-  const actions = await ensureCleanInstallation()
-  if (actions.length > 0) {
+  const result = await ensureCleanInstallation()
+
+  // If there are errors, report them separately from "clean"
+  if (result.errors.length > 0) {
     return {
       name: "helper",
       status: "warn",
-      message: `Fixed: ${actions.join(", ")}`,
+      message: `Cleanup had errors: ${result.errors.join("; ")}`,
+      detail: result.actions.length > 0 ? `Fixed: ${result.actions.join(", ")}` : undefined,
+    }
+  }
+
+  // If there are actions, the state was fixed
+  if (result.actions.length > 0) {
+    return {
+      name: "helper",
+      status: "warn",
+      message: `Fixed: ${result.actions.join(", ")}`,
     }
   }
 
