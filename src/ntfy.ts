@@ -154,11 +154,18 @@ async function connectSSE(
   let buffer = ""
   let pollRequested = false
   let currentEvent = ""
+  let firstData = true
 
   try {
     while (true) {
       const { done, value } = await readWithTimeout(reader)
       if (done) break
+      if (firstData) {
+        firstData = false
+        console.log(
+          `connected (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
+        )
+      }
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split("\n")
       buffer = lines.pop() ?? ""
@@ -232,8 +239,8 @@ export async function startListener(
     }
 
     try {
-      console.log(
-        `connected (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
+      debug(
+        `connecting (topics: ${topics.length}, since: ${since === "latest" ? "now" : since.slice(0, 8)})`,
       )
       const result = await connectSSE(config, topics, since, async (msg) => {
         state.update((s) => ({ ...s, lastMessageId: msg.id }))
@@ -245,15 +252,17 @@ export async function startListener(
       pollRequested = result.pollRequested
       console.log("connection closed — reconnecting")
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       const online = await isNetworkAvailable()
+
       if (!online) {
-        debug("offline — waiting for network")
+        // Log the reason even when offline so the logs show what happened
+        console.log(`offline — ${message}`)
         await Bun.sleep(OFFLINE_RETRY_MS)
-        continue // skip poll + backoff, retry immediately when network is back
+        continue // skip poll + backoff, retry when network returns
       }
 
       consecutiveFailures++
-      const message = err instanceof Error ? err.message : String(err)
       console.error(`connection error (attempt ${consecutiveFailures}): ${message}`)
 
       // Alert user after sustained server failure, with cooldown to avoid spam
