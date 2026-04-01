@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/jkrumm/ntfy-mac/compare/v1.10.1...v1.11.0) (2026-04-01)
+
+
+### Features
+
+* **notifications:** add permission checking and improved troubleshooting ([576a2c5](https://github.com/jkrumm/ntfy-mac/commit/576a2c551c9bf4042f49bbca151d0130c7a7195c))
+
 ## [1.10.1](https://github.com/jkrumm/ntfy-mac/compare/v1.10.0...v1.10.1) (2026-03-25)
 
 
