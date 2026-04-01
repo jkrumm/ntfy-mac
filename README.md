@@ -153,14 +153,20 @@ echo '{"title":"T","body":"B"}' | ntfy-mac notify --json    # full payload via s
 
 **No notifications appearing**
 
-1. Check notification permissions: System Settings → Notifications → ntfy-mac
-2. Check logs: `ntfy-mac logs`
+1. Check permissions: System Settings → Notifications → ntfy-mac → Allow Notifications
+2. Check notification style: must be set to **Banners** or **Alerts** (not "None")
+3. Check logs: `ntfy-mac logs`
+
+**Sounds play but no banners visible**
+
+1. Disable **Scheduled Summary**: System Settings → Notifications → ntfy-mac → turn off "Scheduled Summary" (Mitteilungen zusammenfassen). macOS silently queues notifications to Notification Center when this is enabled
+2. Check **Focus mode**: ensure ntfy-mac is not being filtered. High-priority notifications (p4/p5) use `time-sensitive` interruption level and should break through Focus, but lower priorities may be suppressed
 
 **Authentication failed** — Re-run `ntfy-mac setup`.
 
 **No topics found** — Subscribe to at least one topic in the ntfy web UI or app first.
 
-**Full health check** — Run `ntfy-mac doctor` to validate everything at once.
+**Full health check** — Run `ntfy-mac doctor` to validate everything at once. It checks notification permissions, server connectivity, daemon status, and more.
 
 ---
 

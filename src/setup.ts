@@ -288,4 +288,24 @@ export async function runSetup(): Promise<void> {
     sound: "Pop",
     interruptionLevel: "active",
   })
+
+  await Bun.sleep(2000)
+
+  const sawBanner = await ask("Did you see a notification banner? (y/n)", "y")
+  if (sawBanner.toLowerCase() !== "y") {
+    console.log("")
+    console.log("Troubleshooting — no banner visible:")
+    console.log("")
+    console.log("  1. System Settings → Notifications → ntfy-mac")
+    console.log('     Ensure notifications are allowed and style is "Banners" or "Alerts"')
+    console.log("")
+    console.log("  2. Disable Scheduled Summary")
+    console.log("     System Settings → Notifications → ntfy-mac → turn off Scheduled Summary")
+    console.log("     macOS silently queues notifications when this is enabled")
+    console.log("")
+    console.log("  3. Check Focus mode")
+    console.log("     Ensure ntfy-mac is not filtered by an active Focus mode")
+    console.log("")
+    console.log("  Run 'ntfy-mac doctor' anytime to re-check permissions.")
+  }
 }

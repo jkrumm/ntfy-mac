@@ -300,6 +300,75 @@ async function checkHelper(): Promise<CheckResult> {
   return { name: "helper", status: "ok", message: "Clean, no stale artifacts" }
 }
 
+async function checkNotificationPermission(): Promise<CheckResult> {
+  const helperPath = resolveHelperPath()
+  if (!existsSync(helperPath)) {
+    return { name: "permissions", status: "fail", message: "Skipped (helper not found)" }
+  }
+
+  const testPayload = JSON.stringify({
+    title: "ntfy-mac",
+    body: "permission check",
+    interruptionLevel: "passive",
+  })
+
+  try {
+    const proc = Bun.spawn([helperPath], {
+      stdin: Buffer.from(testPayload),
+      stdout: "ignore",
+      stderr: "pipe",
+    })
+
+    const result = await Promise.race([
+      proc.exited.then((code) => ({ code, timedOut: false })),
+      Bun.sleep(5000).then(() => ({ code: null, timedOut: true })),
+    ])
+
+    if (result.timedOut) {
+      proc.kill()
+      return {
+        name: "permissions",
+        status: "warn",
+        message: "Helper timed out checking permissions",
+      }
+    }
+
+    const stderrText = await new Response(proc.stderr).text()
+
+    if (stderrText.includes("notifications denied")) {
+      return {
+        name: "permissions",
+        status: "fail",
+        message: "Notifications denied by macOS",
+        detail: "Enable in: System Settings → Notifications → ntfy-mac",
+      }
+    }
+
+    if (stderrText.includes("permission error")) {
+      return {
+        name: "permissions",
+        status: "warn",
+        message: "Notification permission error",
+        detail: stderrText.trim(),
+      }
+    }
+
+    return {
+      name: "permissions",
+      status: "ok",
+      message: "Notifications allowed",
+      detail: "If banners are missing, check Scheduled Summary is off in notification settings",
+    }
+  } catch (err) {
+    return {
+      name: "permissions",
+      status: "warn",
+      message: "Could not check notification permissions",
+      detail: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
+
 function checkDismissConfig(): CheckResult {
   const stored = loadStoredConfigSync()
   const dismiss = stored?.dismiss as Record<string, number> | undefined
@@ -355,6 +424,7 @@ export async function runDoctor(version: string, jsonMode: boolean): Promise<voi
     checkTopics(),
     checkDaemon(installMethod),
     checkHelper(),
+    checkNotificationPermission(),
     checkState(),
     Promise.resolve(checkLogs(installMethod)),
     checkUpdate(version),
