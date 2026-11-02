@@ -3,34 +3,45 @@ import NtfyAppLogic
 import NtfyCore
 import SwiftUI
 
-/// The History window: topics, the message list and the selected message. The model is built by
-/// the app delegate; the window runs it while it is open.
+/// The History window, a chat: conversations (topics) on the left, the selected one as a thread
+/// with a composer on the right. The model is built by the app delegate; the window runs it
+/// while it is open.
 struct HistoryWindow: View {
   @Bindable var model: HistoryModel
   let windows: WindowRouter
-  @State private var confirmingDelete = false
+  @State private var deleting: MessageKey?
   @State private var quickLook: URL?
   @State private var notice: String?
 
   var body: some View {
     NavigationSplitView {
       HistorySidebar(model: model)
-        .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 280)
-    } content: {
-      HistoryList(model: model, confirmingDelete: $confirmingDelete, quickLook: openQuickLook)
-        .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 520)
+        .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 380)
     } detail: {
-      detail
+      VStack(spacing: 0) {
+        ChatHeader(model: model)
+        Divider()
+        ChatThreadView(
+          model: model, quickLook: $quickLook, deleting: $deleting, report: { notice = $0 })
+        Divider()
+        ChatComposerView(model: model)
+      }
     }
     .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search messages")
     .toolbar { HistoryFilterBar(model: model, export: export) }
-    .frame(minWidth: 720, minHeight: 420)
+    .toolbar(removing: .title)
+    .frame(minWidth: 760, idealWidth: 980, minHeight: 480, idealHeight: 680)
     .fileQuickLook($quickLook)
     .environment(\.openURL, OpenURLAction(handler: Self.open))
     .confirmationDialog(
-      "Delete this message?", isPresented: $confirmingDelete, titleVisibility: .visible
+      "Delete this message?",
+      isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+      titleVisibility: .visible
     ) {
-      Button("Delete", role: .destructive) { Task { await model.delete() } }
+      Button("Delete", role: .destructive) {
+        if let key = deleting { Task { await model.delete(key) } }
+        deleting = nil
+      }
     } message: {
       Text("This cannot be undone.")
     }
@@ -43,6 +54,7 @@ struct HistoryWindow: View {
       Text(verbatim: notice ?? "")
     }
     .onAppear {
+      if model.publisher == nil { model.publisher = ConfiguredPublisherProvider.live() }
       model.start()
       applyPendingSelection()
     }
@@ -51,28 +63,10 @@ struct HistoryWindow: View {
     .onChange(of: model.isAvailable) { applyPendingSelection() }
   }
 
-  @ViewBuilder private var detail: some View {
-    if let shown = model.detail {
-      HistoryDetail(
-        model: model, detail: shown, confirmingDelete: $confirmingDelete, quickLook: $quickLook,
-        report: { notice = $0 })
-    } else {
-      ContentUnavailableView(
-        "Select a message", systemImage: "envelope",
-        description: Text("Pick a message to read it here."))
-    }
-  }
-
   /// Applies the router's selection once the history is readable, and clears it.
   private func applyPendingSelection() {
     guard model.isAvailable, let key = windows.takeSelection() else { return }
     Task { await model.apply(selection: key) }
-  }
-
-  private func openQuickLook() -> Bool {
-    guard case .ready(let url) = model.attachment else { return false }
-    quickLook = url
-    return true
   }
 
   private func export(_ format: ExportFormat) {
