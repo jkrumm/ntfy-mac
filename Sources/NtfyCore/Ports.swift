@@ -58,7 +58,10 @@ public protocol NotificationPoster: Sendable {
   func postMissedSummary(count: Int, oldestTopic: String) async throws(NtfyError)
 }
 
-/// Persistent message history.
+/// Persistent message history as the ingest and delivery layers use it.
+///
+/// A message with the same `sequenceID` (falling back to `id`) as an earlier one in its topic
+/// supersedes it: queries return only the newest, non-withdrawn row of each sequence.
 public protocol HistoryStore: Sendable {
   /// Returns `true` if the message was new; the dedup key is topic + id.
   @discardableResult
@@ -67,6 +70,38 @@ public protocol HistoryStore: Sendable {
   func recent(limit: Int) async throws(NtfyError) -> [NtfyMessage]
   /// Id of the newest stored message, used as the stream resume cursor.
   func lastMessageID() async throws(NtfyError) -> String?
+
+  /// Records that the message was shown.
+  func markNotified(topic: String, id: String, at time: Date) async throws(NtfyError)
+  /// Stored messages that were never shown, oldest first (boot reconcile).
+  func unnotified(limit: Int) async throws(NtfyError) -> [NtfyMessage]
+
+  /// The server deleted the sequence (`message_delete`): hide every row of it.
+  func withdraw(topic: String, sequenceID: String) async throws(NtfyError)
+  /// The server cleared the sequence (`message_clear`): mark it read and acknowledged.
+  func markCleared(topic: String, sequenceID: String) async throws(NtfyError)
+
+  /// Drops rows beyond the policy and returns how many went.
+  @discardableResult
+  func prune(policy: RetentionPolicy, now: Date) async throws(NtfyError) -> Int
+}
+
+/// What the user does with stored messages: browse, read, acknowledge, snooze.
+public protocol HistoryInbox: Sendable {
+  /// Newest first.
+  func entries(_ query: HistoryQuery) async throws(NtfyError) -> [StoredMessage]
+
+  func markRead(topic: String, id: String) async throws(NtfyError)
+  func markAllRead(topic: String) async throws(NtfyError)
+  /// Acknowledging also marks the message read and drops its reminder.
+  func acknowledge(topic: String, id: String) async throws(NtfyError)
+  /// Not yet acknowledged and at least `minPriority`, oldest first.
+  func unacknowledged(minPriority: Priority) async throws(NtfyError) -> [StoredMessage]
+
+  func snooze(topic: String, id: String, until: Date) async throws(NtfyError)
+  func clearReminder(topic: String, id: String) async throws(NtfyError)
+  /// Snoozed messages whose time has come, earliest first.
+  func dueReminders(now: Date) async throws(NtfyError) -> [StoredMessage]
 }
 
 /// User-editable settings.

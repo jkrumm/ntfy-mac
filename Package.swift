@@ -16,14 +16,19 @@ let package = Package(
     .executable(name: "ntfy-mac", targets: ["NtfyMacCLI"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
+    .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.12.0"),
   ],
   targets: [
     // Pure domain and ports. Depends on nothing.
     .target(name: "NtfyCore", swiftSettings: strict),
     // Adapters. Each one sees the core and nothing else.
     .target(name: "NtfyClient", dependencies: ["NtfyCore"], swiftSettings: strict),
-    .target(name: "NtfyStore", dependencies: ["NtfyCore"], swiftSettings: strict),
+    .target(
+      name: "NtfyStore",
+      dependencies: ["NtfyCore", .product(name: "GRDB", package: "GRDB.swift")],
+      swiftSettings: strict
+    ),
     .target(name: "NtfyPlatform", dependencies: ["NtfyCore"], swiftSettings: strict),
     // Versioned CLI <-> app wire protocol. Standalone.
     .target(name: "NtfyIPC", swiftSettings: strict),
@@ -47,6 +52,9 @@ let package = Package(
     .testTarget(
       name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore"],
       path: "tests/NtfyClientTests", swiftSettings: strict),
+    .testTarget(
+      name: "NtfyStoreTests", dependencies: ["NtfyStore", "NtfyCore", "NtfyTesting"],
+      path: "tests/NtfyStoreTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyPlatformTests", dependencies: ["NtfyPlatform", "NtfyCore"],
       path: "tests/NtfyPlatformTests", swiftSettings: strict),

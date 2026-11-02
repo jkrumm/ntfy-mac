@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where the history database lives. The GRDB-backed `HistoryStore` lands here in a later wave.
+/// Where the history database lives; `SQLiteHistoryStore` opens it.
 public enum StoreLocation {
   public static let directoryName = "ntfy-mac"
   public static let databaseFileName = "history.sqlite"
