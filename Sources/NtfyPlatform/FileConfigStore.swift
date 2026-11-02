@@ -27,6 +27,20 @@ public actor FileConfigStore: ConfigStore {
     return config
   }
 
+  /// Like `load`, but a file that exists and is neither blank nor valid JSON, or cannot be read,
+  /// is an error instead of an empty config. Callers that act on "nothing configured" use this,
+  /// so a half-written file is not mistaken for a cleared one.
+  public func loadChecked() throws(NtfyError) -> Config {
+    guard let data = try AtomicFile.read(url) else { return Config() }
+    if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) {
+      return Config()
+    }
+    guard let config = Config.parse(data) else {
+      throw .storage("\(url.lastPathComponent) is not valid JSON")
+    }
+    return config
+  }
+
   public func save(_ config: Config) throws(NtfyError) {
     try refuseToClobberMalformedFile()
     try AtomicFile.write(try config.serialized(), to: url)

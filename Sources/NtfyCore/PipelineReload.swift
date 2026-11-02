@@ -9,17 +9,29 @@ public enum PipelineReload: Sendable, Hashable {
   /// Tear down what runs; nothing is configured.
   case idle
 
-  /// Decides from the settings the pipeline was built with and the freshly resolved ones. Only
-  /// what the connection depends on forces a rebuild; sounds, dismiss times and the re-alert
-  /// options are read per notification and never do.
-  public static func decide(current: Settings?, resolved: Settings?) -> PipelineReload {
-    switch (current, resolved) {
-    case (nil, nil): .keep
-    case (nil, .some): .rebuild
-    case (.some, nil): .idle
-    case (let old?, let new?): old.connection == new.connection ? .keep : .rebuild
+  /// Decides from the settings the pipeline was built with and what resolving them now gave.
+  /// Only what the connection depends on forces a rebuild; sounds, dismiss times and the
+  /// re-alert options are read per notification and never do. A failed resolution (a half-written
+  /// file, an unreadable Keychain) never tears anything down: only a positively empty
+  /// configuration does.
+  public static func decide(current: Settings?, outcome: SettingsOutcome) -> PipelineReload {
+    switch (current, outcome) {
+    case (_, .failed): .keep
+    case (nil, .unconfigured): .keep
+    case (nil, .resolved): .rebuild
+    case (.some, .unconfigured): .idle
+    case (let old?, .resolved(let new)): old.connection == new.connection ? .keep : .rebuild
     }
   }
+}
+
+/// What resolving the settings came to.
+public enum SettingsOutcome: Sendable, Hashable {
+  case resolved(Settings)
+  /// Positively nothing configured: no URL or no token anywhere.
+  case unconfigured
+  /// Something could not be read or is invalid; the reason is for the log.
+  case failed(String)
 }
 
 /// The part of `Settings` a running pipeline is built from.

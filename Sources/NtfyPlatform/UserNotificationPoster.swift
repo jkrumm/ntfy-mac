@@ -4,17 +4,28 @@ import NtfyCore
 /// `NotificationPoster` over the notification center.
 ///
 /// - A post replaces a delivered notification with the same identifier: remove, register the
-///   category, add. Categories live per launch, so the set is merged (never overwritten) and
-///   kept to the notifications still shown, capped at `maxCategories`.
+///   category, add.
+/// - Actors are reentrant, so the whole remove-register-add sequence of a post (and every
+///   category restore) runs behind a serial gate: one at a time, in arrival order. The gate is
+///   not cancellation-aware; a waiter that is cancelled still waits its turn.
+/// - The category set lives here, not in the center: the poster is its only writer, merges in
+///   one synchronous step and pushes the result. Categories belong to the notifications still
+///   shown plus the ones being posted right now (`inFlight`), capped at `maxCategories`. The
+///   center's own delivered list can lag behind an add, which is why in-flight identifiers are
+///   never pruned.
 /// - Nothing here throws except as `NtfyError`, and nothing crashes on a failed attachment: an
 ///   image is optional.
-/// - The actor serialises posts; category updates are read-modify-write and rely on that.
 public actor UserNotificationPoster: NotificationPoster {
   public static let maxCategories = 64
 
   private let center: any NotificationCenterClient
   private let images: any ImageFetching
   private let log: @Sendable (String) -> Void
+
+  private var categories: [String: NotificationCategorySpec] = [:]
+  private var inFlight: Set<String> = []
+  private var gateBusy = false
+  private var gateWaiters: [CheckedContinuation<Void, Never>] = []
 
   public init(
     center: any NotificationCenterClient, images: any ImageFetching,
@@ -30,6 +41,11 @@ public actor UserNotificationPoster: NotificationPoster {
     if let imageURL = content.imageURL { file = await images.fetch(imageURL) }
     if content.imageURL != nil, file == nil { log("image not attached to \(content.identifier)") }
     let spec = UserNotificationMapper.spec(for: content, attachment: file)
+
+    await enterGate()
+    defer { leaveGate() }
+    inFlight.insert(spec.identifier)
+    defer { inFlight.remove(spec.identifier) }
     await center.removeDelivered(identifiers: [content.identifier])
     await register(spec.category.map { [$0] } ?? [])
     do throws(NtfyError) {
@@ -68,6 +84,12 @@ public actor UserNotificationPoster: NotificationPoster {
   public func restoreCategories(for contents: [NotificationContent]) async {
     let specs = contents.filter { !$0.buttons.isEmpty }.map(UserNotificationMapper.category(for:))
     guard !specs.isEmpty else { return }
+    await enterGate()
+    defer { leaveGate() }
+    let restored = Set(
+      specs.compactMap { UserNotificationMapper.notificationIdentifier(ofCategory: $0.identifier) })
+    inFlight.formUnion(restored)
+    defer { inFlight.subtract(restored) }
     await register(specs)
   }
 
@@ -83,12 +105,36 @@ public actor UserNotificationPoster: NotificationPoster {
     await restoreCategories(for: contents)
   }
 
+  /// Merges `adding` into the category set and pushes it to the center. Call only behind the
+  /// gate. The only suspension is the read of the delivered list, taken before the merge; the
+  /// merge and the update of `categories` happen in one step after it.
   private func register(_ adding: [NotificationCategorySpec]) async {
-    let delivered = Set(await center.delivered().map(\.identifier))
-    let existing = await center.categories()
+    let delivered = Set(await center.delivered().map(\.identifier)).union(inFlight)
     let merged = NotificationCategoryBook.merged(
-      existing: existing, adding: adding, delivered: delivered, limit: Self.maxCategories)
-    guard Set(merged) != Set(existing) else { return }
+      existing: Array(categories.values), adding: adding, delivered: delivered,
+      limit: Self.maxCategories)
+    let next = Dictionary(uniqueKeysWithValues: merged.map { ($0.identifier, $0) })
+    guard next != categories else { return }
+    categories = next
     await center.setCategories(merged)
+  }
+
+  // MARK: Gate
+
+  private func enterGate() async {
+    guard gateBusy else {
+      gateBusy = true
+      return
+    }
+    await withCheckedContinuation { gateWaiters.append($0) }
+  }
+
+  /// Hands the gate to the next waiter, which keeps it busy.
+  private func leaveGate() {
+    guard !gateWaiters.isEmpty else {
+      gateBusy = false
+      return
+    }
+    gateWaiters.removeFirst().resume()
   }
 }

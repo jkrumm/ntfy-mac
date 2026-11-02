@@ -62,16 +62,14 @@ import Testing
 
   @Test func categorySetIsBounded() async throws {
     let center = FakeNotificationCenter()
-    let many = (0..<100).map { index in
-      NotificationCategorySpec(identifier: "ntfy:alerts/\(index)", actions: [])
+    let poster = poster(center)
+    for index in 0..<(UserNotificationPoster.maxCategories + 6) {
+      try await poster.post(withButtons(id: "n\(index)"))
     }
-    await center.setRegistered(many)
-    await center.setShown(
-      (0..<100).map { DeliveredNotification(identifier: "alerts/\($0)", userInfo: [:]) })
-    try await poster(center).post(withButtons(id: "fresh"))
     let registered = await center.registered
     #expect(registered.count == UserNotificationPoster.maxCategories)
-    #expect(registered.first?.identifier == "ntfy:alerts/fresh")
+    #expect(
+      registered.first?.identifier == "ntfy:alerts/n\(UserNotificationPoster.maxCategories + 5)")
   }
 
   @Test func deniedCenterThrowsPermissionDenied() async {
@@ -184,5 +182,47 @@ import Testing
     ])
     await poster(center).restoreDeliveredCategories(inbox: history, config: Config())
     #expect(await center.registered.map(\.identifier) == ["ntfy:alerts/one"])
+  }
+
+  @Test func interleavedPostsAndARestoreKeepEveryCategory() async throws {
+    let center = FakeNotificationCenter()
+    let poster = poster(center)
+    let first = withButtons(id: "first")
+    let second = withButtons(id: "second")
+    let restored = withButtons(id: "restored")
+    await center.holdNextAdd()
+
+    let postA = Task { try await poster.post(first) }
+    for _ in 0..<10_000 where !(await center.isHoldingAdd) { await Task.yield() }
+    #expect(await center.isHoldingAdd)
+
+    let postB = Task { try await poster.post(second) }
+    let restore = Task { await poster.restoreCategories(for: [restored]) }
+    for _ in 0..<1000 { await Task.yield() }
+    // Both wait behind the first post: nothing else touched the center meanwhile.
+    #expect(
+      await center.calls == [.remove(["alerts/first"]), .setCategories, .add("alerts/first")])
+
+    await center.releaseHeldAdd()
+    try await postA.value
+    try await postB.value
+    await restore.value
+
+    let registered = Set(await center.registered.map(\.identifier))
+    #expect(registered == ["ntfy:alerts/first", "ntfy:alerts/second", "ntfy:alerts/restored"])
+    let added = await center.added
+    #expect(added.map(\.identifier) == ["alerts/first", "alerts/second"])
+    for spec in added { #expect(registered.contains(try #require(spec.category?.identifier))) }
+  }
+
+  @Test func aFailedPostReleasesTheGate() async throws {
+    let center = FakeNotificationCenter()
+    await center.failNextAdds(1, with: .storage("boom"))
+    let poster = poster(center)
+    await #expect(throws: NtfyError.storage("boom")) {
+      try await poster.post(NotificationFixtures.content())
+    }
+    try await poster.post(withButtons(id: "next"))
+    #expect(await center.registered.map(\.identifier) == ["ntfy:alerts/next"])
   }
 }

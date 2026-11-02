@@ -15,19 +15,26 @@ import Testing
   }
 
   @Test func nothingConfiguredStaysIdle() {
-    #expect(PipelineReload.decide(current: nil, resolved: nil) == .keep)
+    #expect(PipelineReload.decide(current: nil, outcome: .unconfigured) == .keep)
   }
 
   @Test func firstConfigurationBuilds() throws {
-    #expect(PipelineReload.decide(current: nil, resolved: try settings()) == .rebuild)
+    #expect(PipelineReload.decide(current: nil, outcome: .resolved(try settings())) == .rebuild)
   }
 
   @Test func removedConfigurationGoesIdle() throws {
-    #expect(PipelineReload.decide(current: try settings(), resolved: nil) == .idle)
+    #expect(PipelineReload.decide(current: try settings(), outcome: .unconfigured) == .idle)
+  }
+
+  @Test func aFailedResolutionNeverTearsDownOrBuilds() throws {
+    #expect(
+      PipelineReload.decide(current: try settings(), outcome: .failed("half-written")) == .keep)
+    #expect(PipelineReload.decide(current: nil, outcome: .failed("keychain")) == .keep)
   }
 
   @Test func identicalSettingsKeep() throws {
-    #expect(PipelineReload.decide(current: try settings(), resolved: try settings()) == .keep)
+    #expect(
+      PipelineReload.decide(current: try settings(), outcome: .resolved(try settings())) == .keep)
   }
 
   @Test func connectionChangesRebuild() throws {
@@ -40,7 +47,7 @@ import Testing
       try settings(allowInsecure: true),
     ]
     for new in changed {
-      #expect(PipelineReload.decide(current: base, resolved: new) == .rebuild)
+      #expect(PipelineReload.decide(current: base, outcome: .resolved(new)) == .rebuild)
     }
   }
 
@@ -51,7 +58,7 @@ import Testing
       try settings(dismiss: [3: 0]),
     ]
     for new in changed {
-      #expect(PipelineReload.decide(current: base, resolved: new) == .keep)
+      #expect(PipelineReload.decide(current: base, outcome: .resolved(new)) == .keep)
     }
   }
 

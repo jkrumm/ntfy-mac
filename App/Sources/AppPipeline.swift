@@ -38,10 +38,10 @@ final class AppPipeline: Sendable {
       center: services.center,
       images: URLSessionImageFetcher(
         server: settings.url, token: { token }, allowInsecure: settings.allowInsecure),
-      log: { log.info("\($0, privacy: .public)") })
+      log: { log.info("\($0, privacy: .private)") })
     let delivery = DeliveryService(
       poster: poster, history: store, inbox: store, config: services.config,
-      clock: services.clock, log: { log.info("\($0, privacy: .public)") })
+      clock: services.clock, log: { log.info("\($0, privacy: .private)") })
 
     await delivery.start()
     await poster.restoreDeliveredCategories(inbox: store, config: services.config.load())
@@ -70,13 +70,19 @@ final class AppPipeline: Sendable {
     }
   }
 
-  /// Supervisor first, then the retention loop and delivery, and last the store.
+  /// The router is detached first, so a click in the next moments cannot reach a stopping
+  /// delivery; then supervisor, retention loop, delivery, and last the store is closed.
   func shutdown() async {
+    await services.router.use(nil)
     await supervisor.stop()
     retention.cancel()
     await retention.value
     await delivery.shutdown()
-    await services.router.use(nil)
+    do throws(NtfyError) {
+      try store.close()
+    } catch {
+      Log.logger(.store).error("history not closed: \(String(describing: error), privacy: .public)")
+    }
   }
 
   // MARK: Wiring
@@ -90,7 +96,7 @@ final class AppPipeline: Sendable {
       presenter: ActivatingHistoryPresenter(), confirmer: AlertConfirmer(),
       runner: URLSessionHTTPActionRunner(allowPrivateNetwork: {
         await services.config.load().allowPrivateNetworkActions
-      }), log: { log.info("\($0, privacy: .public)") })
+      }), log: { log.info("\($0, privacy: .private)") })
   }
 
   private static func ports(
@@ -98,7 +104,7 @@ final class AppPipeline: Sendable {
     services: AppServices
   ) -> StreamSupervisor.Ports {
     let log = Log.logger(.stream)
-    let diagnostics: @Sendable (String) -> Void = { log.debug("\($0, privacy: .public)") }
+    let diagnostics: @Sendable (String) -> Void = { log.debug("\($0, privacy: .private)") }
     return StreamSupervisor.Ports(
       stream: URLSessionMessageStream(
         base: settings.url, token: settings.token, allowInsecure: settings.allowInsecure,
@@ -118,7 +124,7 @@ final class AppPipeline: Sendable {
     let log = Log.logger(.stream)
     var options = StreamSupervisor.Options()
     options.selection = settings.topicSelection
-    options.log = { log.info("\($0, privacy: .public)") }
+    options.log = { log.info("\($0, privacy: .private)") }
     options.sink = delivery.eventSink()
     options.activity = {
       let activity = ProcessActivity(
@@ -135,9 +141,9 @@ final class AppPipeline: Sendable {
     while !Task.isCancelled {
       do throws(NtfyError) {
         let dropped = try await store.prune(policy: RetentionPolicy(), now: clock.now())
-        if dropped > 0 { log.info("pruned \(dropped, privacy: .public) history rows") }
+        if dropped > 0 { log.info("pruned \(dropped, privacy: .private) history rows") }
       } catch {
-        log.error("history not pruned: \(String(describing: error), privacy: .public)")
+        log.error("history not pruned: \(String(describing: error), privacy: .private)")
       }
       do { try await clock.sleep(for: retentionInterval) } catch { return }
     }

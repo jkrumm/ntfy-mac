@@ -6,36 +6,53 @@ import NtfyPlatform
 /// the connection settings change, and follows the config file. It decides nothing itself;
 /// `PipelineReload` does.
 actor AppController {
+  private enum Lifecycle { case new, starting, running, stopped }
+
   private let services: AppServices
   private let secrets = KeychainSecretStore()
   private let log = Log.logger(.delivery)
+  private var lifecycle = Lifecycle.new
   private var current: Settings?
   private var pipeline: AppPipeline?
   private var watcher: Task<Void, Never>?
+  private var permissionTask: Task<Void, Never>?
 
   init(router: ResponseRouter) {
     services = AppServices(
       config: FileConfigStore(),
-      center: LiveNotificationCenter(log: { Log.logger(.delivery).info("\($0, privacy: .public)") }
+      center: LiveNotificationCenter(log: { Log.logger(.delivery).info("\($0, privacy: .private)") }
       ),
       router: router, clock: SystemClock())
   }
 
+  private var isActive: Bool { lifecycle == .starting || lifecycle == .running }
+
   /// Migrates the token, builds the first pipeline and starts following the config file. The
-  /// authorization prompt runs on its own task: startup never waits for the user.
+  /// authorization prompt runs on its own task: startup never waits for the user. A `stop()` that
+  /// arrives while this is suspended wins: nothing is built after it, and a pipeline that was
+  /// being built is shut down again.
   func start() async {
-    guard watcher == nil else { return }
-    await migrateToken()
-    Task { await self.requestPermissionOnce() }
-    await reload()
+    guard lifecycle == .new else { return }
+    lifecycle = .starting
+    // Created first, so an edit while the first pipeline is being built is not missed.
     let changes = ConfigWatcher().changes()
+    await migrateToken()
+    guard isActive else { return }
+    permissionTask = Task { await self.requestPermissionOnce() }
+    await reload()
+    guard lifecycle == .starting else { return }
+    lifecycle = .running
     watcher = Task {
       for await _ in changes { await self.reload() }
     }
   }
 
-  /// Stops following the config and tears the pipeline down.
+  /// Stops following the config and tears the pipeline down. Idempotent.
   func stop() async {
+    guard lifecycle != .stopped else { return }
+    lifecycle = .stopped
+    permissionTask?.cancel()
+    permissionTask = nil
     watcher?.cancel()
     await watcher?.value
     watcher = nil
@@ -45,22 +62,33 @@ actor AppController {
   // MARK: Reload
 
   private func reload() async {
-    let resolved = await resolve()
-    switch PipelineReload.decide(current: current, resolved: resolved) {
+    guard isActive else { return }
+    let outcome = await resolve()
+    guard isActive else { return }
+    if case .failed(let reason) = outcome {
+      log.error("configuration not read, keeping what runs: \(reason, privacy: .public)")
+    }
+    switch PipelineReload.decide(current: current, outcome: outcome) {
     case .keep:
-      current = resolved
+      if case .resolved(let settings) = outcome { current = settings }
     case .idle:
       await teardown()
       log.info("not configured; idle")
     case .rebuild:
       await teardown()
-      if let resolved { await build(resolved) }
+      if case .resolved(let settings) = outcome { await build(settings) }
     }
   }
 
   private func build(_ settings: Settings) async {
+    guard isActive else { return }
     do throws(NtfyError) {
-      pipeline = try await AppPipeline.start(settings: settings, services: services)
+      let started = try await AppPipeline.start(settings: settings, services: services)
+      guard isActive else {
+        await started.shutdown()
+        return
+      }
+      pipeline = started
       current = settings
       log.info("pipeline started for \(settings.origin, privacy: .private)")
     } catch {
@@ -75,18 +103,29 @@ actor AppController {
     await running?.shutdown()
   }
 
-  private func resolve() async -> Settings? {
-    let config = await services.config.load()
-    let token = try? await secrets.token()
+  /// Anything that cannot be read or validated is `.failed`, never `.unconfigured`: a
+  /// half-written file or a Keychain hiccup must not stop a healthy stream.
+  private func resolve() async -> SettingsOutcome {
+    let config: Config
+    do throws(NtfyError) {
+      config = try await services.config.loadChecked()
+    } catch {
+      return .failed("config file: \(error)")
+    }
+    let token: String?
+    do throws(NtfyError) {
+      token = try await secrets.token()
+    } catch {
+      return .failed("keychain: \(error)")
+    }
     do {
       let resolution = try ConfigResolver.resolve(
         config: config, keychainToken: token,
         environment: ConfigEnvironment(ProcessInfo.processInfo.environment))
-      guard case .configured(let settings) = resolution else { return nil }
-      return settings
+      guard case .configured(let settings) = resolution else { return .unconfigured }
+      return .resolved(settings)
     } catch {
-      log.error("configuration invalid: \(error.description, privacy: .public)")
-      return nil
+      return .failed(error.description)
     }
   }
 

@@ -90,4 +90,13 @@ import Testing
     #expect(try rig.permissions(rig.databaseURL) == 0o600)
     #expect(try rig.permissions(directory) == 0o700)
   }
+
+  @Test func closedStoreRefusesFurtherUse() async throws {
+    let rig = try HistoryRig(.sqlite)
+    let store = try SQLiteHistoryStore.open(
+      at: rig.directory.databaseURL, server: HistoryRig.server, clock: rig.clock)
+    try await store.append(rig.message("1"))
+    try store.close()
+    await #expect(throws: NtfyError.self) { try await store.recent(limit: 1) }
+  }
 }

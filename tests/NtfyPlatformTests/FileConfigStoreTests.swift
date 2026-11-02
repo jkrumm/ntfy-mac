@@ -18,6 +18,22 @@ import Testing
     #expect(await FileConfigStore(url: dir.file("config.json")).load() == Config())
   }
 
+  @Test func checkedLoadTreatsMissingAndBlankAsEmpty() async throws {
+    let dir = TempDirectory()
+    let store = FileConfigStore(url: dir.file("config.json"))
+    #expect(try await store.loadChecked() == Config())
+    try dir.write(" \n", to: "config.json")
+    #expect(try await store.loadChecked() == Config())
+  }
+
+  @Test(arguments: ["not json", "[1]", "{\"url\":"])
+  func checkedLoadRefusesAMalformedFile(content: String) async throws {
+    let dir = TempDirectory()
+    try dir.write(content, to: "config.json")
+    let store = FileConfigStore(url: dir.file("config.json"))
+    await #expect(throws: NtfyError.self) { try await store.loadChecked() }
+  }
+
   @Test func readsA1xFile() async throws {
     let dir = TempDirectory()
     try dir.write(

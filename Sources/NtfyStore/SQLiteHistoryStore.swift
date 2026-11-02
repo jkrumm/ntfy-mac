@@ -29,6 +29,16 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
     SQLiteHistoryStore(pool: try HistoryDatabase.openReader(at: url), server: server, clock: clock)
   }
 
+  /// Closes the database connections. Every later call fails with `.storage`. Call it only after
+  /// everything that uses the store has stopped.
+  public func close() throws(NtfyError) {
+    do {
+      try pool.close()
+    } catch {
+      throw HistoryError.map(error)
+    }
+  }
+
   @discardableResult
   public func append(_ message: NtfyMessage) async throws(NtfyError) -> Bool {
     let server = server

@@ -119,9 +119,7 @@ public protocol NotificationCenterClient: Sendable {
   /// Unknown identifiers are ignored.
   func removeDelivered(identifiers: [String]) async
   func delivered() async -> [DeliveredNotification]
-  /// Every category registered in this launch.
-  func categories() async -> [NotificationCategorySpec]
-  /// Replaces the registered categories; callers merge first.
+  /// Replaces the registered categories; the poster owns the set and always sends all of it.
   func setCategories(_ categories: [NotificationCategorySpec]) async
   func settings() async -> NotificationSettingsSnapshot
   /// Asks for `[.alert, .sound, .badge]`; `false` when the user declined or the request failed.

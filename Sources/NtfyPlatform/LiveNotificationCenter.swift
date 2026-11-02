@@ -34,11 +34,6 @@ public struct LiveNotificationCenter: NotificationCenterClient {
     }
   }
 
-  public func categories() async -> [NotificationCategorySpec] {
-    await UNUserNotificationCenter.current().notificationCategories()
-      .map(UserNotificationMapper.spec(from:))
-  }
-
   public func setCategories(_ categories: [NotificationCategorySpec]) async {
     UNUserNotificationCenter.current().setNotificationCategories(
       Set(categories.map(UserNotificationMapper.category(from:))))
