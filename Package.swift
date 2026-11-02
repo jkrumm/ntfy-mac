@@ -56,7 +56,7 @@ let package = Package(
       name: "NtfyStoreTests", dependencies: ["NtfyStore", "NtfyCore", "NtfyTesting"],
       path: "tests/NtfyStoreTests", swiftSettings: strict),
     .testTarget(
-      name: "NtfyPlatformTests", dependencies: ["NtfyPlatform", "NtfyCore"],
+      name: "NtfyPlatformTests", dependencies: ["NtfyPlatform", "NtfyCore", "NtfyTesting"],
       path: "tests/NtfyPlatformTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyTestingTests", dependencies: ["NtfyTesting", "NtfyCore"],
