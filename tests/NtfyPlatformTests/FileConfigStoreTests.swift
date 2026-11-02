@@ -71,7 +71,7 @@ import Testing
     let store = FileConfigStore(url: dir.file("config.json"))
     for index in 0..<5 { try await store.save(Config(url: "https://n\(index).example.com")) }
     let names = try FileManager.default.contentsOfDirectory(atPath: dir.url.path)
-    #expect(names == ["config.json"])
+    #expect(names.sorted() == ["config.json", "config.json.lock"])
   }
 
   @Test func unknownKeysSurviveSaves() async throws {

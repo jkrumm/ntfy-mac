@@ -117,8 +117,18 @@ public protocol HistoryInbox: Sendable {
 /// User-editable settings.
 public protocol ConfigStore: Sendable {
   func load() async throws(NtfyError) -> Config
+  /// Like `load`, but a file that exists and is unreadable or malformed is an error rather than an
+  /// empty config. For callers that act on "nothing configured" (`doctor`, `setup`).
+  func loadChecked() async throws(NtfyError) -> Config
   func save(_ config: Config) async throws(NtfyError)
   /// Read-modify-write as one step, so a concurrent writer's change is not reverted by a stale
   /// snapshot. Prefer this to `load` + `save` for anything but a full replace.
   func update(_ change: @Sendable (inout Config) -> Void) async throws(NtfyError)
+}
+
+extension ConfigStore {
+  /// Stores that cannot hold a malformed file (in-memory fakes) just load.
+  public func loadChecked() async throws(NtfyError) -> Config {
+    try await load()
+  }
 }

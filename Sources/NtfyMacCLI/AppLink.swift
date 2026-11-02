@@ -37,10 +37,13 @@ struct AppLink: Sendable {
   }
 
   /// The app's answer, which may itself be an error response (`Response.status == .error`).
-  func send(_ request: Request) async throws(NtfyError) -> Response {
+  /// With `launch` false a down app is `appUnavailable` at once and nothing is started, for
+  /// read-only callers like `doctor`.
+  func send(_ request: Request, launch: Bool = true) async throws(NtfyError) -> Response {
     do throws(IPCError) {
       return try await client.send(request)
     } catch .appNotRunning {
+      guard launch else { throw .appUnavailable }
       return try await launchAndRetry(request)
     } catch {
       throw Self.map(error)
@@ -88,17 +91,29 @@ struct AppLink: Sendable {
   }
 }
 
+/// What the commands need from the app, so they can be tested without a socket.
+protocol AppControlling: Sendable {
+  func send(_ request: Request, launch: Bool) async throws(NtfyError) -> Response
+}
+
+extension AppLink: AppControlling {}
+
 /// Finds the `.app` this executable ships in.
 enum AppBundle {
-  /// The enclosing `.app`, resolving symlinks (the CLI is usually reached through a link on
-  /// the PATH); nil when the executable does not live inside one.
-  static func enclosing() -> URL? {
+  /// The running executable, symlinks resolved (the CLI is usually reached through a link on
+  /// the PATH); nil when the system cannot say.
+  static func executable() -> URL? {
     var size: UInt32 = 4096
     var buffer = [CChar](repeating: 0, count: Int(size))
     guard _NSGetExecutablePath(&buffer, &size) == 0 else { return nil }
     let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
     guard let path = String(validating: bytes, as: UTF8.self) else { return nil }
-    var url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+    return URL(fileURLWithPath: path).resolvingSymlinksInPath()
+  }
+
+  /// The enclosing `.app`; nil when the executable does not live inside one.
+  static func enclosing() -> URL? {
+    guard var url = executable() else { return nil }
     while url.path != "/" {
       if url.pathExtension == "app" { return url }
       url.deleteLastPathComponent()

@@ -13,6 +13,10 @@ enum ProcessExit: Int32, CaseIterable {
 
   init(error: any Error) {
     switch error {
+    case let failure as CLIFailure:
+      self = failure.exit
+    case let request as ExitRequest:
+      self = request.exit
     case let error as NtfyError:
       self.init(error)
     case is IPCError:

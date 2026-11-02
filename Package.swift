@@ -62,7 +62,8 @@ let package = Package(
       name: "NtfyTestingTests", dependencies: ["NtfyTesting", "NtfyCore"],
       path: "tests/NtfyTestingTests", swiftSettings: strict),
     .testTarget(
-      name: "NtfyMacCLITests", dependencies: ["NtfyMacCLI", "NtfyCore", "NtfyIPC"],
+      name: "NtfyMacCLITests",
+      dependencies: ["NtfyMacCLI", "NtfyCore", "NtfyIPC", "NtfyTesting"],
       path: "tests/NtfyMacCLITests", swiftSettings: strict),
   ],
   swiftLanguageModes: [.v6]

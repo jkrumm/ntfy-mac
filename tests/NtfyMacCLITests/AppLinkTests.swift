@@ -66,6 +66,17 @@ private actor Launches {
     await #expect(throws: NtfyError.appUnavailable) { try await link.send(ping) }
   }
 
+  @Test func aDownAppIsNotLaunchedWhenLaunchingIsOff() async {
+    defer { cleanup() }
+    let launches = Launches()
+    let link = AppLink(socket: socket, app: app) { _ in
+      await launches.record()
+      return true
+    }
+    await #expect(throws: NtfyError.appUnavailable) { try await link.send(ping, launch: false) }
+    #expect(await launches.count == 0)
+  }
+
   @Test func noEnclosingAppMeansUnavailable() async {
     let link = AppLink(socket: socket, app: nil, launch: { _ in true })
     await #expect(throws: NtfyError.appUnavailable) { try await link.send(ping) }

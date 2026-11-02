@@ -28,10 +28,12 @@ public actor FileCursorStore: CursorStore {
   }
 
   public func save(_ id: String) throws(NtfyError) {
-    var object = try readObject() ?? [:]
-    if object[Self.key] == .string(id) { return }
-    object[Self.key] = .string(id)
-    try AtomicFile.write(try ConfigValue.encodeObject(object), to: url)
+    try FileLock.withExclusive(url.appendingPathExtension("lock")) { () throws(NtfyError) in
+      var object = try readObject() ?? [:]
+      if object[Self.key] == .string(id) { return }
+      object[Self.key] = .string(id)
+      try AtomicFile.write(try ConfigValue.encodeObject(object), to: url)
+    }
   }
 
   /// Nil when the file is missing or corrupt. An unreadable file (permissions) still throws.
