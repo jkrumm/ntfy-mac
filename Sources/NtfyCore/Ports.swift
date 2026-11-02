@@ -97,6 +97,10 @@ public protocol HistoryInbox: Sendable {
   /// Newest first.
   func entries(_ query: HistoryQuery) async throws(NtfyError) -> [StoredMessage]
 
+  /// One visible message by its key, nil when unknown or withdrawn. Callbacks from outside the
+  /// process (a notification click) go through this, never through ids they carry.
+  func message(topic: String, id: String) async throws(NtfyError) -> StoredMessage?
+
   func markRead(topic: String, id: String) async throws(NtfyError)
   func markAllRead(topic: String) async throws(NtfyError)
   /// Acknowledging also marks the message read and drops its reminder.

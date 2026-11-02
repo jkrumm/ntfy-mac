@@ -8,6 +8,14 @@ extension SQLiteHistoryStore: HistoryInbox {
     return try await fetchStored(select)
   }
 
+  public func message(topic: String, id: String) async throws(NtfyError) -> StoredMessage? {
+    var select = HistorySelect(server: server)
+    select.and("m.topic = ?", topic)
+    select.and("m.id = ?", id)
+    select.ordered("m.rowid DESC", limit: 1)
+    return try await fetchStored(select).first
+  }
+
   public func markRead(topic: String, id: String) async throws(NtfyError) {
     let now = clock.now()
     try await update(

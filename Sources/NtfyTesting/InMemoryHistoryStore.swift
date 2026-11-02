@@ -133,6 +133,10 @@ extension InMemoryHistoryStore {
     return Array(matches.reversed().dropFirst(max(query.offset, 0)).prefix(max(query.limit, 0)))
   }
 
+  public func message(topic: String, id: String) -> StoredMessage? {
+    visible().map(\.stored).first { $0.message.topic == topic && $0.message.id == id }
+  }
+
   public func markRead(topic: String, id: String) {
     let now = clock.now()
     change(topic: topic, id: id) { $0.readAt = $0.readAt ?? now }

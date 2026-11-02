@@ -62,6 +62,31 @@ import Testing
   }
 
   @Test(arguments: Backend.allCases)
+  func messageLooksUpOneVisibleRowByKey(_ backend: Backend) async throws {
+    let rig = try HistoryRig(backend)
+    try await rig.store.append(rig.message("1", at: 0, body: "first"))
+    try await rig.store.append(rig.message("1", topic: "other", at: 1, body: "second"))
+    try await rig.store.markRead(topic: "alerts", id: "1")
+    let found = try #require(try await rig.store.message(topic: "alerts", id: "1"))
+    #expect(found.message.body == "first")
+    #expect(found.isRead)
+    #expect(try await rig.store.message(topic: "other", id: "1")?.message.body == "second")
+    #expect(try await rig.store.message(topic: "alerts", id: "missing") == nil)
+    #expect(try await rig.store.message(topic: "missing", id: "1") == nil)
+  }
+
+  @Test(arguments: Backend.allCases)
+  func messageHidesWithdrawnAndSupersededRows(_ backend: Backend) async throws {
+    let rig = try HistoryRig(backend)
+    try await rig.store.append(rig.message("1", at: 0, sequenceID: "seq"))
+    try await rig.store.append(rig.message("2", at: 1, sequenceID: "seq"))
+    #expect(try await rig.store.message(topic: "alerts", id: "1") == nil)
+    #expect(try await rig.store.message(topic: "alerts", id: "2") != nil)
+    try await rig.store.withdraw(topic: "alerts", sequenceID: "seq")
+    #expect(try await rig.store.message(topic: "alerts", id: "2") == nil)
+  }
+
+  @Test(arguments: Backend.allCases)
   func markClearedReadsAndAcknowledges(_ backend: Backend) async throws {
     let rig = try HistoryRig(backend)
     try await rig.store.append(rig.message("1", sequenceID: "seq"))

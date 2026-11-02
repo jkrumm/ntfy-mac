@@ -6,6 +6,8 @@ struct Stub: Sendable {
   var status = 200
   var headers = ["Content-Type": "application/x-ndjson; charset=utf-8"]
   var lines: [String] = []
+  /// Raw bytes sent after the lines (binary bodies such as images).
+  var body: Data?
   /// Answer with a 302 to this URL instead of a body.
   var redirectTo: URL?
   /// Report this URL as the response's origin (as a transparently followed redirect would).
@@ -90,6 +92,7 @@ final class StubURLProtocol: URLProtocol {
     for line in stub.lines {
       client?.urlProtocol(self, didLoad: Data((line + "\n").utf8))
     }
+    if let body = stub.body { client?.urlProtocol(self, didLoad: body) }
     if !stub.hold { client?.urlProtocolDidFinishLoading(self) }
   }
 

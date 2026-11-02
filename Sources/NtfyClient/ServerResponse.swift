@@ -34,7 +34,7 @@ enum ServerResponse {
     (error as? NtfyError) ?? .serverUnreachable
   }
 
-  private static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+  static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
     func origin(_ url: URL) -> [String?] {
       let scheme = url.scheme?.lowercased()
       let port = url.port ?? (scheme == "https" ? 443 : 80)
