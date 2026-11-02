@@ -34,6 +34,9 @@ public struct Config: Sendable, Hashable {
   public var reAlertMaxRepeats: Int
   /// Notifications are held back until this moment (ISO 8601 in the file); absent means not paused.
   public var pausedUntil: Date?
+  /// Per-topic mute, minimum priority and emoji, keyed by topic name.
+  public var topicSettings: [String: TopicSettings]
+  public var quietHours: QuietHours
   /// Every other top-level key, preserved verbatim.
   public var extras: [String: ConfigValue]
 
@@ -50,6 +53,8 @@ public struct Config: Sendable, Hashable {
     reAlertMinPriority: Int = Defaults.reAlertMinPriority,
     reAlertMaxRepeats: Int = Defaults.reAlertMaxRepeats,
     pausedUntil: Date? = nil,
+    topicSettings: [String: TopicSettings] = [:],
+    quietHours: QuietHours = QuietHours(),
     extras: [String: ConfigValue] = [:]
   ) {
     self.url = url
@@ -64,6 +69,8 @@ public struct Config: Sendable, Hashable {
     self.reAlertMinPriority = Priority(clamping: reAlertMinPriority).rawValue
     self.reAlertMaxRepeats = reAlertMaxRepeats
     self.pausedUntil = pausedUntil
+    self.topicSettings = topicSettings
+    self.quietHours = quietHours
     self.extras = extras
   }
 
@@ -88,11 +95,17 @@ public struct Config: Sendable, Hashable {
     static let reAlertMinPriority = "reAlertMinPriority"
     static let reAlertMaxRepeats = "reAlertMaxRepeats"
     static let pausedUntil = "pausedUntil"
+    static let topicSettings = "topicSettings"
+    static let quietHours = "quietHours"
     static let known: Set<String> = [
       url, token, sounds, dismiss, extraTopics, allowInsecure, allowPrivateNetworkActions,
       reAlert, reAlertIntervalSeconds, reAlertMinPriority, reAlertMaxRepeats, pausedUntil,
+      topicSettings, quietHours,
     ]
   }
+
+  /// Every top-level key this version reads. The settings catalog must cover them (`token` aside).
+  public static var knownKeys: Set<String> { Key.known }
 
   private static let priorities = 1...5
 
@@ -132,6 +145,10 @@ public struct Config: Sendable, Hashable {
       object[Key.reAlertMaxRepeats]?.intValue.flatMap { $0 >= 0 ? $0 : nil }
       ?? Defaults.reAlertMaxRepeats
     pausedUntil = object[Key.pausedUntil]?.stringValue.flatMap(Self.parseDate)
+    topicSettings = (object[Key.topicSettings]?.objectValue ?? [:]).compactMapValues {
+      TopicSettings(value: $0)
+    }
+    quietHours = QuietHours(value: object[Key.quietHours])
     extras = object.filter { !Self.Key.known.contains($0.key) }
   }
 
@@ -168,6 +185,9 @@ public struct Config: Sendable, Hashable {
       result[Key.reAlertMaxRepeats] = .int(reAlertMaxRepeats)
     }
     if let pausedUntil { result[Key.pausedUntil] = .string(Self.formatDate(pausedUntil)) }
+    let topics = topicSettings.compactMapValues(\.configValue)
+    if !topics.isEmpty { result[Key.topicSettings] = .object(topics) }
+    if let quiet = quietHours.configValue { result[Key.quietHours] = quiet }
     return result
   }
 
@@ -188,5 +208,12 @@ public struct Config: Sendable, Hashable {
   /// The bytes to write to the file.
   public func serialized() throws(NtfyError) -> Data {
     try ConfigValue.encodeObject(object)
+  }
+}
+
+extension Config {
+  /// Whether the topic settings keep this message out of the notifications.
+  func suppresses(_ message: NtfyMessage) -> Bool {
+    topicSettings[message.topic]?.suppresses(message.priority) ?? false
   }
 }

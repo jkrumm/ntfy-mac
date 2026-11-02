@@ -14,7 +14,7 @@ public enum DeliveryPolicy {
     return NotificationContent(
       identifier: message.notificationIdentifier,
       threadID: message.topic,
-      title: message.title ?? capitalized(message.topic),
+      title: title(for: message, config: config),
       subtitle: emojis.isEmpty ? message.topic : "\(message.topic) • \(emojis)",
       body: message.body,
       sound: profile.sound,
@@ -26,6 +26,15 @@ public enum DeliveryPolicy {
       buttons: buttons(for: message, config: config, requiresAcknowledge: requiresAcknowledge),
       requiresAcknowledge: requiresAcknowledge,
       messageRef: ref)
+  }
+
+  /// The title, prefixed with the topic's emoji when the topic has one.
+  private static func title(for message: NtfyMessage, config: Config) -> String {
+    let title = message.title ?? capitalized(message.topic)
+    guard let emoji = config.topicSettings[message.topic]?.emoji, !emoji.isEmpty else {
+      return title
+    }
+    return "\(emoji) \(title)"
   }
 
   private static func capitalized(_ text: String) -> String {

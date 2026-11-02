@@ -63,7 +63,13 @@ extension DeliveryService {
       inFlight = nil
       return .skipped
     }
-    if holdBack(loaded) {
+    let isLocal = localIdentifiers.contains(message.notificationIdentifier)
+    if !isLocal, loaded.suppresses(message) {
+      inFlight = nil
+      await discard(message, ref: ref, repeating: repeatsLeft != nil)
+      return .skipped
+    }
+    if holdBack(loaded, for: message, quietExempt: isLocal) {
       inFlight = nil
       return .skipped
     }
@@ -92,8 +98,16 @@ extension DeliveryService {
     return .posted
   }
 
+  /// A suppressed message is settled without a notification: marked notified (a re-alert already
+  /// was) and, if it was a snoozed reminder, cleared.
+  private func discard(_ message: NtfyMessage, ref: MessageRef, repeating: Bool) async {
+    log("notification \(message.notificationIdentifier) suppressed by the topic settings")
+    if !repeating { await markNotified(ref) }
+    await settleReminder(ref)
+  }
+
   private func postSummary(count: Int, oldestTopic: String, covers: [MessageRef]) async -> Outcome {
-    if holdBack(await currentConfig()) { return .skipped }
+    if holdBack(await currentConfig(), for: nil) { return .skipped }
     do throws(NtfyError) {
       try await poster.postMissedSummary(count: count, oldestTopic: oldestTopic)
     } catch {

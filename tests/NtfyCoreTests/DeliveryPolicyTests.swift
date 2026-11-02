@@ -28,6 +28,18 @@ import Testing
 
   // MARK: text
 
+  @Test func aTopicEmojiPrefixesOnlyTheTitle() {
+    let config = Config(topicSettings: ["alerts": TopicSettings(emoji: "📦")])
+    let plain = content(message(title: "Built"))
+    let marked = content(message(title: "Built"), config)
+    #expect(marked.title == "📦 Built")
+    #expect(content(message(), config).title == "📦 Alerts")
+    #expect(content(message(topic: "other", title: "Built"), config).title == "Built")
+    #expect(marked.subtitle == plain.subtitle)
+    #expect(marked.body == plain.body)
+    #expect(marked.identifier == plain.identifier)
+  }
+
   @Test func titleFallsBackToCapitalisedTopic() {
     #expect(content(message()).title == "Alerts")
     #expect(content(message(title: "Custom Title")).title == "Custom Title")

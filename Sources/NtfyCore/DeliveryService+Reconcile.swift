@@ -11,15 +11,19 @@ extension DeliveryService {
   ///    a timer for the rest of it.
   /// 4. Reminders that came due fire.
   public func reconcile() async {
+    await reconcile(announcing: .byAge)
+  }
+
+  func reconcile(announcing announcement: Announcement) async {
     guard !stopped else { return }
     let config = await currentConfig()
-    await announceUnnotified()
+    await announceUnnotified(announcement)
     await resumeRealerts(config)
     await expireDelivered(config)
     await fireDueReminders()
   }
 
-  private func announceUnnotified() async {
+  private func announceUnnotified(_ announcement: Announcement) async {
     do throws(NtfyError) {
       var rows: [NtfyMessage] = []
       var pages = 0
@@ -30,7 +34,7 @@ extension DeliveryService {
         if page.count < Self.reconcileLimit { break }
       }
       if pages > 1 { log("reconcile read \(rows.count) unnotified messages in \(pages) pages") }
-      await announceMissed(rows)
+      await announce(rows, as: announcement)
     } catch {
       log("unnotified messages not read: \(error)")
     }
@@ -51,7 +55,7 @@ extension DeliveryService {
       guard now.timeIntervalSince(stored.message.time) < Self.reAlertResumeLimit else { continue }
       let key = DeliveryTimers.Key(
         kind: .realert, identifier: stored.message.notificationIdentifier)
-      guard !timers.has(key) else { continue }
+      guard !timers.has(key), !config.suppresses(stored.message) else { continue }
       scheduleRealert(
         stored.message, repeatsLeft: config.reAlertMaxRepeats,
         interval: TimeInterval(config.reAlertIntervalSeconds))

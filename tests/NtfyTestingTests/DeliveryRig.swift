@@ -19,7 +19,20 @@ struct DeliveryRig {
     history = InMemoryHistoryStore(clock: clock)
     config = InMemoryConfigStore(initial)
     service = DeliveryService(
-      poster: poster, history: history, inbox: history, config: config, clock: clock)
+      poster: poster, history: history, inbox: history, config: config, clock: clock,
+      calendar: Self.utc)
+  }
+
+  /// The fake clock starts at 22:13 UTC on 2023-11-14.
+  static let utc: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+    return calendar
+  }()
+
+  /// Seconds from now until the next 07:00 UTC.
+  var untilMorning: TimeInterval {
+    QuietHours().nextEnd(after: clock.now(), calendar: Self.utc).timeIntervalSince(clock.now())
   }
 
   func message(

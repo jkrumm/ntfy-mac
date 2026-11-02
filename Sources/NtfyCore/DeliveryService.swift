@@ -1,5 +1,15 @@
 import Foundation
 
+/// How `reconcile` announces the messages it finds unnotified.
+enum Announcement {
+  /// By the age of the oldest (`MissedMessagePolicy`).
+  case byAge
+  /// As one summary, whatever the age (the end of quiet hours with `digest`).
+  case summary
+  /// Each one through the queue, whatever the age (the end of quiet hours without `digest`).
+  case each
+}
+
 /// What happened to a notification while its post was running.
 enum InFlightFate {
   case keep
@@ -21,6 +31,12 @@ enum InFlightFate {
 /// - While `Config.pausedUntil` is in the future nothing is posted: messages stay unnotified in the
 ///   history, and the first moment the pause is over (its end, or the next reminder poll after
 ///   the config cleared it) `reconcile` shows them under `MissedMessagePolicy`.
+/// - Quiet hours (`Config.quietHours`) hold messages back the same way, except priority 5 when the
+///   urgent bypass is on. When the window ends, `reconcile` shows what was held: as one summary
+///   with `digest`, else individually. A manual pause that outlasts the window wins; one
+///   reconcile covers both.
+/// - A topic that is muted, or a message below the topic's minimum priority, is stored and marked
+///   notified without a notification, so a later reconcile never shows it.
 /// - Reminders that came due in the history are shown again, polled every
 ///   `reminderPollInterval` (the CLI writes snoozes into the history from another process, so no
 ///   in-process timer knows the next deadline).
@@ -48,6 +64,8 @@ public actor DeliveryService: Delivering {
   let inbox: any HistoryInbox
   let configStore: any ConfigStore
   let clock: any Clock
+  /// Decides what wall-clock time the quiet hours mean.
+  let calendar: Calendar
   let log: @Sendable (String) -> Void
 
   var queue: DeliveryQueue
@@ -58,6 +76,11 @@ public actor DeliveryService: Delivering {
   var isFiringReminders = false
   /// Set when a post was held back by `Config.pausedUntil`; the resume reconciles once.
   var heldBack = false
+  /// Set when quiet hours (not only a pause) held something back; the resume then digests.
+  var quietHeld = false
+  /// Identifiers of `deliverLocal` messages, which topic settings and quiet hours do not apply to.
+  /// Entries stay for the process lifetime: a handful of explicit `notify` calls.
+  var localIdentifiers: Set<String> = []
   /// Auto-dismiss seconds for locally posted messages (`deliverLocal`), by notification
   /// identifier, consumed by the post.
   var dismissOverrides: [String: TimeInterval] = [:]
@@ -71,6 +94,7 @@ public actor DeliveryService: Delivering {
   public init(
     poster: any NotificationPoster, history: any HistoryStore, inbox: any HistoryInbox,
     config: any ConfigStore, clock: any Clock, minimumInterval: TimeInterval = 1.5,
+    calendar: Calendar = .current,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.poster = poster
@@ -78,6 +102,7 @@ public actor DeliveryService: Delivering {
     self.inbox = inbox
     configStore = config
     self.clock = clock
+    self.calendar = calendar
     self.log = log
     queue = DeliveryQueue(minimumInterval: minimumInterval)
   }
@@ -116,14 +141,29 @@ public actor DeliveryService: Delivering {
   /// Queues a message that did not come from the server (the CLI's `notify`). `dismissAfter`
   /// replaces the configured auto-dismiss of its priority for this one notification; 0 means
   /// never.
+  ///
+  /// A local message is an explicit action of the user, so topic settings (mute, minimum
+  /// priority) and quiet hours do not apply to it. A manual pause still holds it back.
   public func deliverLocal(_ message: NtfyMessage, dismissAfter: TimeInterval?) {
+    localIdentifiers.insert(message.notificationIdentifier)
     if let dismissAfter { dismissOverrides[message.notificationIdentifier] = dismissAfter }
     deliver(message)
   }
 
   public func announceMissed(_ messages: [NtfyMessage]) async {
-    let fresh = messages.filter { !isPending(MessageRef(topic: $0.topic, id: $0.id)) }
-    switch MissedMessagePolicy.decide(fresh, now: clock.now()) {
+    await announce(messages, as: .byAge)
+  }
+
+  /// Messages the topic settings suppress are marked notified and left out of every mode.
+  func announce(_ messages: [NtfyMessage], as announcement: Announcement) async {
+    let fresh = await settleSuppressed(messages)
+    let decision =
+      switch announcement {
+      case .byAge: MissedMessagePolicy.decide(fresh, now: clock.now())
+      case .summary: Self.digest(fresh)
+      case .each: MissedMessageDecision.individual(fresh)
+      }
+    switch decision {
     case .individual(let toShow):
       for message in toShow { deliver(message) }
     case .summary(let count, let oldestTopic):
@@ -137,6 +177,28 @@ public actor DeliveryService: Delivering {
   }
 
   // MARK: Shared helpers
+
+  /// The messages that are not already pending; those the topic settings suppress are marked
+  /// notified instead.
+  private func settleSuppressed(_ messages: [NtfyMessage]) async -> [NtfyMessage] {
+    let config = await currentConfig()
+    var fresh: [NtfyMessage] = []
+    for message in messages {
+      let ref = MessageRef(topic: message.topic, id: message.id)
+      guard !isPending(ref) else { continue }
+      if config.suppresses(message) {
+        await markNotified(ref)
+      } else {
+        fresh.append(message)
+      }
+    }
+    return fresh
+  }
+
+  private static func digest(_ messages: [NtfyMessage]) -> MissedMessageDecision {
+    guard let oldest = messages.min(by: { $0.time < $1.time }) else { return .silent }
+    return .summary(count: messages.count, oldestTopic: oldest.topic)
+  }
 
   func isPending(_ ref: MessageRef) -> Bool {
     inFlight?.ref == ref || queue.contains { $0.ref == ref }
