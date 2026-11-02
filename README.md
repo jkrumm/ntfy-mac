@@ -83,7 +83,7 @@ Nothing to reconfigure. Install 2.0 over the old version (any of the methods abo
 
 **Auto-discovery** — Picks up your subscribed topics automatically. Re-checks every 30 minutes — no restart needed when you add or remove topics.
 
-**Updates** — `brew upgrade ntfy-mac`, or rerun the installer. `ntfy-mac update --check` looks for a newer release.
+**Updates** — `brew upgrade ntfy-mac` for Homebrew installs. Curl and manual installs run `ntfy-mac update`, which verifies the release checksum before it swaps the app in. `ntfy-mac update --check` only looks.
 
 **Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
 
@@ -123,7 +123,7 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 | `ntfy-mac notify`      | Send a local notification through the app (no server needed).     |
 | `ntfy-mac sounds`      | Preview the notification sounds.                                  |
 | `ntfy-mac logs`        | Show the app's log from the unified log.                          |
-| `ntfy-mac update`      | Update ntfy-mac (Homebrew installs) or check for a newer release. |
+| `ntfy-mac update`      | Update ntfy-mac (Homebrew or verified download) or check for a newer release. |
 | `ntfy-mac uninstall`   | Remove ntfy-mac's config, history, state and token.               |
 | `ntfy-mac version`     | Print the version.                                                |
 | `ntfy-mac start`       | Start the ntfy-mac app if it is not running.                      |
@@ -265,6 +265,7 @@ ntfy-mac ack --all --topic alerts             # clear what you have handled
 
 ```bash
 brew upgrade ntfy-mac         # Homebrew installs
+ntfy-mac update               # curl and manual installs: verified download, swap, restart
 ntfy-mac update --check       # look for a newer release without installing it
 ntfy-mac uninstall            # removes config, history, state and the token
 ```
