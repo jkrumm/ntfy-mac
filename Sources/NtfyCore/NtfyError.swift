@@ -9,6 +9,8 @@ public enum NtfyError: Error, Sendable, Hashable {
   /// The server answered with a redirect. Never followed, since the token must not leave the
   /// configured host; retrying cannot help, the server URL needs fixing.
   case redirected
+  /// A token would travel over plain http to a non-loopback host.
+  case insecureServer
   /// A topic name the server would not accept.
   case invalidTopic(String)
   /// The menu bar app is not running or not reachable over its socket.

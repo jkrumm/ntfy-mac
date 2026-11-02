@@ -15,6 +15,7 @@ import Testing
     (.storage("x"), .runtime),
     (.rateLimited(retryAfter: 5), .runtime),
     (.redirected, .runtime),
+    (.insecureServer, .runtime),
     (.invalidTopic("x y"), .usage),
   ])
   func mapsCoreErrors(error: NtfyError, expected: ProcessExit) {

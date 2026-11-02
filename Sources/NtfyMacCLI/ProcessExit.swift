@@ -30,7 +30,7 @@ enum ProcessExit: Int32, CaseIterable {
     case .serverUnreachable: self = .serverUnreachable
     case .appUnavailable, .permissionDenied: self = .appUnavailable
     case .invalidTopic: self = .usage
-    case .rateLimited, .redirected, .invalidResponse, .storage: self = .runtime
+    case .rateLimited, .redirected, .insecureServer, .invalidResponse, .storage: self = .runtime
     }
   }
 }

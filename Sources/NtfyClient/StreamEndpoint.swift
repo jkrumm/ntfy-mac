@@ -14,26 +14,20 @@ public enum StreamEndpoint {
       }
   }
 
-  public static func url(base: URL, topics: [String], since: String?) throws(NtfyError) -> URL {
+  /// `poll` turns the live subscription into a one-shot read of the cache.
+  public static func url(
+    base: URL, topics: [String], since: String?, poll: Bool = false, token: String? = nil,
+    allowInsecure: Bool = false
+  ) throws(NtfyError) -> URL {
     guard !topics.isEmpty else { throw .invalidResponse("no topics to subscribe to") }
     if let bad = topics.first(where: { !isValid(topic: $0) }) {
       throw .invalidTopic(bad)
     }
-    guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false),
-      let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
-      components.host?.isEmpty == false
-    else {
-      throw .invalidResponse("server URL must be http(s) with a host")
-    }
-    var path = components.percentEncodedPath
-    if !path.hasSuffix("/") { path += "/" }
-    components.percentEncodedPath = path + topics.joined(separator: ",") + "/json"
-    components.fragment = nil
-    components.percentEncodedQuery = nil
-    if let since {
-      components.queryItems = [URLQueryItem(name: "since", value: since)]
-    }
-    guard let url = components.url else { throw .invalidResponse("malformed server URL") }
-    return url
+    var query: [URLQueryItem] = []
+    if let since { query.append(URLQueryItem(name: "since", value: since)) }
+    if poll { query.append(URLQueryItem(name: "poll", value: "1")) }
+    return try ServerEndpoint.url(
+      base: base, path: topics.joined(separator: ",") + "/json", query: query, token: token,
+      allowInsecure: allowInsecure)
   }
 }

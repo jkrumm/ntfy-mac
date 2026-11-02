@@ -10,6 +10,8 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
   public let priority: Priority
   public let tags: [String]
   public let click: URL?
+  /// Groups updates of one notification; the server omits it when it equals `id`.
+  public let sequenceID: String?
 
   public init(
     id: String,
@@ -19,7 +21,8 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
     body: String,
     priority: Priority = .default,
     tags: [String] = [],
-    click: URL? = nil
+    click: URL? = nil,
+    sequenceID: String? = nil
   ) {
     self.id = id
     self.topic = topic
@@ -29,5 +32,6 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
     self.priority = priority
     self.tags = tags
     self.click = click
+    self.sequenceID = sequenceID
   }
 }

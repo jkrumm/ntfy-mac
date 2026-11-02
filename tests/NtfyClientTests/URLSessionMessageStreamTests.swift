@@ -11,21 +11,30 @@ import Testing
   }
 
   private struct Outcome {
-    var ids: [String] = []
+    var events: [StreamEvent] = []
     var error: NtfyError?
+
+    var ids: [String] {
+      events.compactMap { event in
+        guard case .message(let message) = event else { return nil }
+        return message.id
+      }
+    }
   }
 
   private func run(
-    _ stub: Stub, token: String? = "tk",
+    _ stub: Stub, token: String? = "tk", base: URL? = nil, allowInsecure: Bool = false,
+    connectTimeout: Duration = .seconds(30),
     diagnostics: @escaping @Sendable (String) -> Void = { _ in }
   ) async -> (outcome: Outcome, base: URL) {
-    let base = StubURLProtocol.register(stub)
+    let base = base ?? StubURLProtocol.register(stub)
     let stream = URLSessionMessageStream(
-      base: base, token: token, session: StubURLProtocol.session(), diagnostics: diagnostics)
+      base: base, token: token, allowInsecure: allowInsecure, connectTimeout: connectTimeout,
+      session: StubURLProtocol.session(), diagnostics: diagnostics)
     var outcome = Outcome()
     do {
-      for try await message in stream.messages(topics: ["t"], since: nil) {
-        outcome.ids.append(message.id)
+      for try await event in stream.events(topics: ["t"], since: nil) {
+        outcome.events.append(event)
       }
     } catch {
       outcome.error = error as? NtfyError
@@ -58,6 +67,8 @@ import Testing
     let stub = Stub(status: 429, headers: ["Retry-After": "30"])
     #expect(await run(stub).outcome.error == .rateLimited(retryAfter: 30))
     #expect(await run(Stub(status: 429)).outcome.error == .rateLimited(retryAfter: nil))
+    let garbage = Stub(status: 429, headers: ["Retry-After": "-3"])
+    #expect(await run(garbage).outcome.error == .rateLimited(retryAfter: nil))
   }
 
   @Test(arguments: [500, 502, 503])
@@ -87,7 +98,7 @@ import Testing
   @Test func htmlFromAProxyIsNotAStream() async {
     let stub = Stub(headers: ["Content-Type": "text/html"], lines: ["<html>captive portal</html>"])
     let (outcome, _) = await run(stub)
-    #expect(outcome.error == .invalidResponse("expected an NDJSON stream, got text/html"))
+    #expect(outcome.error == .invalidResponse("expected JSON, got text/html"))
     #expect(outcome.ids.isEmpty)
   }
 
@@ -100,10 +111,69 @@ import Testing
     #expect(skipped.withLock { $0 } == 2)
   }
 
-  @Test func unknownEventsAreIgnored() async {
-    let keepalive = #"{"id":"k","time":1,"event":"keepalive","topic":"t"}"#
-    let (outcome, _) = await run(Stub(lines: [keepalive, Self.line("1")]))
+  @Test func yieldsEveryKnownEventTypeAndSkipsUnknownOnes() async {
+    let lines = [
+      #"{"id":"o","time":1,"event":"open","topic":"t"}"#,
+      #"{"id":"k","time":1,"event":"keepalive","topic":"t"}"#,
+      #"{"id":"p","time":1,"event":"poll_request","topic":"t"}"#,
+      Self.line("1"),
+      #"{"id":"d","time":1,"event":"message_delete","topic":"t","sequence_id":"s"}"#,
+      #"{"id":"c","time":1,"event":"message_clear","topic":"t","sequence_id":"s"}"#,
+      #"{"id":"f","time":1,"event":"future","topic":"t"}"#,
+    ]
+    let (outcome, _) = await run(Stub(lines: lines))
+    #expect(outcome.error == nil)
+    #expect(outcome.events.count == 6)
+    #expect(Array(outcome.events.prefix(3)) == [.open, .keepalive, .pollRequest])
     #expect(outcome.ids == ["1"])
+    #expect(
+      Array(outcome.events.suffix(2)) == [
+        .messageDelete(topic: "t", sequenceID: "s"), .messageClear(topic: "t", sequenceID: "s"),
+      ])
+  }
+
+  @Test func plainHttpWithTokenIsRefusedBeforeAnyRequest() async {
+    let base = StubURLProtocol.register(Stub(lines: [Self.line("1")]), scheme: "http")
+    let (outcome, _) = await run(Stub(), base: base)
+    #expect(outcome.error == .insecureServer)
+    #expect(StubURLProtocol.requests(for: base).isEmpty)
+  }
+
+  @Test func plainHttpIsAllowedOnOptInAndWithoutToken() async {
+    let optIn = StubURLProtocol.register(Stub(lines: [Self.line("1")]), scheme: "http")
+    #expect(await run(Stub(), base: optIn, allowInsecure: true).outcome.ids == ["1"])
+    let anonymous = StubURLProtocol.register(Stub(lines: [Self.line("2")]), scheme: "http")
+    #expect(await run(Stub(), token: nil, base: anonymous).outcome.ids == ["2"])
+  }
+
+  @Test func loopbackHttpIsAllowedWithToken() async {
+    let base = StubURLProtocol.register(
+      Stub(lines: [Self.line("1")]), scheme: "http", host: "localhost")
+    #expect(await run(Stub(), base: base).outcome.ids == ["1"])
+  }
+
+  @Test func silentServerHitsTheConnectTimeout() async {
+    let (outcome, base) = await run(Stub(stall: true), connectTimeout: .milliseconds(100))
+    #expect(outcome.error == .serverUnreachable)
+    for _ in 0..<1000 where !StubURLProtocol.isStopped(base) { await Task.yield() }
+    #expect(StubURLProtocol.isStopped(base))
+  }
+
+  @Test func openBodyHasNoTimeout() async {
+    let stub = Stub(lines: [Self.line("1")], hold: true)
+    let base = StubURLProtocol.register(stub)
+    let stream = URLSessionMessageStream(
+      base: base, token: nil, connectTimeout: .milliseconds(50), session: StubURLProtocol.session())
+    let consumer = Task { () -> [String] in
+      var ids: [String] = []
+      for try await event in stream.events(topics: ["t"], since: nil) {
+        if case .message(let message) = event { ids.append(message.id) }
+      }
+      return ids
+    }
+    try? await Task.sleep(for: .milliseconds(300))
+    consumer.cancel()
+    #expect((try? await consumer.value) == ["1"])
   }
 
   @Test func invalidTopicsFailBeforeAnyRequest() async {
@@ -111,7 +181,7 @@ import Testing
     let stream = URLSessionMessageStream(base: base, token: nil, session: StubURLProtocol.session())
     var failure: NtfyError?
     do {
-      for try await _ in stream.messages(topics: ["bad topic"], since: nil) {}
+      for try await _ in stream.events(topics: ["bad topic"], since: nil) {}
     } catch {
       failure = error as? NtfyError
     }
@@ -125,7 +195,7 @@ import Testing
     let (signal, signalContinuation) = AsyncStream<Void>.makeStream()
     let consumer = Task { () -> NtfyError? in
       do {
-        for try await _ in stream.messages(topics: ["t"], since: nil) {
+        for try await _ in stream.events(topics: ["t"], since: nil) {
           signalContinuation.yield()
         }
         return nil

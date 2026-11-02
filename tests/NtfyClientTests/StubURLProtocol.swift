@@ -12,6 +12,8 @@ struct Stub: Sendable {
   var respondFrom: URL?
   /// Keep the connection open after the body, like a live stream.
   var hold = false
+  /// Never answer at all, like a server that accepted the connection and went silent.
+  var stall = false
 }
 
 final class StubURLProtocol: URLProtocol {
@@ -23,11 +25,15 @@ final class StubURLProtocol: URLProtocol {
 
   private static let records = Mutex<[String: Record]>([:])
 
-  /// Registers a stub and returns the base URL that reaches it.
-  static func register(_ stub: Stub) -> URL {
-    let host = "\(UUID().uuidString.lowercased()).test"
+  /// Registers a stub and returns the base URL that reaches it. Pass `host` to claim a fixed
+  /// (e.g. loopback) host; each such host may be used by one test only.
+  static func register(_ stub: Stub, scheme: String = "https", host: String? = nil) -> URL {
+    let host = host ?? "\(UUID().uuidString.lowercased()).test"
     records.withLock { $0[host] = Record(stub: stub) }
-    guard let url = URL(string: "https://\(host)") else { fatalError("invalid stub host \(host)") }
+    let authority = host.contains(":") ? "[\(host)]" : host
+    guard let url = URL(string: "\(scheme)://\(authority)") else {
+      fatalError("invalid stub host \(host)")
+    }
     return url
   }
 
@@ -68,6 +74,7 @@ final class StubURLProtocol: URLProtocol {
       client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
       return
     }
+    if stub.stall { return }
     if let target = stub.redirectTo {
       let response = Self.response(url, status: 302, headers: ["Location": target.absoluteString])
       client?.urlProtocol(
