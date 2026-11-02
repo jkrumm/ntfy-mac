@@ -3,39 +3,38 @@ import ImageIO
 import NtfyAppLogic
 import SwiftUI
 
-/// The attachment of the shown message: facts, a button to fetch it, then a preview and the
-/// file actions once it is local.
+/// The attachment of a message, inline in its bubble: facts, a button to fetch it, then a
+/// preview and the file actions once it is local. A click on the preview opens Quick Look.
 struct AttachmentPreview: View {
   let model: HistoryModel
+  let key: MessageKey
   let file: MessageDetail.Attachment
   @Binding var quickLook: URL?
   let report: (String) -> Void
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 10) {
-        Label {
-          VStack(alignment: .leading) {
-            Text(verbatim: file.name).fontWeight(.medium)
-            Text(verbatim: facts).font(.caption).foregroundStyle(.secondary)
-          }
-        } icon: {
-          Image(systemName: file.isImage ? "photo" : "paperclip")
+    VStack(alignment: .leading, spacing: 8) {
+      Label {
+        VStack(alignment: .leading) {
+          Text(verbatim: file.name).fontWeight(.medium)
+          Text(verbatim: facts).font(.caption).foregroundStyle(.secondary)
         }
-        content
+      } icon: {
+        Image(systemName: file.isImage ? "photo" : "paperclip")
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(4)
-    } label: {
-      Text("Attachment")
+      content
     }
+    .padding(8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      .background.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
   }
 
   @ViewBuilder private var content: some View {
-    switch model.attachment {
+    switch model.attachmentState(for: key) {
     case .idle:
       Button {
-        model.loadAttachment()
+        model.loadAttachment(for: key)
       } label: {
         Label(file.isImage ? "Load Image" : "Download", systemImage: "arrow.down.circle")
       }
@@ -47,11 +46,11 @@ struct AttachmentPreview: View {
       HStack {
         ProgressView().controlSize(.small)
         Text("Loading…")
-        Button("Cancel") { model.cancelAttachment() }
+        Button("Cancel") { model.cancelAttachment(for: key) }
       }
     case .failed(let reason):
       Text(verbatim: reason).foregroundStyle(.red)
-      Button("Try Again") { model.loadAttachment() }
+      Button("Try Again") { model.loadAttachment(for: key) }
     case .ready(let url):
       ready(url)
     }
@@ -59,14 +58,20 @@ struct AttachmentPreview: View {
 
   private func ready(_ url: URL) -> some View {
     VStack(alignment: .leading, spacing: 10) {
-      if file.isImage {
-        LocalImage(url: url)
-      } else {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-          .resizable()
-          .frame(width: 64, height: 64)
-          .accessibilityHidden(true)
+      Button {
+        quickLook = url
+      } label: {
+        if file.isImage {
+          LocalImage(url: url)
+        } else {
+          Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+            .resizable()
+            .frame(width: 64, height: 64)
+            .accessibilityHidden(true)
+        }
       }
+      .buttonStyle(.plain)
+      .help("Quick Look")
       HStack {
         Button {
           quickLook = url
@@ -88,6 +93,7 @@ struct AttachmentPreview: View {
           Label("Save As…", systemImage: "square.and.arrow.down")
         }
       }
+      .controlSize(.small)
     }
   }
 
@@ -111,7 +117,7 @@ private struct LocalImage: View {
         Image(nsImage: NSImage(cgImage: image, size: .zero))
           .resizable()
           .scaledToFit()
-          .frame(maxHeight: 360)
+          .frame(maxHeight: 280)
           .accessibilityLabel("Image preview")
       } else if failed {
         Label("This image cannot be previewed.", systemImage: "photo.badge.exclamationmark")
