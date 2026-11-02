@@ -16,18 +16,21 @@ public struct IPCRequestHandler: Sendable {
   private let permissions: any NotificationPermissionProviding
   private let clock: any NtfyCore.Clock
   private let loginItem: any LoginItemControlling
+  private let meeting: (any MeetingStateProviding)?
   private let log: @Sendable (String) -> Void
 
   public init(
     pipeline: @escaping PipelineProvider, config: any ConfigStore,
     permissions: any NotificationPermissionProviding, clock: any NtfyCore.Clock,
-    loginItem: any LoginItemControlling, log: @escaping @Sendable (String) -> Void = { _ in }
+    loginItem: any LoginItemControlling, meeting: (any MeetingStateProviding)? = nil,
+    log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.pipeline = pipeline
     self.config = config
     self.permissions = permissions
     self.clock = clock
     self.loginItem = loginItem
+    self.meeting = meeting
     self.log = log
   }
 
@@ -52,8 +55,20 @@ public struct IPCRequestHandler: Sendable {
     let connection = await pipeline()?.supervisor?.currentStatus ?? .stopped
     let result = StatusResult(
       connection: connection.ipcName, pausedUntil: await activePause(),
-      appVersion: Version.current, permission: await permissions.current().summary)
+      appVersion: Version.current, permission: await permissions.current().summary,
+      meeting: await meetingSummary())
     return .success(id: request.id, result: ResultPayload(status: result))
+  }
+
+  /// What holds notifications back now because of a meeting: the override or, with the mode on,
+  /// the detection.
+  private func meetingSummary() async -> MeetingSummary {
+    let settings = (try? await config.load().meeting) ?? MeetingSettings()
+    let now = clock.now()
+    let state = settings.effectiveState(detected: await meeting?.current() ?? .inactive, at: now)
+    return MeetingSummary(
+      active: state.isActive, reason: state.reason?.code, detail: state.reason?.detail,
+      presenting: settings.isPresenting(at: now))
   }
 
   private func permission(_ request: Request) async -> Response {
