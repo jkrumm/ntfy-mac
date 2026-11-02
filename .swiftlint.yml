@@ -8,6 +8,7 @@ included:
   - Package.swift
 
 excluded:
+  - Sources/NtfyCore/TagEmojiData.swift
   - .build
   - .tools
   - node_modules

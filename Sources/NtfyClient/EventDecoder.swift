@@ -12,9 +12,14 @@ private struct WireEvent: Decodable {
   let priority: Int?
   let tags: [String]?
   let click: URL?
+  let icon: Lenient<URL>?
+  let attachment: Lenient<WireAttachment>?
+  let actions: Lenient<[Lenient<WireAction>]>?
+  let expires: Lenient<TimeInterval>?
 
   private enum CodingKeys: String, CodingKey {
-    case id, time, event, topic, message, title, priority, tags, click
+    case id, time, event, topic, message, title, priority, tags, click, icon
+    case attachment, actions, expires
     case sequenceID = "sequence_id"
   }
 }
@@ -56,7 +61,11 @@ public enum EventDecoder {
       priority: Priority(clamping: event.priority ?? Priority.default.rawValue),
       tags: event.tags ?? [],
       click: event.click,
-      sequenceID: event.sequenceID
+      sequenceID: event.sequenceID,
+      icon: event.icon?.value,
+      attachment: event.attachment?.value?.model,
+      actions: (event.actions?.value ?? []).compactMap { $0.value?.model },
+      expires: event.expires?.value.map { Date(timeIntervalSince1970: $0) }
     )
   }
 }

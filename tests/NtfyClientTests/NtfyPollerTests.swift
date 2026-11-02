@@ -49,6 +49,17 @@ import Testing
     #expect(skipped.withLock { $0 } == 1)
   }
 
+  @Test func pollDecodesActionsAttachmentAndIcon() async throws {
+    let json =
+      #"{"id":"1","time":1,"event":"message","topic":"t","icon":"https://e.com/i.png","#
+      + #""attachment":{"name":"a.png","url":"https://e.com/a.png","type":"image/png"},"#
+      + #""actions":[{"action":"view","label":"Open","url":"https://e.com"}]}"#
+    let message = try #require(try await poll(Stub(lines: [json])).result.get().first)
+    #expect(message.icon == URL(string: "https://e.com/i.png"))
+    #expect(message.attachment?.mimeType == "image/png")
+    #expect(message.actions.map(\.label) == ["Open"])
+  }
+
   @Test func truncatedReplayIsReported() async throws {
     let notes = Mutex<[String]>([])
     let stub = Stub(

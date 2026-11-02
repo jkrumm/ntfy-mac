@@ -62,6 +62,15 @@ public enum ConfigValue: Sendable, Hashable, Codable {
     }
   }
 
+  /// A whole JSON number as an `Int`; fractions and other types are nil.
+  public var intValue: Int? {
+    switch self {
+    case .int(let value): value
+    case .double(let value): Int(exactly: value)
+    default: nil
+    }
+  }
+
   /// Whether this is `true`; any other value, including other types, is false.
   public var isTrue: Bool {
     guard case .bool(let value) = self else { return false }

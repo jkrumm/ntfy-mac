@@ -63,6 +63,70 @@ import Testing
       try decodeMessage(#"{"id":"b","time":1,"event":"message","topic":"t"}"#)?.sequenceID == nil)
   }
 
+  @Test func decodesIconAttachmentActionsAndExpiry() throws {
+    let message = try #require(
+      try decodeMessage(
+        """
+        {"id":"a","time":1,"event":"message","topic":"t","expires":1700000100,\
+        "icon":"https://e.com/i.png",\
+        "attachment":{"name":"a.png","url":"https://e.com/a.png","type":"image/png",\
+        "size":42,"expires":1700000200},\
+        "actions":[{"id":"x1","action":"http","label":"Go","clear":true,"url":"https://e.com/h",\
+        "method":"PUT","headers":{"X":"1"},"body":"b"},{"action":"view","label":"Open",\
+        "url":"https://e.com"},{"action":"future","label":"F"}]}
+        """))
+    #expect(message.icon == URL(string: "https://e.com/i.png"))
+    #expect(message.expires == Date(timeIntervalSince1970: 1_700_000_100))
+    let attachment = try #require(message.attachment)
+    #expect(attachment.name == "a.png")
+    #expect(attachment.url == URL(string: "https://e.com/a.png"))
+    #expect(attachment.mimeType == "image/png")
+    #expect(attachment.size == 42)
+    #expect(attachment.expires == Date(timeIntervalSince1970: 1_700_000_200))
+    #expect(message.actions.count == 3)
+    let http = message.actions[0]
+    #expect(http.id == "x1")
+    #expect(http.kind == .http)
+    #expect(http.clear)
+    #expect(http.method == "PUT")
+    #expect(http.headers == ["X": "1"])
+    #expect(http.body == "b")
+    #expect(message.actions[1].kind == .view)
+    #expect(message.actions[1].clear == false)
+    #expect(message.actions[2].kind == .unknown("future"))
+  }
+
+  @Test func newFieldsDefaultWhenAbsent() throws {
+    let message = try #require(
+      try decodeMessage(#"{"id":"a","time":1,"event":"message","topic":"t"}"#))
+    #expect(message.icon == nil)
+    #expect(message.attachment == nil)
+    #expect(message.actions.isEmpty)
+    #expect(message.expires == nil)
+  }
+
+  @Test(arguments: [
+    #""icon":5"#, #""icon":"""#, #""attachment":"str""#, #""attachment":{"name":"x"}"#,
+    #""actions":"nope""#, #""actions":[1,"a",null]"#, #""expires":"soon""#,
+    #""actions":[{"action":"view"}]"#,
+  ])
+  func malformedOptionalSubObjectsAreDroppedNotTheMessage(fragment: String) throws {
+    let line = #"{"id":"a","time":1,"event":"message","topic":"t","message":"hi","# + fragment + "}"
+    let message = try #require(try decodeMessage(line))
+    #expect(message.body == "hi")
+    #expect(message.icon == nil)
+    #expect(message.attachment == nil)
+    #expect(message.actions.isEmpty)
+    #expect(message.expires == nil)
+  }
+
+  @Test func oneBadActionDoesNotDropItsSiblings() throws {
+    let line =
+      #"{"id":"a","time":1,"event":"message","topic":"t","actions":[{"action":"view"},"#
+      + #"{"action":"view","label":"Ok","url":"https://e.com"}]}"#
+    #expect(try decodeMessage(line)?.actions.map(\.label) == ["Ok"])
+  }
+
   @Test func decodesControlEvents() throws {
     #expect(try decode(#"{"id":"o","time":1,"event":"open","topic":"t1,t2"}"#) == .open)
     #expect(try decode(#"{"id":"k","time":1,"event":"keepalive","topic":"t"}"#) == .keepalive)

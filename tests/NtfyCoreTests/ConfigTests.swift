@@ -96,4 +96,50 @@ import Testing
   @Test func wrongTypedAllowInsecureReadsAsFalse() throws {
     #expect(try #require(parse(#"{"allowInsecure":"yes"}"#)).allowInsecure == false)
   }
+
+  @Test func deliveryKeysDefaultAndAreNotWrittenAtDefaults() throws {
+    let config = try #require(parse("{}"))
+    #expect(config.allowPrivateNetworkActions == false)
+    #expect(config.reAlert)
+    #expect(config.reAlertIntervalSeconds == 300)
+    #expect(config.reAlertMinPriority == 5)
+    #expect(config.reAlertMaxRepeats == 12)
+    #expect(config.object.isEmpty)
+  }
+
+  @Test func deliveryKeysRoundTripAndAreNotExtras() throws {
+    let config = try #require(
+      parse(
+        """
+        {"allowPrivateNetworkActions":true,"reAlert":false,"reAlertIntervalSeconds":60,
+         "reAlertMinPriority":4,"reAlertMaxRepeats":0,"other":1}
+        """))
+    #expect(config.allowPrivateNetworkActions)
+    #expect(config.reAlert == false)
+    #expect(config.reAlertIntervalSeconds == 60)
+    #expect(config.reAlertMinPriority == 4)
+    #expect(config.reAlertMaxRepeats == 0)
+    #expect(config.extras == ["other": .int(1)])
+    #expect(try #require(Config.parse(try config.serialized())) == config)
+  }
+
+  @Test func reAlertMinPriorityIsClamped() throws {
+    #expect(try #require(parse(#"{"reAlertMinPriority":9}"#)).reAlertMinPriority == 5)
+    #expect(try #require(parse(#"{"reAlertMinPriority":-2}"#)).reAlertMinPriority == 1)
+    #expect(Config(reAlertMinPriority: 0).reAlertMinPriority == 1)
+  }
+
+  @Test func wrongTypedDeliveryKeysFallBackToDefaults() throws {
+    let config = try #require(
+      parse(
+        """
+        {"allowPrivateNetworkActions":"yes","reAlert":"no","reAlertIntervalSeconds":"5",
+         "reAlertMinPriority":2.5,"reAlertMaxRepeats":-1}
+        """))
+    #expect(config.allowPrivateNetworkActions == false)
+    #expect(config.reAlert)
+    #expect(config.reAlertIntervalSeconds == 300)
+    #expect(config.reAlertMinPriority == 5)
+    #expect(config.reAlertMaxRepeats == 12)
+  }
 }
