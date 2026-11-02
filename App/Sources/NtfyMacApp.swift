@@ -101,8 +101,9 @@ struct NtfyMacApp: App {
     .menuBarExtraStyle(.window)
 
     Window(AppWindow.history.title, id: AppWindow.history.rawValue) {
-      HistoryWindow(model: delegate.model, windows: delegate.windows)
+      HistoryWindow(model: delegate.historyModel, windows: delegate.windows)
     }
+    .defaultSize(width: 1000, height: 640)
     .defaultLaunchBehavior(.suppressed)
     .restorationBehavior(.disabled)
 

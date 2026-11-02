@@ -1,13 +1,96 @@
+import AppKit
 import NtfyAppLogic
+import NtfyCore
 import SwiftUI
 
-/// Placeholder: the History window task replaces this body and owns the file.
+/// The History window: topics, the message list and the selected message. The model is built by
+/// the app delegate; the window runs it while it is open.
 struct HistoryWindow: View {
-  let model: AppModel
+  @Bindable var model: HistoryModel
   let windows: WindowRouter
+  @State private var confirmingDelete = false
+  @State private var quickLook: URL?
+  @State private var notice: String?
 
   var body: some View {
-    Text(windows.pendingSelection.map { "Selected: \($0.topic)/\($0.id)" } ?? "History")
-      .frame(minWidth: 480, minHeight: 320)
+    NavigationSplitView {
+      HistorySidebar(model: model)
+        .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 280)
+    } content: {
+      HistoryList(model: model, confirmingDelete: $confirmingDelete, quickLook: openQuickLook)
+        .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 520)
+    } detail: {
+      detail
+    }
+    .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search messages")
+    .toolbar { HistoryFilterBar(model: model, export: export) }
+    .frame(minWidth: 720, minHeight: 420)
+    .fileQuickLook($quickLook)
+    .environment(\.openURL, OpenURLAction(handler: Self.open))
+    .confirmationDialog(
+      "Delete this message?", isPresented: $confirmingDelete, titleVisibility: .visible
+    ) {
+      Button("Delete", role: .destructive) { Task { await model.delete() } }
+    } message: {
+      Text("This cannot be undone.")
+    }
+    .alert(
+      "Something went wrong",
+      isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })
+    ) {
+      Button("OK") { notice = nil }
+    } message: {
+      Text(verbatim: notice ?? "")
+    }
+    .onAppear {
+      model.start()
+      applyPendingSelection()
+    }
+    .onDisappear { model.stop() }
+    .onChange(of: windows.pendingSelection) { applyPendingSelection() }
+    .onChange(of: model.isAvailable) { applyPendingSelection() }
+  }
+
+  @ViewBuilder private var detail: some View {
+    if let shown = model.detail {
+      HistoryDetail(
+        model: model, detail: shown, confirmingDelete: $confirmingDelete, quickLook: $quickLook,
+        report: { notice = $0 })
+    } else {
+      ContentUnavailableView(
+        "Select a message", systemImage: "envelope",
+        description: Text("Pick a message to read it here."))
+    }
+  }
+
+  /// Applies the router's selection once the history is readable, and clears it.
+  private func applyPendingSelection() {
+    guard model.isAvailable, let key = windows.takeSelection() else { return }
+    Task { await model.apply(selection: key) }
+  }
+
+  private func openQuickLook() -> Bool {
+    guard case .ready(let url) = model.attachment else { return false }
+    quickLook = url
+    return true
+  }
+
+  private func export(_ format: ExportFormat) {
+    Task {
+      guard let result = await model.export(format) else {
+        notice = "There are no messages to export for the current filters."
+        return
+      }
+      do { try await HistoryFiles.save(result) } catch {
+        notice = "The export could not be written: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  /// Only http, https and mailto links open, and they open in the default app.
+  private static func open(_ url: URL) -> OpenURLAction.Result {
+    guard let allowed = URLPolicy.openable(url) else { return .discarded }
+    NSWorkspace.shared.open(allowed)
+    return .handled
   }
 }
