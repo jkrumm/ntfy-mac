@@ -94,6 +94,15 @@ private struct OnboardingRig {
     #expect(chosen.loginItem.state() == .enabled)
   }
 
+  @Test func unchecking_anEnabledLoginItem_turnsItOff() async {
+    let rig = OnboardingRig(loginItem: InMemoryLoginItem(.enabled))
+    rig.model.reset()
+    #expect(rig.model.launchAtLogin)
+    rig.model.launchAtLogin = false
+    #expect(await rig.model.finish())
+    #expect(rig.loginItem.state() == .notRegistered)
+  }
+
   // MARK: Notifications
 
   @Test func theAuthorizationPromptHoldsTheQuitGuardAndUpdatesTheState() async {

@@ -72,23 +72,30 @@ extension HistoryModel {
   }
 
   /// Everything the filters match, not just the loaded page, as a file for the save panel.
-  /// nil when there is nothing to export or no history to read.
-  public func export(_ format: ExportFormat) async -> HistoryExport? {
+  /// nil when there is nothing to export or no history to read; throws when reading or encoding
+  /// fails.
+  ///
+  /// The read is pinned to the moment it starts (`until`), and capped at the count then, so a
+  /// message arriving between pages cannot shift the paging; rows are also de-duplicated by key.
+  public func export(_ format: ExportFormat) async throws(NtfyError) -> HistoryExport? {
     guard let inbox = handles?.inbox else { return nil }
+    let started = clock.now()
+    let total = try await inbox.count(currentQuery(limit: 0, until: started))
     var messages: [StoredMessage] = []
-    do throws(NtfyError) {
-      while true {
-        let page = try await inbox.entries(
-          currentQuery(limit: Self.exportPageSize, offset: messages.count))
-        messages += page
-        if page.count < Self.exportPageSize { break }
+    var seen: Set<MessageKey> = []
+    var read = 0
+    while messages.count < total {
+      let page = try await inbox.entries(
+        currentQuery(limit: Self.exportPageSize, offset: read, until: started))
+      read += page.count
+      for stored in page
+      where seen.insert(MessageKey(topic: stored.message.topic, id: stored.message.id)).inserted {
+        messages.append(stored)
       }
-    } catch {
-      log("export failed: \(error)")
-      return nil
+      if page.count < Self.exportPageSize { break }
     }
     guard !messages.isEmpty else { return nil }
-    return HistoryExporter.export(messages, as: format, scope: selectedTopic, now: clock.now())
+    return try HistoryExporter.export(messages, as: format, scope: selectedTopic, now: started)
   }
 
   // MARK: Helpers

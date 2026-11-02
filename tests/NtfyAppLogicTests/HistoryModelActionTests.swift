@@ -6,6 +6,8 @@ import Testing
 
 @MainActor @Suite struct HistoryModelActionTests {
   private let alerts = MessageKey(topic: "alerts", id: "a")
+  /// The export page size of `HistoryModel`.
+  private let exportPage = 500
 
   @Test func acknowledgingAcknowledgesAndWithdrawsTheNotification() async {
     let rig = HistoryModelRig()
@@ -143,13 +145,13 @@ import Testing
     await rig.add("b1", topic: "builds", age: 1)
     await rig.start()
     #expect(rig.ids().count == 1)
-    let all = try #require(await rig.model.export(.json))
+    let all = try #require(try await rig.model.export(.json))
     let objects = try #require(try JSONSerialization.jsonObject(with: all.data) as? [[String: Any]])
     #expect(objects.compactMap { $0["id"] as? String } == ["b1", "a2", "a1"])
     #expect(all.suggestedFileName == "ntfy-all-20231114T221320Z.json")
     rig.model.selectedTopic = "alerts"
     await rig.model.refresh()
-    let csv = try #require(await rig.model.export(.csv))
+    let csv = try #require(try await rig.model.export(.csv))
     let text = String(bytes: csv.data, encoding: .utf8) ?? ""
     #expect(text.contains("'=evil"))
     #expect(!text.contains("builds"))
@@ -157,7 +159,53 @@ import Testing
     rig.model.unreadOnly = true
     rig.model.minPriority = .max
     await rig.model.refresh()
-    #expect(await rig.model.export(.json) == nil)
+    #expect(try await rig.model.export(.json) == nil)
+    rig.model.stop()
+  }
+
+  /// 501 messages: one full export page and a second page of one.
+  private func exportRig() async -> HistoryModelRig {
+    let rig = HistoryModelRig()
+    for index in 0..<(exportPage + 1) {
+      await rig.add("m\(index)", age: 1000 - Double(index))
+    }
+    await rig.start()
+    return rig
+  }
+
+  private func exportedIDs(_ export: HistoryExport?) throws -> [String] {
+    let data = try #require(export).data
+    let objects = try #require(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+    return objects.compactMap { $0["id"] as? String }
+  }
+
+  @Test func aMessageArrivingMidExportIsLeftOutAndNothingRepeats() async throws {
+    let rig = await exportRig()
+    let (history, clock) = (rig.pipeline.history, rig.pipeline.clock)
+    await history.setAfterEntries { query in
+      guard query.offset == 0 else { return }
+      clock.advance(by: .seconds(5))
+      let late = NtfyMessage(id: "late", topic: "alerts", time: clock.now(), body: "late")
+      _ = try? await history.append(late)
+    }
+    let ids = try exportedIDs(try await rig.model.export(.json))
+    #expect(ids.count == exportPage + 1)
+    #expect(Set(ids).count == ids.count)
+    #expect(!ids.contains("late"))
+    rig.model.stop()
+  }
+
+  @Test func aMessageWithinTheBoundIsDeduplicatedWhenPagingShifts() async throws {
+    let rig = await exportRig()
+    let (history, clock) = (rig.pipeline.history, rig.pipeline.clock)
+    await history.setAfterEntries { query in
+      guard query.offset == 0 else { return }
+      let early = NtfyMessage(id: "early", topic: "alerts", time: clock.now(), body: "early")
+      _ = try? await history.append(early)
+    }
+    let ids = try exportedIDs(try await rig.model.export(.json))
+    #expect(Set(ids).count == ids.count)
+    #expect(ids.filter { $0 == "early" }.count <= 1)
     rig.model.stop()
   }
 }

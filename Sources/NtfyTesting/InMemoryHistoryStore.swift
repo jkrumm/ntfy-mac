@@ -15,6 +15,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox, HistoryObserving 
   private var appendFailure: NtfyError?
   private var appendsBeforeFailure = 0
   private var clearReminderFailure: NtfyError?
+  private var afterEntries: (@Sendable (HistoryQuery) async -> Void)?
 
   public init(clock: any NtfyCore.Clock = FakeClock()) {
     self.clock = clock
@@ -28,6 +29,12 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox, HistoryObserving 
   public func setAppendFailure(_ failure: NtfyError?, afterSuccesses successes: Int = 0) {
     appendFailure = failure
     appendsBeforeFailure = successes
+  }
+
+  /// Runs `hook` after each `entries` read has taken its snapshot, before it returns: a message
+  /// arriving between two pages of a read.
+  public func setAfterEntries(_ hook: (@Sendable (HistoryQuery) async -> Void)?) {
+    afterEntries = hook
   }
 
   /// Makes `clearReminder` throw `failure`, or work again with `nil`.
@@ -142,11 +149,13 @@ extension StoredMessage {
 }
 
 extension InMemoryHistoryStore {
-  public func entries(_ query: HistoryQuery) -> [StoredMessage] {
+  public func entries(_ query: HistoryQuery) async -> [StoredMessage] {
     let words = SearchWords(query.text)
     guard words.isSearchable else { return [] }
     let matches = visible().map(\.stored).filter { query.accepts($0) && words.match($0.message) }
-    return Array(matches.reversed().dropFirst(max(query.offset, 0)).prefix(max(query.limit, 0)))
+    let page = Array(matches.reversed().dropFirst(max(query.offset, 0)).prefix(max(query.limit, 0)))
+    await afterEntries?(query)
+    return page
   }
 
   public func message(topic: String, id: String) -> StoredMessage? {
@@ -216,6 +225,7 @@ extension HistoryQuery {
     if unreadOnly, stored.readAt != nil { return false }
     if let minPriority, stored.message.priority < minPriority { return false }
     if let since, stored.message.time < since { return false }
+    if let until, stored.message.time > until { return false }
     return true
   }
 }

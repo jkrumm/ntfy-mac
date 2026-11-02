@@ -29,7 +29,7 @@ import Testing
   @Test func jsonIsAnArrayOfObjectsWithISOTimesAndSortedKeys() throws {
     let attachment = MessageAttachment(
       url: URL(string: "https://e.com/a.png")!, name: "a.png", mimeType: "image/png", size: 9)
-    let data = HistoryExporter.json([
+    let data = try HistoryExporter.json([
       stored(tags: ["warning"], click: "https://e.com/x", attachment: attachment, read: true)
     ])
     let array = try #require(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
@@ -51,7 +51,7 @@ import Testing
   }
 
   @Test func absentValuesAreNullAndNeverMissing() throws {
-    let data = HistoryExporter.json([stored(title: nil)])
+    let data = try HistoryExporter.json([stored(title: nil)])
     let object = try #require(
       try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     ).first
@@ -60,15 +60,15 @@ import Testing
     #expect((object?["attachments"] as? [Any])?.isEmpty == true)
   }
 
-  @Test func jsonIsStableAndEmptyIsAnEmptyArray() {
+  @Test func jsonIsStableAndEmptyIsAnEmptyArray() throws {
     let messages = [stored("a"), stored("b")]
-    #expect(HistoryExporter.json(messages) == HistoryExporter.json(messages))
-    #expect(text(HistoryExporter.json([])) == "[\n\n]")
+    #expect(try HistoryExporter.json(messages) == HistoryExporter.json(messages))
+    #expect(try text(HistoryExporter.json([])) == "[\n\n]")
   }
 
   @Test func jsonKeepsUnicodeNewlinesAndQuotesIntact() throws {
     let body = "Größe \u{1F680} \"quoted\"\nline two\t/slash"
-    let data = HistoryExporter.json([stored(body: body)])
+    let data = try HistoryExporter.json([stored(body: body)])
     let object = try #require(
       try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     ).first
@@ -128,11 +128,11 @@ import Testing
 
   // MARK: Export
 
-  @Test func exportNamesTheFileByScopeTimeAndFormat() {
-    let json = HistoryExporter.export([stored()], as: .json, scope: "alerts", now: time)
+  @Test func exportNamesTheFileByScopeTimeAndFormat() throws {
+    let json = try HistoryExporter.export([stored()], as: .json, scope: "alerts", now: time)
     #expect(json.suggestedFileName == "ntfy-alerts-20231114T221320Z.json")
     #expect(json.format == .json && json.format.mimeType == "application/json")
-    let csv = HistoryExporter.export([stored()], as: .csv, scope: nil, now: time)
+    let csv = try HistoryExporter.export([stored()], as: .csv, scope: nil, now: time)
     #expect(csv.suggestedFileName == "ntfy-all-20231114T221320Z.csv")
     #expect(csv.data == HistoryExporter.csv([stored()]))
     #expect(csv.format.mimeType == "text/csv")

@@ -186,12 +186,12 @@ public final class HistoryModel {
 
   var trimmedSearch: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-  func currentQuery(limit: Int, offset: Int = 0) -> HistoryQuery {
+  func currentQuery(limit: Int, offset: Int = 0, until: Date? = nil) -> HistoryQuery {
     HistoryQuery(
       topic: selectedTopic, unreadOnly: unreadOnly,
       text: trimmedSearch.isEmpty ? nil : trimmedSearch,
       minPriority: minPriority, since: dateFilter.start(from: clock.now(), calendar: calendar),
-      limit: limit, offset: offset)
+      until: until, limit: limit, offset: offset)
   }
 
   /// Back to the first page, re-read.

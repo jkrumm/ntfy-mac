@@ -71,6 +71,7 @@ extension HistoryQuery {
     if unreadOnly { select.and("m.read_at IS NULL") }
     if let minPriority { select.and("m.priority >= ?", minPriority.rawValue) }
     if let since { select.and("m.time >= ?", since) }
+    if let until { select.and("m.time <= ?", until) }
     if let text {
       guard let pattern = FTS5Pattern(matchingAllPrefixesIn: text) else { return nil }
       select.matching(pattern)

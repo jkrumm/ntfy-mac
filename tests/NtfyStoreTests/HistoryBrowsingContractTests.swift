@@ -22,6 +22,8 @@ import Testing
     #expect(try await count(HistoryQuery(unreadOnly: true)) == 2)
     #expect(try await count(HistoryQuery(minPriority: .high)) == 1)
     #expect(try await count(HistoryQuery(since: rig.clock.now().addingTimeInterval(5))) == 2)
+    #expect(try await count(HistoryQuery(until: rig.clock.now().addingTimeInterval(10))) == 2)
+    #expect(try await count(HistoryQuery(until: rig.clock.now().addingTimeInterval(-1))) == 0)
     #expect(try await count(HistoryQuery(text: "deploy")) == 2)
     #expect(try await count(HistoryQuery(topic: "a", text: "failed")) == 1)
     #expect(try await count(HistoryQuery(text: "\"")) == 0)

@@ -30,8 +30,8 @@ public enum HistoryExporter {
   /// `scope` is the topic the messages belong to, nil for all of them; it names the file.
   public static func export(
     _ messages: [StoredMessage], as format: ExportFormat, scope: String?, now: Date
-  ) -> HistoryExport {
-    let data = format == .json ? json(messages) : csv(messages)
+  ) throws(NtfyError) -> HistoryExport {
+    let data = try format == .json ? json(messages) : csv(messages)
     let stamp = now.formatted(Date.ISO8601FormatStyle()).filter { $0 != "-" && $0 != ":" }
     return HistoryExport(
       data: data, suggestedFileName: "ntfy-\(scope ?? "all")-\(stamp).\(format.fileExtension)",
@@ -39,11 +39,15 @@ public enum HistoryExporter {
   }
 
   /// An array of objects with sorted keys and ISO 8601 times; absent values are `null`.
-  public static func json(_ messages: [StoredMessage]) -> Data {
+  public static func json(_ messages: [StoredMessage]) throws(NtfyError) -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .iso8601
-    return (try? encoder.encode(messages.map(ExportedMessage.init))) ?? Data("[]".utf8)
+    do {
+      return try encoder.encode(messages.map(ExportedMessage.init))
+    } catch {
+      throw .storage("The export could not be encoded: \(error)")
+    }
   }
 
   /// RFC 4180: a header row, CRLF after every record, fields with a comma, quote or line break

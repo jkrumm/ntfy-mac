@@ -67,14 +67,26 @@ struct ServerConnection {
     let result = await tester.test(
       url: url.absoluteString, token: token, allowInsecure: allowInsecure)
     guard case .ok = result else { return result }
+    let address = url.absoluteString
+    let previous = try? await config.load()
     do throws(NtfyError) {
-      if !typed.isEmpty { try await secrets.setToken(typed) }
-      let address = url.absoluteString
       try await config.update { stored in
         stored.url = address
         stored.token = nil
       }
     } catch {
+      return .invalid(reason: "The connection works, but saving failed: \(error).")
+    }
+    guard !typed.isEmpty else { return result }
+    do throws(NtfyError) {
+      try await secrets.setToken(typed)
+    } catch {
+      // The URL is already stored; put the old address back so it keeps matching the old token.
+      let (oldURL, oldToken) = (previous?.url, previous?.token)
+      try? await config.update { stored in
+        stored.url = oldURL
+        stored.token = oldToken
+      }
       return .invalid(reason: "The connection works, but saving failed: \(error).")
     }
     return result

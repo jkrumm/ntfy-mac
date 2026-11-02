@@ -95,12 +95,15 @@ public final class OnboardingModel {
   /// should stay open then.
   public func finish() async -> Bool {
     loginError = nil
-    guard launchAtLogin else { return true }
+    let current = loginItems.state()
+    let matches =
+      launchAtLogin ? current == .enabled : [.notRegistered, .notFound].contains(current)
+    guard !matches else { return true }
     do throws(NtfyError) {
-      _ = try loginItems.setEnabled(true)
+      _ = try loginItems.setEnabled(launchAtLogin)
       return true
     } catch {
-      loginError = "The login item could not be turned on: \(error)"
+      loginError = "The login item could not be turned \(launchAtLogin ? "on" : "off"): \(error)"
       return false
     }
   }

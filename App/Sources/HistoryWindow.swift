@@ -77,12 +77,14 @@ struct HistoryWindow: View {
 
   private func export(_ format: ExportFormat) {
     Task {
-      guard let result = await model.export(format) else {
-        notice = "There are no messages to export for the current filters."
-        return
-      }
-      do { try await HistoryFiles.save(result) } catch {
-        notice = "The export could not be written: \(error.localizedDescription)"
+      do {
+        guard let result = try await model.export(format) else {
+          notice = "There are no messages to export for the current filters."
+          return
+        }
+        try await HistoryFiles.save(result)
+      } catch {
+        notice = "The export failed: \(error.localizedDescription)"
       }
     }
   }

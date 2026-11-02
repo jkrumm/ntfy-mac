@@ -74,4 +74,20 @@ import Testing
     #expect(PauseChoice.untilMorning.end(from: date(8), calendar: calendar) == date(8, day: 11))
     #expect(PauseChoice.untilMorning.end(from: date(3), calendar: calendar) == date(8))
   }
+
+  @Test func untilMorningFollowsTheWallClockAcrossADaylightSavingChange() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Berlin") ?? .gmt
+    func date(_ hour: Int, day: Int) -> Date {
+      calendar.date(from: DateComponents(year: 2026, month: 3, day: day, hour: hour))
+        ?? .distantPast
+    }
+    // Clocks go forward on 29 March 2026: the night of 28 to 29 is 23 hours long.
+    let end = PauseChoice.untilMorning.end(from: date(22, day: 28), calendar: calendar)
+    #expect(end == date(8, day: 29))
+    #expect(end.timeIntervalSince(date(22, day: 28)) == 9 * 3600)
+    let next = PauseChoice.untilMorning.end(from: date(9, day: 29), calendar: calendar)
+    #expect(next == date(8, day: 30))
+    #expect(next.timeIntervalSince(date(9, day: 29)) == 23 * 3600)
+  }
 }

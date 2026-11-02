@@ -176,6 +176,28 @@ import Testing
     #expect(left.isEmpty)
   }
 
+  @Test func aBodyExactlyAtTheCapIsStoredWhole() async throws {
+    let body = Data(repeating: 7, count: 100)
+    let base = StubURLProtocol.register(file(body))
+    let stored = try await fetcher(server: base, maxBytes: 100).fetch(attachment(base))
+    #expect(try Data(contentsOf: stored) == body)
+  }
+
+  @Test func aBodyOneByteOverTheCapFailsAndLeavesNothingBehind() async throws {
+    let base = StubURLProtocol.register(file(Data(repeating: 7, count: 101)))
+    await expectRefusal { () async throws(NtfyError) in
+      try await fetcher(server: base, maxBytes: 100).fetch(attachment(base))
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+  }
+
+  @Test func aLargeBodyArrivesWholeThroughSeveralChunks() async throws {
+    let body = Data((0..<200_000).map { UInt8($0 % 251) })
+    let base = StubURLProtocol.register(file(body))
+    let stored = try await fetcher(server: base, maxBytes: 200_000).fetch(attachment(base))
+    #expect(try Data(contentsOf: stored) == body)
+  }
+
   @Test func theCapItselfIsFiftyMegabytes() {
     #expect(URLSessionAttachmentFetcher.maxBytes == 50 * 1024 * 1024)
   }

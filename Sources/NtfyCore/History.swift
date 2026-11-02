@@ -31,18 +31,22 @@ public struct HistoryQuery: Sendable, Hashable {
   public var text: String?
   public var minPriority: Priority?
   public var since: Date?
+  /// Only messages at or before this time; pins a multi-page read against messages arriving.
+  public var until: Date?
   public var limit: Int
   public var offset: Int
 
   public init(
     topic: String? = nil, unreadOnly: Bool = false, text: String? = nil,
-    minPriority: Priority? = nil, since: Date? = nil, limit: Int = 100, offset: Int = 0
+    minPriority: Priority? = nil, since: Date? = nil, until: Date? = nil, limit: Int = 100,
+    offset: Int = 0
   ) {
     self.topic = topic
     self.unreadOnly = unreadOnly
     self.text = text
     self.minPriority = minPriority
     self.since = since
+    self.until = until
     self.limit = limit
     self.offset = offset
   }

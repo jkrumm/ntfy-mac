@@ -49,6 +49,10 @@ public final class SettingsModel {
   @ObservationIgnored let calendar: Calendar
   @ObservationIgnored let log: @Sendable (String) -> Void
   @ObservationIgnored private var tasks: [Task<Void, Never>] = []
+  /// The tail of the config work (writes and reloads), which runs one after the other.
+  @ObservationIgnored private var lastConfigWork: Task<Void, Never>?
+  /// Counts optimistic edits; a load that started before one must not overwrite it.
+  @ObservationIgnored private var editGeneration = 0
 
   public struct Dependencies {
     public var config: any ConfigStore
@@ -160,11 +164,30 @@ public final class SettingsModel {
     }
   }
 
+  /// Calls run one after the other, like `AppModel.refresh`, so a late load never overwrites a
+  /// newer one.
   func reloadConfig() async {
+    await serialized { await self.loadConfig() }
+  }
+
+  private func serialized(_ work: @escaping @MainActor () async -> Void) async {
+    let previous = lastConfigWork
+    let run = Task {
+      await previous?.value
+      await work()
+    }
+    lastConfigWork = run
+    await run.value
+  }
+
+  private func loadConfig() async {
     let previousURL = config.url ?? ""
     defer { if urlText == previousURL { urlText = config.url ?? "" } }
+    let generation = editGeneration
     do throws(NtfyError) {
-      config = try await store.load()
+      let loaded = try await store.load()
+      // An edit made while this load ran is newer than the file; its own write reloads next.
+      if generation == editGeneration { config = loaded }
     } catch {
       log("config not read: \(error)")
     }
@@ -190,14 +213,17 @@ public final class SettingsModel {
   /// Applies `change` to the snapshot, then to the file as one read-modify-write.
   func write(_ change: @escaping @Sendable (inout Config) -> Void) async {
     change(&config)
-    do throws(NtfyError) {
-      try await store.update(change)
-      notice = nil
-    } catch {
-      notice = "The setting could not be saved: \(error)"
-      log("config not written: \(error)")
+    editGeneration += 1
+    await serialized {
+      do throws(NtfyError) {
+        try await self.store.update(change)
+        self.notice = nil
+      } catch {
+        self.notice = "The setting could not be saved: \(error)"
+        self.log("config not written: \(error)")
+      }
+      await self.loadConfig()
     }
-    await reloadConfig()
   }
 
   func refuse(_ message: String) {

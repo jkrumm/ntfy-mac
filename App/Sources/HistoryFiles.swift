@@ -16,12 +16,7 @@ enum HistoryFiles {
   /// Asks where to save a copy of a fetched attachment.
   static func saveCopy(of file: URL, named name: String) async throws {
     guard let url = ask(name: name, types: []) else { return }
-    try await Task.detached {
-      if FileManager.default.fileExists(atPath: url.path) {
-        try FileManager.default.removeItem(at: url)
-      }
-      try FileManager.default.copyItem(at: file, to: url)
-    }.value
+    try await Task.detached { try SafeFileCopy.copy(file, to: url) }.value
   }
 
   private static func ask(name: String, types: [UTType]) -> URL? {

@@ -6,8 +6,12 @@ import NtfyCore
 ///
 /// - The bearer token goes only to the configured server's own origin, never to another host.
 /// - Redirects are refused. Only `https` is fetched, plus plain `http` for the server's own origin.
-/// - A host that is not the server's own must resolve to public addresses only.
-/// - The body is capped at `maxBytes`: by the declared size first, then while streaming.
+/// - A host that is not the server's own must resolve to public addresses only. Known residual:
+///   the host is resolved once for that public-address check and again by URLSession when it
+///   connects, so a DNS-rebinding answer can slip a private address in between. This is the same
+///   residual as the action runner's (Wave 3); addresses are not pinned.
+/// - The body is capped at `maxBytes`: by the declared size first, then chunk by chunk as it
+///   arrives; a chunk that would pass the cap fails the fetch, nothing is cut short.
 /// - A file lands atomically at `<directory>/<hash of the URL>/<sanitised name>` (folder `0700`,
 ///   file `0600`) and is reused on the next fetch. `prune` removes old folders and runs before
 ///   every fetch.
@@ -16,7 +20,6 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
   /// Cached attachments not used for this long are removed by `prune`.
   public static let retention: TimeInterval = 7 * 24 * 60 * 60
   private static let maxNameLength = 100
-  private static let chunkSize = 64 * 1024
 
   private let server: URL
   private let token: @Sendable () async -> String?
@@ -114,7 +117,7 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
 
   // MARK: Rules
 
-  private static let tooLarge = NtfyError.invalidResponse("the attachment is larger than 50 MB")
+  fileprivate static let tooLarge = NtfyError.invalidResponse("the attachment is larger than 50 MB")
 
   /// `https` anywhere; plain `http` only on the server's own origin.
   private func isAllowed(_ url: URL) -> Bool {
@@ -160,8 +163,6 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
   private static func download(
     _ request: URLRequest, on session: URLSession, limit: Int64, to destination: Destination
   ) async throws {
-    let (bytes, response) = try await session.bytes(for: request, delegate: RedirectRefuser())
-    try check(response, limit: limit)
     let partial = try preparePartial(root: destination.root, folder: destination.folder)
     var committed = false
     let handle = try FileHandle(forWritingTo: partial)
@@ -169,7 +170,7 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
       try? handle.close()
       if !committed { try? FileManager.default.removeItem(at: partial) }
     }
-    try await stream(bytes, into: handle, limit: limit)
+    try await ChunkedDownload.run(request, on: session, limit: limit, into: handle)
     try handle.close()
     // A parallel fetch of the same attachment may have finished first; its file is as good.
     if !FileManager.default.fileExists(atPath: destination.file.path) {
@@ -179,7 +180,7 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
   }
 
   /// Status and declared size, before a byte is stored.
-  private static func check(_ response: URLResponse, limit: Int64) throws {
+  fileprivate static func check(_ response: URLResponse, limit: Int64) throws {
     guard let http = response as? HTTPURLResponse else {
       throw NtfyError.invalidResponse("not an HTTP response")
     }
@@ -195,23 +196,6 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
     {
       throw tooLarge
     }
-  }
-
-  /// Writes the body in chunks and stops at the cap, whatever the headers claimed.
-  private static func stream(
-    _ bytes: URLSession.AsyncBytes, into handle: FileHandle, limit: Int64
-  ) async throws {
-    var buffer = Data()
-    var total: Int64 = 0
-    for try await byte in bytes {
-      total += 1
-      guard total <= limit else { throw tooLarge }
-      buffer.append(byte)
-      guard buffer.count >= chunkSize else { continue }
-      try handle.write(contentsOf: buffer)
-      buffer.removeAll(keepingCapacity: true)
-    }
-    try handle.write(contentsOf: buffer)
   }
 
   /// Creates the private folders and an empty `0600` file to stream into.
@@ -233,5 +217,87 @@ public struct URLSessionAttachmentFetcher: AttachmentFetching {
     let manager = FileManager.default
     guard (try? manager.contentsOfDirectory(atPath: folder.path))?.isEmpty == true else { return }
     try? manager.removeItem(at: folder)
+  }
+}
+
+/// Streams one request's body into a file as URLSession delivers it, in chunks rather than byte
+/// by byte. The status and declared size are checked before the first chunk, redirects are
+/// refused, and a chunk that would take the total past `limit` fails the download before it is
+/// written.
+private final class ChunkedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+  private let handle: FileHandle
+  private let limit: Int64
+  private var total: Int64 = 0
+  private var failure: (any Error)?
+  private var continuation: CheckedContinuation<Void, any Error>?
+
+  private init(handle: FileHandle, limit: Int64) {
+    self.handle = handle
+    self.limit = limit
+  }
+
+  static func run(
+    _ request: URLRequest, on session: URLSession, limit: Int64, into handle: FileHandle
+  ) async throws {
+    let download = ChunkedDownload(handle: handle, limit: limit)
+    let task = session.dataTask(with: request)
+    task.delegate = download
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        download.continuation = continuation
+        task.resume()
+      }
+    } onCancel: {
+      task.cancel()
+    }
+  }
+
+  func urlSession(
+    _ session: URLSession, task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+    completionHandler: @escaping @Sendable (URLRequest?) -> Void
+  ) {
+    completionHandler(nil)
+  }
+
+  func urlSession(
+    _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+    completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+  ) {
+    do {
+      try URLSessionAttachmentFetcher.check(response, limit: limit)
+      completionHandler(.allow)
+    } catch {
+      failure = error
+      completionHandler(.cancel)
+    }
+  }
+
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    guard failure == nil else { return }
+    guard total + Int64(data.count) <= limit else {
+      failure = URLSessionAttachmentFetcher.tooLarge
+      dataTask.cancel()
+      return
+    }
+    total += Int64(data.count)
+    do {
+      try handle.write(contentsOf: data)
+    } catch {
+      failure = error
+      dataTask.cancel()
+    }
+  }
+
+  func urlSession(
+    _ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?
+  ) {
+    let outcome = failure ?? error
+    if let outcome {
+      continuation?.resume(throwing: outcome)
+    } else {
+      continuation?.resume()
+    }
+    continuation = nil
   }
 }
