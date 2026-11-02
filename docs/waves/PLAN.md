@@ -81,15 +81,30 @@
 - **Dev server** (HomeLab ntfy 2.36.0, tailnet-only) is documented in `AGENTS.md` with placeholders; tests use topics prefixed `ntfy-mac-test-`.
 - **Stale items pruned:** `IMPLEMENTATION_PLAN.md` deleted, `.claude/scheduled_tasks.lock` untracked and ignored, the Keychain claims lived only in the deleted plan.
 
-## Wave 2 — Core: config, secrets, stream <!-- status: active -->
+## Wave 2 — Core: config, secrets, stream <!-- status: done -->
 
-- [ ] `NtfyCore` config: read and write config.json with full compatibility, apply env-var overrides, and add a file watcher. Move the token to the Keychain with a migration and tests.
-- [ ] ntfy client: topic discovery (`/v1/account`), the NDJSON stream parser (message, keepalive, open, poll_request, message_delete, message_clear), and the catch-up poll.
-- [ ] The reconnect state machine described under Decisions, fully unit-tested with the injected clock: sleep and wake, path change, 401, 429, redirect, stall, offline at boot (no crash loop).
-- [ ] Missed-message policy, ported from `categorizeMissedMessages` (1 h / 12 h buckets, summary notification) and applied to the startup replay as well. Advance the cursor only after the message is stored. Import the 1.x `state.json` cursor.
+- [x] `NtfyCore` config: read and write config.json with full compatibility, apply env-var overrides, and add a file watcher. Move the token to the Keychain with a migration and tests.
+- [x] ntfy client: topic discovery (`/v1/account`), the NDJSON stream parser (message, keepalive, open, poll_request, message_delete, message_clear), and the catch-up poll.
+- [x] The reconnect state machine described under Decisions, fully unit-tested with the injected clock: sleep and wake, path change, 401, 429, redirect, stall, offline at boot (no crash loop).
+- [x] Missed-message policy, ported from `categorizeMissedMessages` (1 h / 12 h buckets, summary notification) and applied to the startup replay as well. Advance the cursor only after the message is stored. Import the 1.x `state.json` cursor.
       **Left behind:**
 
-## Wave 3 — History and delivery <!-- status: pending -->
+- **Commits** on `master` (direct, not pushed): client and ports, config/secrets, reconnect and supervisor. `make check` green on the mini; `/review` came back `clean` after one fix round (1 blocking: the token migration saved a stale config snapshot; now an atomic `ConfigStore.update`). Two later nits fixed inline (`stop()` App Nap token race, migration scrub guard).
+- **Port contract** (`Ports.swift`): `MessageStream.events` yields `StreamEvent` (`open`, `keepalive`, `pollRequest`, `message`, `messageDelete`, `messageClear`; delete/clear carry `sequenceID`, and a message's `sequenceID` is nil when it equals `id`, so use `sequenceID ?? id`). A normal finish means the server closed the connection: reconnect with `since`. New ports: `MessagePoller`, `TopicSource`, `CursorStore`, `SystemEvents`; `HistoryStore.append` returns whether the message was new; `NotificationPoster.postMissedSummary`; `ConfigStore.update`.
+- **Config:** `Config` round-trips unknown keys (`extras`), writes atomically with mode 600 and `F_FULLFSYNC`, refuses to write over a malformed file. 1.x precedence kept: the file's `url`/`token` win over `NTFY_URL`/`NTFY_TOKEN`; `NTFY_TOPICS` replaces discovery. New persisted key `allowInsecure` (plain-http + token is refused otherwise, `NtfyError.insecureServer`, terminal). Token: Keychain, then plaintext file token (migrated and scrubbed by `ConfigTokenMigration`), then env. `FileCursorStore` reads and writes only `lastMessageId` in the 1.x `state.json`. `ConfigWatcher` watches the directory (atomic replace); an in-place edit that keeps the inode is missed.
+- **Behaviour:** the catch-up poll runs before every stream open, so the startup replay obeys `MissedMessagePolicy` (1 h / 12 h). A first run has no cursor and starts at the unix timestamp of the first connect, persisted at once (no `since=latest` gap). The cursor advances only after `history.append`. Backoff 5 s to 5 min with jitter, reset after 60 s of health (not on a message); 401/403, redirect, invalid topic, insecure server halt until `restart()`; 429 waits at least 60 s or `Retry-After`; wake reconnects immediately; offline waits for the path (nothing throws out of the supervisor, so no crash loop); watchdog max(90 s, 2x the largest gap). Topic re-discovery every 30 min.
+- **Known gaps / inputs for Wave 3:**
+  - **At-most-once notification.** A crash between `append` and `post` loses that notification (history is kept). Wave 3's delivery reconcile should post stored-but-unnotified rows on boot (needs a notified flag in the GRDB schema).
+  - **No composition root yet.** Nothing wires the supervisor to real adapters; the app root arrives with Wave 3 delivery. It must pass `Options.activity` (`ProcessInfo.beginActivity`), `Options.log` (`Log.logger(.stream)`), `Options.sink` (delete/clear to the delivery layer) and `allowInsecure` from `Settings`.
+  - `.pollRequest` runs its catch-up inline and a poll failure there drops the connection; the poller skips undecodable lines and notes `X-Messages-Truncated` only through `diagnostics`, so a truncated replay still advances the cursor.
+  - `FileConfigStore.update` and `FileCursorStore` are atomic within one process only; the app and the CLI both write config in Wave 4, so add an `flock` sidecar then.
+  - Known config keys with wrong types or priorities outside 1...5 are dropped on the next write.
+  - `StreamSupervisor` `Wi-Fi to Ethernet` switches that stay `satisfied` emit no path event; the watchdog covers them.
+  - `ProcessExit` maps `insecureServer`, `rateLimited`, `redirected` to exit 1 and `invalidTopic` to 2; revisit in Wave 4.
+  - **Not exercised live:** no run against the dev ntfy server (`op://common/ntfy/TOKEN` is not in the mini's secrets cache, so a live integration test was skipped). Real sleep/wake and `NWPathMonitor` events are untested; add both to the Wave 3 MacBook checklist together with the banner comparison from Wave 1.
+  - `/v1/account` is undocumented upstream; the response shape was read from the server source.
+
+## Wave 3 — History and delivery <!-- status: active -->
 
 - [ ] GRDB store: schema, migrations, `INSERT OR IGNORE` dedup, FTS5, per-topic retention, read status, and an ack state per message.
 - [ ] Delivery: port the priority mapping (sound, interruption level, dismiss), the sound and dismiss overrides, and the tag-to-emoji map (generated from gemoji as in 1.x). Keep the paced queue with priority ordering, and reconcile it in-process instead of guessing when a notification was shown.
