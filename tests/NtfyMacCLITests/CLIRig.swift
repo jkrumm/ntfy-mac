@@ -201,6 +201,7 @@ struct CLIRig {
   var stdin = Data()
   var executablePath: String
   var variables: [String: String] = [:]
+  var appCandidates: [URL] = []
   /// Replaces the self-updater's default fakes (nothing to download, nothing running).
   var update: SelfUpdatePorts?
 
@@ -256,6 +257,7 @@ struct CLIRig {
           brewPrefixes: [scratch.file("brew")]),
         agents: launchAgents, registry: launchServices, processes: legacyProcesses,
         runningExecutable: nil, processID: 1234),
+      appCandidates: appCandidates,
       prompter: prompter, readStandardInput: { input })
   }
 

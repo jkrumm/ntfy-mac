@@ -44,6 +44,8 @@ struct CLIEnvironment: Sendable {
   var releases: any ReleaseLookup
   var update: SelfUpdatePorts
   var legacy: LegacyInstallCleanup
+  /// Where a copy of `NtfyMac.app` may live; the `duplicate-install` check looks at these.
+  var appCandidates: [URL]
   var prompter: any Prompting
   /// Reads all of stdin.
   var readStandardInput: @Sendable () -> Data

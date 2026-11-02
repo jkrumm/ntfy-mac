@@ -11,6 +11,8 @@
 #   NTFY_MAC_NO_LAUNCH  set to 1 to skip opening the app
 #   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download
 #                       URL; only file://, http://127.0.0.1 and http://localhost are accepted)
+#   NTFY_MAC_BREW_PREFIXES  colon-separated Homebrew prefixes to look in (tests only; default
+#                       /opt/homebrew:/usr/local)
 set -euo pipefail
 
 REPO="jkrumm/ntfy-mac"
@@ -28,6 +30,15 @@ fail() {
 [[ "$(uname -m)" == "arm64" ]] || fail "requires Apple Silicon (arm64), got $(uname -m)"
 macos_major="$(sw_vers -productVersion | cut -d. -f1)"
 [[ "$macos_major" -ge 15 ]] || fail "requires macOS 15 or later, got $(sw_vers -productVersion)"
+
+# ── One install per Mac ───────────────────────────────────────────────────────
+
+# A Homebrew copy and this one would share a bundle id and destroy each other. No override.
+IFS=: read -r -a brew_prefixes <<<"${NTFY_MAC_BREW_PREFIXES:-/opt/homebrew:/usr/local}"
+for prefix in "${brew_prefixes[@]}"; do
+  [[ -n "$prefix" && -e "$prefix/opt/ntfy-mac/NtfyMac.app" ]] || continue
+  fail "ntfy-mac is managed by Homebrew ($prefix/opt/ntfy-mac). Update it with 'brew upgrade ntfy-mac', or run 'brew uninstall ntfy-mac' first to install with this script. Nothing was installed."
+done
 
 # ── Version ───────────────────────────────────────────────────────────────────
 

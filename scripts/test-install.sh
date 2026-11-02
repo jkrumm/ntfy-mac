@@ -66,6 +66,7 @@ run_install() {
   mkdir -p "$c/home"
   HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="file://$rel" \
     NTFY_MAC_APP_DIR="$c/apps" NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 \
+    NTFY_MAC_BREW_PREFIXES="${brew_prefixes:-$c/no-brew}" \
     bash "$installer" >"$c/out" 2>&1
 }
 
@@ -89,6 +90,17 @@ check "migrate ran" migrated "$c"
 check "migrate ran via the bundle path before the link existed" migrated_before_relink "$c"
 check "symlink resolves to a working CLI" runs "$c"
 check "no staging leftovers" no_leftovers "$c"
+
+# a Homebrew copy blocks the install; without one nothing changes
+c="$tmp/brew-case"
+mkdir -p "$c/brew-a" "$c/brew-b/opt/ntfy-mac/NtfyMac.app"
+if brew_prefixes="$c/brew-a:$c/brew-b" run_install "$c" "$tmp/good"; then bad "Homebrew copy refuses the install"; else ok "Homebrew copy refuses the install"; fi
+check "Homebrew refusal installs nothing" nothing_installed "$c"
+check "Homebrew refusal names brew upgrade" grep -q "brew upgrade ntfy-mac" "$c/out"
+check "Homebrew refusal names brew uninstall" grep -q "brew uninstall ntfy-mac" "$c/out"
+c="$tmp/brew-absent"
+if brew_prefixes="$c/brew-a:$c/brew-b" run_install "$c" "$tmp/good"; then ok "no Homebrew copy installs as before"; else bad "no Homebrew copy installs as before"; cat "$c/out" >&2; fi
+check "no Homebrew copy leaves a working install" runs "$c"
 
 # rerun is idempotent
 if run_install "$c" "$tmp/good"; then ok "rerun exits 0"; else bad "rerun exits 0"; cat "$c/out" >&2; fi

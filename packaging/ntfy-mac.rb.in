@@ -24,9 +24,12 @@ class NtfyMac < Formula
       The app is installed at:
         #{opt_prefix}/NtfyMac.app
 
-      Link it into ~/Applications so Spotlight and Login Items find it:
+      Link it into ~/Applications so Spotlight and Login Items find it. If
+      ~/Applications/NtfyMac.app is already a real folder (a curl install), delete that
+      folder first; your config and history stay. Then:
         mkdir -p ~/Applications && ln -sfn #{opt_prefix}/NtfyMac.app ~/Applications/NtfyMac.app
 
+      Keep one install per Mac: `ntfy-mac doctor` warns about a second copy.
       This copy is managed by Homebrew: update it with `brew upgrade ntfy-mac`.
 
       Then run `ntfy-mac setup`, or open the app.

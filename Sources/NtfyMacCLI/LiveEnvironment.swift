@@ -35,6 +35,7 @@ extension CLIEnvironment {
       legacy: .live(
         home: paths.home, stateDirectory: paths.stateDirectory,
         runningExecutable: AppBundle.executable()),
+      appCandidates: DuplicateInstall.candidates(home: paths.home),
       prompter: TerminalPrompter(),
       readStandardInput: { FileHandle.standardInput.readDataToEndOfFile() })
   }

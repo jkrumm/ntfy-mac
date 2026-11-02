@@ -19,6 +19,7 @@ struct DoctorChecks {
     checks += app
     checks.append(await historyCheck())
     checks.append(await legacyCheck())
+    checks.append(duplicateCheck())
     if case .success(let config) = loaded { checks.append(overridesCheck(config)) }
     if sendTest { checks.append(await testNotification(appIsUp: app.first?.status != .fail)) }
     return checks
@@ -253,6 +254,11 @@ struct DoctorChecks {
     return DoctorCheck(
       "legacy-install", .warn, "\(report.found.count) leftover(s) of a 1.x install",
       detail: "Remove them with: ntfy-mac migrate")
+  }
+
+  private func duplicateCheck() -> DoctorCheck {
+    DuplicateInstall.check(
+      candidates: environment.appCandidates, runningExecutable: environment.executablePath)
   }
 
   private func overridesCheck(_ config: Config) -> DoctorCheck {
