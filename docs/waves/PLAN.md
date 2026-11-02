@@ -104,20 +104,47 @@
   - **Not exercised live:** no run against the dev ntfy server (`op://common/ntfy/TOKEN` is not in the mini's secrets cache, so a live integration test was skipped). Real sleep/wake and `NWPathMonitor` events are untested; add both to the Wave 3 MacBook checklist together with the banner comparison from Wave 1.
   - `/v1/account` is undocumented upstream; the response shape was read from the server source.
 
-## Wave 3 — History and delivery <!-- status: active -->
+## Wave 3 — History and delivery <!-- status: done -->
 
-- [ ] GRDB store: schema, migrations, `INSERT OR IGNORE` dedup, FTS5, per-topic retention, read status, and an ack state per message.
-- [ ] Delivery: port the priority mapping (sound, interruption level, dismiss), the sound and dismiss overrides, and the tag-to-emoji map (generated from gemoji as in 1.x). Keep the paced queue with priority ordering, and reconcile it in-process instead of guessing when a notification was shown.
-- [ ] Actions:
+- [x] GRDB store: schema, migrations, `INSERT OR IGNORE` dedup, FTS5, per-topic retention, read status, and an ack state per message.
+- [x] Delivery: port the priority mapping (sound, interruption level, dismiss), the sound and dismiss overrides, and the tag-to-emoji map (generated from gemoji as in 1.x). Keep the paced queue with priority ordering, and reconcile it in-process instead of guessing when a notification was shown.
+- [x] Actions:
   - `view` and click URLs only for http, https and mailto.
   - `http` actions require confirmation for non-http(s) targets and a per-server opt-in for private-network targets.
   - Attachments and icons: same-origin credentials, a size cap, a timeout.
   - Action design (owner feedback: on the MacBook, notifications with several actions hide the buttons behind Optionen, so Acknowledge costs two clicks). Clicking the notification body opens the click URL, or the history entry when there is none, and marks the message read. Buttons only where they earn their place: urgent messages with re-alert get a single Acknowledge (one click); ntfy message actions are shown as sent; no default Remind button. Remind (15 min / 1 h / tomorrow 08:00) moves to the history UI and the CLI. Decide against the Wave 1 spike result for banner vs alert behaviour with 1 vs 2+ actions.
   - Re-alert for urgent messages until acknowledged (configurable).
-- [ ] Notification permission state: detect denied or summary-only, and expose it to `doctor` and the UI.
+- [x] Notification permission state: detect denied or summary-only, and expose it to `doctor` and the UI.
       **Left behind:**
 
-## Wave 4 — Agent-first CLI and llms.txt <!-- status: pending -->
+- **Commits** on `master` (direct, not pushed): GRDB store, delivery policy, delivery service, response handling and fetchers, UN adapters and app root, then three review-fix commits. `make check` green on the mini (Xcode 27.1 / Swift 6.4); `/review` over the wave diff came back with 0 confirmed blocking after the first round; the second round found 1 blocking (a reentrancy race in `UserNotificationPoster` that could drop a category and its buttons), fixed with a serial gate and an interleaving test. The last fix commit was not reviewed again.
+- **Store** (`SQLiteHistoryStore`, GRDB 7.12.0, only `NtfyStore` depends on it): `HistoryStore` (append/dedup, recent, notified state, withdraw, clear, prune) and `HistoryInbox` (entries with FTS5 search and filters, read, acknowledge, snooze/remind, unacknowledged, `message(topic:id:)`). Writer `open(at:server:clock:)`, CLI reader `openReadOnly`. Persistent WAL so a read-only second process works; mode 600/700. `pk INTEGER PRIMARY KEY AUTOINCREMENT` under the FTS index. Retention defaults: 1000 per topic, 90 days; the app prunes hourly. Search input is sanitised.
+- **Delivery:** `DeliveryPolicy.content(for:config:)` is the one pure entry point (priority table and overrides, tag emoji from a generated map, `scripts/generate-emojis.swift`). `DeliveryService` actor: paced priority queue (1.5 s, 3 attempts), `markNotified` only after a successful post, auto-dismiss, re-alert, boot `reconcile()` (unnotified rows through `MissedMessagePolicy`, paged; resumes re-alerts for rows under 24 h old; expired dismissals; due reminders), reminders polled every 30 s and cleared only after a successful post.
+- **Action design as implemented:** body click opens the click URL, else the history (the app only activates itself until Wave 5), and marks the message read and acknowledged; buttons are the ntfy `view`/`http` actions as sent plus one Acknowledge for messages at or above `reAlertMinPriority`; at most 3; no default Remind buttons. `broadcast`/`copy` actions are skipped, as in 1.x.
+- **New persisted config keys:** `allowPrivateNetworkActions` (false), `reAlert` (true), `reAlertIntervalSeconds` (300), `reAlertMinPriority` (5), `reAlertMaxRepeats` (12). **Owner decision open:** re-alert defaults to on, so a 1.x user upgrading gets repeating alerts for unacknowledged priority-5 messages (at most 12 repeats, 1 h). 1.x had no re-alert; flip the default in `Config` if that is too loud.
+- **Safety:** `URLPolicy` allows http, https and mailto for clicks and view buttons, http/https only for images. `ActionPolicy` asks for confirmation for non-http(s) and private-network `http` targets (loopback, RFC1918, CGNAT/tailnet, ULA, special ranges, local names) unless `allowPrivateNetworkActions`; the runner also resolves the host and refuses private results (DNS rebinding between check and connect is a documented residual). Images: same-origin credentials only, no redirects, 10 MB cap, 10 s / 15 s timeouts, JPEG/PNG/GIF by magic bytes, private hosts skipped unless the server's own origin. The ntfy token is never sent to an action target.
+- **Permission state:** `NotificationPermission` with `isUsable` and `problems` (stable codes: `not-determined`, `denied`, `alerts-off`, `sound-off`, `time-sensitive-off`, `scheduled-summary`), `UserNotificationPermissionProvider`. The app asks once at launch if undetermined. It is not yet exposed over IPC or `doctor` (Wave 4: the socket server does not exist yet; `NtfyIPC` is standalone, so mirror the value type there).
+- **App root** (`App/Sources`): migrates the token, sets the UN delegate at launch, builds a pipeline (store, poster, delivery, response handler, supervisor, hourly prune) from the resolved config and rebuilds it when `url`/token/topics/`allowInsecure` change (`PipelineReload`); a transient config or Keychain error keeps the running pipeline. Not configured means idle. Logs use `.private` for topics and ids. No menu bar, no UI.
+- **Not verified live (needs the MacBook, not run: it needs the owner to stop the 1.x daemon there first, and no human session was available).** `make install-macbook` left a signed `NtfyMac.app` in `~/Applications` on the MacBook, not launched. One batched checklist, all on the MacBook:
+  1. Stop the 1.x daemon (`brew services stop ntfy-mac`), launch `~/Applications/NtfyMac.app`, click Allow on the prompt (do not quit while it is pending). Expect the stream to connect and the old messages not to replay.
+  2. Publish to the dev server topics at priorities 1 to 5; check the sound per priority (system sounds by name through `UNNotificationSound(named:)` are untested for 2.0), the auto-dismiss times (4/5/8 s; 4 and 5 stay), and that 4/5 break through a Focus.
+  3. Banner comparison from Wave 1: a priority-5 message (1 Acknowledge button), a message with 2 and with 3 ntfy actions. Does the single button show without Options? Do 2+ hide behind Options?
+  4. Body click on a message with and without a click URL; Acknowledge on a priority-5 (the re-alert every 5 min must stop); a `view` and an `http` action to a public and a private target (the private one must ask first).
+  5. Quit and relaunch with a notification still shown: its buttons must still work (category restore). Edit `config.json` (sounds, then `url`): sounds apply at once, `url` rebuilds the stream.
+  6. Sleep/wake and a Wi-Fi off/on: reconnect without lost or duplicated messages (Wave 2's untested part).
+  7. Image attachment and icon from a public URL; a message with an attachment URL on another host must show without the image.
+  8. `log show --predicate 'subsystem == "com.jkrumm.ntfy-mac"'` for errors.
+- **Known gaps / inputs for Wave 4 and 5:**
+  - The time-sensitive entitlement is not set (unverified for ad-hoc signing and it may stop the app launching); `timeSensitive` may degrade to `active` until Developer ID (Wave 7). `critical` is not modelled.
+  - The Mac App Store sandbox will need sounds and category handling re-checked (Wave 7).
+  - The missed-message summary notification has empty `userInfo`, so clicking it does nothing until the history UI exists.
+  - `DeliveryService+Responses` reads one `reconcileLimit` page of history for the identifier lookup.
+  - Connection-lost and setup-required system notifications from 1.x are not ported; the supervisor status is only logged. Add them with the menu bar status in Wave 5, or earlier if dogfooding needs them.
+  - `FileConfigStore` writes are atomic within one process; the CLI and the app now both write config in Wave 4: add the `flock` sidecar noted in Wave 2.
+  - `ConfigWatcherTests.cancellingTheConsumerEndsIterationAndReleasesDescriptors` failed once in a full run (fd-count assertion) and not again in many reruns. Agent test runs left hung `swiftpm-testing-helper` processes; they were killed, and the suites pass stable. Watch for it.
+  - `make analyze` (Periphery) still is not in the gate.
+
+## Wave 4 — Agent-first CLI and llms.txt <!-- status: active -->
 
 - [ ] Port the full 1.x command and flag surface on top of `NtfyCore` and the socket. Add a contract test that runs every 1.x invocation from the README.
 - [ ] Agent ergonomics:
