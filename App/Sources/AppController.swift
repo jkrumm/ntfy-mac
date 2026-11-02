@@ -75,7 +75,7 @@ actor AppController {
     let handler = AppIPCHandler(
       controller: self, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
-      clock: services.clock)
+      clock: services.clock, loginItem: SMAppServiceLoginItem())
     let server = IPCServer(
       path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport())
     ) { await handler.handle($0) }

@@ -155,8 +155,7 @@ import Testing
   @Test func silentServerHitsTheConnectTimeout() async {
     let (outcome, base) = await run(Stub(stall: true), connectTimeout: .milliseconds(100))
     #expect(outcome.error == .serverUnreachable)
-    for _ in 0..<1000 where !StubURLProtocol.isStopped(base) { await Task.yield() }
-    #expect(StubURLProtocol.isStopped(base))
+    #expect(await StubURLProtocol.waitUntilStopped(base))
   }
 
   @Test func openBodyHasNoTimeout() async {
@@ -206,7 +205,6 @@ import Testing
     for await _ in signal { break }
     consumer.cancel()
     #expect(await consumer.value == nil)
-    for _ in 0..<1000 where !StubURLProtocol.isStopped(base) { await Task.yield() }
-    #expect(StubURLProtocol.isStopped(base))
+    #expect(await StubURLProtocol.waitUntilStopped(base))
   }
 }

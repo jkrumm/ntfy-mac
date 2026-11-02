@@ -25,6 +25,16 @@ extension AppPipeline {
     return true
   }
 
+  /// Acknowledges every unacknowledged message (of one topic, if given) and returns how many.
+  func acknowledgeAll(topic: String?) async throws(NtfyError) -> Int {
+    let pending = try await store.unacknowledged(minPriority: .min)
+      .filter { topic == nil || $0.message.topic == topic }
+    for entry in pending {
+      await delivery.acknowledge(topic: entry.message.topic, id: entry.message.id)
+    }
+    return pending.count
+  }
+
   /// False when the history does not know the message. It is shown again by the reminder poll.
   func remind(topic: String, id: String, until: Date) async throws(NtfyError) -> Bool {
     guard try await store.message(topic: topic, id: id) != nil else { return false }

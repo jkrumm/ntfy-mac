@@ -26,6 +26,10 @@ public enum Command: String, Codable, Sendable, CaseIterable {
   case remind
   /// Reads the notification permission state.
   case permission
+  /// Acknowledges every unacknowledged message, optionally of one topic (`Request.ackAll`).
+  case ackAll
+  /// Reads or changes the login item registration (`Request.loginItem`).
+  case loginItem
 }
 
 public struct Request: Versioned, Hashable {
@@ -38,10 +42,15 @@ public struct Request: Versioned, Hashable {
   public let ack: MessageTarget?
   /// Payload of `Command.remind`.
   public let remind: RemindPayload?
+  /// Payload of `Command.ackAll`.
+  public let ackAll: AckAllPayload?
+  /// Payload of `Command.loginItem`.
+  public let loginItem: LoginItemPayload?
 
   public init(
     id: String, command: Command, notify: NotifyPayload? = nil, ack: MessageTarget? = nil,
-    remind: RemindPayload? = nil, protocolVersion: Int = IPC.protocolVersion
+    remind: RemindPayload? = nil, ackAll: AckAllPayload? = nil,
+    loginItem: LoginItemPayload? = nil, protocolVersion: Int = IPC.protocolVersion
   ) {
     self.protocolVersion = protocolVersion
     self.id = id
@@ -49,6 +58,8 @@ public struct Request: Versioned, Hashable {
     self.notify = notify
     self.ack = ack
     self.remind = remind
+    self.ackAll = ackAll
+    self.loginItem = loginItem
   }
 }
 

@@ -24,7 +24,8 @@ import Testing
     #expect(report["version"] as? String == Version.current)
     #expect(report["installMethod"] as? String == "app")
     let status = try checks(result)
-    for name in ["config", "token", "server", "auth", "topics", "app", "permissions"] {
+    for name in ["config", "token", "server", "auth", "topics", "app", "permissions", "login-item"]
+    {
       #expect(status[name] == "ok", "\(name)")
     }
   }
@@ -36,7 +37,7 @@ import Testing
     _ = await rig.run("doctor", "--json")
     let commands = await rig.app.commands()
     #expect(!commands.contains(.notify))
-    #expect(Set(commands) == [.status, .permission])
+    #expect(Set(commands) == [.status, .permission, .loginItem])
     #expect(await rig.app.calls.allSatisfy { !$0.launch })
     #expect(await rig.config.load() == before)
     #expect(await rig.secrets.token() == "tk_secret")

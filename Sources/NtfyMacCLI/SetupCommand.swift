@@ -13,7 +13,7 @@ struct SetupCommand: CLICommand {
   @Option(name: .long, help: "An access token for the server.") var token: String?
   @OptionGroup var output: OutputOptions
 
-  static let loginItemHint = "Start ntfy-mac at login with: ntfy-mac login-item"
+  static let loginItemHint = "Start ntfy-mac at login with: ntfy-mac login-item on"
 
   func validate() throws {
     guard (url == nil) == (token == nil) else {

@@ -23,6 +23,40 @@ public struct RemindPayload: Codable, Sendable, Hashable {
   }
 }
 
+public struct AckAllPayload: Codable, Sendable, Hashable {
+  /// Only this topic; nil acknowledges every topic.
+  public let topic: String?
+
+  public init(topic: String? = nil) { self.topic = topic }
+}
+
+public struct AckAllResult: Codable, Sendable, Hashable {
+  /// How many messages were acknowledged.
+  public let acknowledged: Int
+
+  public init(acknowledged: Int) { self.acknowledged = acknowledged }
+}
+
+public struct LoginItemPayload: Codable, Sendable, Hashable {
+  public enum Action: String, Codable, Sendable {
+    /// Only read the state.
+    case status
+    case enable
+    case disable
+  }
+
+  public let action: Action
+
+  public init(action: Action = .status) { self.action = action }
+}
+
+public struct LoginItemResult: Codable, Sendable, Hashable {
+  /// `enabled`, `requiresApproval`, `notRegistered` or `notFound`.
+  public let state: String
+
+  public init(state: String) { self.state = state }
+}
+
 /// A local notification the CLI asks the app to post.
 public struct NotifyPayload: Codable, Sendable, Hashable {
   public static let defaultPriority = 3
@@ -115,12 +149,17 @@ public struct ResultPayload: Codable, Sendable, Hashable {
   public let status: StatusResult?
   public let notify: NotifyResult?
   public let permission: PermissionSummary?
+  public let ackAll: AckAllResult?
+  public let loginItem: LoginItemResult?
 
   public init(
-    status: StatusResult? = nil, notify: NotifyResult? = nil, permission: PermissionSummary? = nil
+    status: StatusResult? = nil, notify: NotifyResult? = nil, permission: PermissionSummary? = nil,
+    ackAll: AckAllResult? = nil, loginItem: LoginItemResult? = nil
   ) {
     self.status = status
     self.notify = notify
     self.permission = permission
+    self.ackAll = ackAll
+    self.loginItem = loginItem
   }
 }

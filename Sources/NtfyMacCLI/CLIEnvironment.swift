@@ -14,6 +14,16 @@ typealias TopicSourceFactory =
   @Sendable (_ base: URL, _ token: String, _ allowInsecure: Bool) ->
   any TopicSource
 
+/// Builds the publisher for a server.
+typealias PublisherFactory =
+  @Sendable (_ base: URL, _ token: String, _ allowInsecure: Bool) ->
+  any NtfyPublishing
+
+/// Runs `body` until it finishes or the process is interrupted (SIGINT, SIGTERM); an interrupt
+/// ends it quietly instead of killing the process mid-write.
+typealias InterruptibleRunner =
+  @Sendable (_ body: @escaping @Sendable () async throws -> Void) async throws -> Void
+
 /// Everything a command touches outside its own arguments. The one place real adapters are
 /// chosen (`live`); tests build one from fakes.
 struct CLIEnvironment: Sendable {
@@ -26,6 +36,10 @@ struct CLIEnvironment: Sendable {
   var secrets: any SecretStore
   var app: any AppControlling
   var topicSource: TopicSourceFactory
+  var publisher: PublisherFactory
+  var history: any HistoryOpening
+  var clock: any NtfyCore.Clock
+  var runUntilInterrupted: InterruptibleRunner
   var processes: any ProcessRunning
   var releases: any ReleaseLookup
   var prompter: any Prompting

@@ -85,6 +85,12 @@ actor FakeApp: AppControlling {
             permission: PermissionSummary(usable: true)))
       case .permission: ResultPayload(permission: PermissionSummary(usable: true))
       case .notify: ResultPayload(notify: NotifyResult(posted: true))
+      case .ackAll: ResultPayload(ackAll: AckAllResult(acknowledged: 0))
+      case .loginItem:
+        ResultPayload(
+          loginItem: LoginItemResult(
+            state: request.loginItem?.action == .disable
+              ? LoginItemState.notRegistered.rawValue : LoginItemState.enabled.rawValue))
       default: nil
       }
     return .success(id: request.id, result: result)
@@ -108,6 +114,36 @@ actor FakeProcesses: ProcessRunning {
     runs.append(Run(executable: executable, arguments: arguments))
     return status
   }
+}
+
+/// Publishes nothing; remembers what it was asked and answers with a fixed id.
+actor StubPublisher: NtfyPublishing {
+  private(set) var requests: [PublishRequest] = []
+  private let failure: NtfyError?
+  private let time: Date
+
+  init(failure: NtfyError? = nil, time: Date) {
+    self.failure = failure
+    self.time = time
+  }
+
+  func publish(_ request: PublishRequest) async throws(NtfyError) -> PublishedMessage {
+    requests.append(request)
+    if let failure { throw failure }
+    return PublishedMessage(id: "pub1", topic: request.topic, time: time)
+  }
+}
+
+/// History in memory: `absent` is a database the app has not created yet.
+struct FakeHistory: HistoryOpening {
+  let store: InMemoryHistoryStore
+  var absent = false
+
+  func reader(server: String) throws(NtfyError) -> (any HistoryInbox)? {
+    absent ? nil : store
+  }
+
+  func writer(server: String) throws(NtfyError) -> any HistoryInbox { store }
 }
 
 struct FakeReleases: ReleaseLookup {
@@ -149,6 +185,10 @@ struct CLIRig {
   let topics: ScriptedTopicSource
   let app: FakeApp
   let processes: FakeProcesses
+  let clock = FakeClock()
+  let store: InMemoryHistoryStore
+  var historyAbsent = false
+  var publishFailure: NtfyError?
   var releases = FakeReleases()
   var prompter = ScriptedPrompter()
   var terminal = Terminal(stdinIsTTY: false, stdoutIsTTY: false)
@@ -165,6 +205,7 @@ struct CLIRig {
     self.topics = ScriptedTopicSource(topics: topics, failingWith: topicFailure)
     self.app = app
     self.processes = processes
+    store = InMemoryHistoryStore(clock: clock)
     let sounds = scratch.file("sounds")
     for name in ["Ping.aiff", "Pop.aiff", "Sosumi.aiff", "Tink.aiff"] {
       try? scratch.write("", to: "sounds/\(name)")
@@ -185,11 +226,27 @@ struct CLIRig {
   var environment: CLIEnvironment {
     let source = topics
     let input = stdin
+    let publisher = StubPublisher(failure: publishFailure, time: clock.now())
     return CLIEnvironment(
       paths: paths, variables: variables, terminal: terminal, executablePath: executablePath,
       config: config, secrets: secrets, app: app,
-      topicSource: { _, _, _ in source }, processes: processes, releases: releases,
+      topicSource: { _, _, _ in source }, publisher: { _, _, _ in publisher },
+      history: FakeHistory(store: store, absent: historyAbsent), clock: clock,
+      runUntilInterrupted: { try await $0() }, processes: processes, releases: releases,
       prompter: prompter, readStandardInput: { input })
+  }
+
+  /// Adds a message to the history `age` seconds before the rig's clock.
+  @discardableResult
+  func add(
+    _ topic: String = "alerts", id: String, body: String = "body", title: String? = nil,
+    priority: Int = 3, age: TimeInterval = 0, tags: [String] = []
+  ) async -> NtfyMessage {
+    let message = NtfyMessage(
+      id: id, topic: topic, time: clock.now().addingTimeInterval(-age), title: title, body: body,
+      priority: Priority(clamping: priority), tags: tags)
+    _ = try? await store.append(message)
+    return message
   }
 
   func run(_ arguments: String...) async -> RunResult {
@@ -202,5 +259,35 @@ struct CLIRig {
       Output(json: json, stdout: capture.out, stderr: capture.err)
     }
     return RunResult(exit: exit, stdout: capture.stdout, stderr: capture.stderr)
+  }
+}
+
+extension CLIRig {
+  /// Runs a command that sleeps on the rig's clock, moving the clock forward until it ends.
+  /// `during` runs once the command is waiting, to add history while it blocks.
+  func runAdvancing(
+    _ arguments: [String], step: Duration = .milliseconds(500),
+    during: (@Sendable (CLIRig) async -> Void)? = nil
+  ) async -> RunResult {
+    let finished = Mutex(false)
+    let task = Task {
+      let result = await run(arguments)
+      finished.withLock { $0 = true }
+      return result
+    }
+    var rounds = 0
+    var injected = during == nil
+    while !finished.withLock({ $0 }), rounds < 20_000 {
+      rounds += 1
+      if clock.sleeperCount > 0 {
+        if !injected, let during {
+          injected = true
+          await during(self)
+        }
+        clock.advance(by: step)
+      }
+      try? await Task.sleep(for: .milliseconds(1))
+    }
+    return await task.value
   }
 }

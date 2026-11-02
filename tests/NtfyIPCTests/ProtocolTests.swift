@@ -23,6 +23,8 @@ import Testing
           clickURL: URL(string: "https://example.com/x"), dismissAfterSeconds: 7.5)),
       Request(id: "6", command: .ack, ack: MessageTarget(topic: "t", id: "m")),
       Request(id: "7", command: .remind, remind: RemindPayload(topic: "t", id: "m", until: until)),
+      Request(id: "8", command: .ackAll, ackAll: AckAllPayload(topic: "t")),
+      Request(id: "9", command: .loginItem, loginItem: LoginItemPayload(action: .enable)),
     ]
     #expect(Set(requests.map(\.command)) == Set(Command.allCases))
     for request in requests { #expect(try roundTrip(request) == request) }
@@ -36,7 +38,8 @@ import Testing
     let success = Response.success(
       id: "1",
       result: ResultPayload(
-        status: status, notify: NotifyResult(posted: true), permission: permission)
+        status: status, notify: NotifyResult(posted: true), permission: permission,
+        ackAll: AckAllResult(acknowledged: 3), loginItem: LoginItemResult(state: "enabled"))
     )
     #expect(try roundTrip(success) == success)
     let failed = Response.failure(id: "2", code: .permissionDenied, message: "no")

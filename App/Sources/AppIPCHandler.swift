@@ -11,16 +11,19 @@ struct AppIPCHandler: Sendable {
   let config: FileConfigStore
   let permissions: any NotificationPermissionProviding
   let clock: SystemClock
+  let loginItem: any LoginItemControlling
   private let log = Log.logger(.ipc)
 
   init(
     controller: AppController, config: FileConfigStore,
-    permissions: any NotificationPermissionProviding, clock: SystemClock
+    permissions: any NotificationPermissionProviding, clock: SystemClock,
+    loginItem: any LoginItemControlling
   ) {
     self.controller = controller
     self.config = config
     self.permissions = permissions
     self.clock = clock
+    self.loginItem = loginItem
   }
 
   func handle(_ request: Request) async -> Response {
@@ -32,6 +35,8 @@ struct AppIPCHandler: Sendable {
     case .notify: return await notify(request)
     case .ack: return await ack(request)
     case .remind: return await remind(request)
+    case .ackAll: return await ackAll(request)
+    case .loginItem: return loginItemResponse(request)
     }
   }
 
@@ -95,6 +100,32 @@ struct AppIPCHandler: Sendable {
     } catch {
       return internalError(request, "ack", error)
     }
+  }
+
+  private func ackAll(_ request: Request) async -> Response {
+    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
+    do throws(NtfyError) {
+      let count = try await pipeline.acknowledgeAll(topic: request.ackAll?.topic)
+      return .success(
+        id: request.id, result: ResultPayload(ackAll: AckAllResult(acknowledged: count)))
+    } catch {
+      return internalError(request, "ack-all", error)
+    }
+  }
+
+  /// Reads the registration, or changes it first when the request says so.
+  private func loginItemResponse(_ request: Request) -> Response {
+    var state = loginItem.state()
+    let action = request.loginItem?.action ?? .status
+    if action != .status {
+      do throws(NtfyError) {
+        state = try loginItem.setEnabled(action == .enable)
+      } catch {
+        return internalError(request, "login-item", error)
+      }
+    }
+    return .success(
+      id: request.id, result: ResultPayload(loginItem: LoginItemResult(state: state.rawValue)))
   }
 
   private func remind(_ request: Request) async -> Response {

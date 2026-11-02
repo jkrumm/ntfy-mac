@@ -17,7 +17,7 @@ struct DoctorChecks {
     checks += await serverChecks()
     let app = await appChecks()
     checks += app
-    checks.append(await historyCheck(loaded))
+    checks.append(await historyCheck())
     if case .success(let config) = loaded { checks.append(overridesCheck(config)) }
     if sendTest { checks.append(await testNotification(appIsUp: app.first?.status != .fail)) }
     return checks
@@ -142,9 +142,30 @@ struct DoctorChecks {
           "app", .fail, "The app is not running", detail: "Start it with: ntfy-mac start",
           exit: .appUnavailable),
         DoctorCheck("permissions", .skipped, "Skipped (app not running)"),
+        DoctorCheck("login-item", .skipped, "Skipped (app not running)"),
       ]
     }
-    return [appCheck(status), await permissionCheck()]
+    return [appCheck(status), await permissionCheck(), await loginItemCheck()]
+  }
+
+  private func loginItemCheck() async -> DoctorCheck {
+    do {
+      switch try await LoginItemClient(app: environment.app).state(launch: false) {
+      case .enabled:
+        return DoctorCheck("login-item", .passed, "Starts at login")
+      case .requiresApproval:
+        return DoctorCheck(
+          "login-item", .warn, "Login item needs approval",
+          detail: "Approve it in System Settings > General > Login Items")
+      case .notRegistered, .notFound:
+        return DoctorCheck(
+          "login-item", .warn, "Does not start at login",
+          detail: "Enable with: ntfy-mac login-item on")
+      }
+    } catch {
+      return DoctorCheck(
+        "login-item", .warn, "Could not read the login item", detail: ErrorReport(error).message)
+    }
   }
 
   private func appCheck(_ response: Response) -> DoctorCheck {
@@ -203,14 +224,15 @@ struct DoctorChecks {
 
   // MARK: History and settings
 
-  private func historyCheck(_ loaded: Result<Config, NtfyError>) async -> DoctorCheck {
+  private func historyCheck() async -> DoctorCheck {
     let database = environment.paths.databaseURL
     guard FileManager.default.fileExists(atPath: database.path) else {
       return DoctorCheck("history", .warn, "No history database yet (created by the app)")
     }
-    var server = ""
-    if case .success(let config) = loaded { server = config.url ?? "" }
     do throws(NtfyError) {
+      guard let server = try await environment.historyServer() else {
+        return DoctorCheck("history", .warn, "No server configured, history not checked")
+      }
       let store = try SQLiteHistoryStore.openReadOnly(
         at: database, server: server, clock: SystemClock())
       defer { try? store.close() }

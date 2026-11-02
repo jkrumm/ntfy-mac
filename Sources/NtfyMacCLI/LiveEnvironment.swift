@@ -20,6 +20,12 @@ extension CLIEnvironment {
       topicSource: { base, token, allowInsecure in
         NtfyAccountClient(base: base, token: token, allowInsecure: allowInsecure, timeout: 10)
       },
+      publisher: { base, token, allowInsecure in
+        NtfyPublisher(base: base, token: token, allowInsecure: allowInsecure)
+      },
+      history: SQLiteHistoryOpener(database: paths.databaseURL),
+      clock: SystemClock(),
+      runUntilInterrupted: Interrupt.runUntilInterrupted,
       processes: SystemProcessRunner(),
       releases: GitHubReleases(),
       prompter: TerminalPrompter(),

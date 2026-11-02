@@ -43,7 +43,13 @@ struct Output: Sendable {
 
   /// One JSON document on its own line; silent in text mode.
   func document<Value: Encodable>(_ value: Value) {
-    guard json, let text = Self.encode(value) else { return }
+    guard json else { return }
+    record(value)
+  }
+
+  /// One JSON document on its own line in either mode: the NDJSON of streaming commands.
+  func record<Value: Encodable>(_ value: Value) {
+    guard let text = Self.encode(value) else { return }
     writeStdout(text + "\n")
   }
 

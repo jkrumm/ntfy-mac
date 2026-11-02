@@ -12,6 +12,9 @@ struct NtfyMac: AsyncParsableCommand {
       SetupCommand.self, DoctorCommand.self, SubscribeCommand.self, UnsubscribeCommand.self,
       ConfigCommand.self, NotifyCommand.self, SoundsCommand.self, LogsCommand.self,
       UpdateCommand.self, UninstallCommand.self, VersionCommand.self, StartCommand.self,
+      StatusCommand.self, LsCommand.self, SearchCommand.self, ReadCommand.self, AckCommand.self,
+      TailCommand.self, WaitCommand.self, PublishCommand.self, PauseCommand.self,
+      ResumeCommand.self, LoginItemCommand.self, SchemaCommand.self,
     ]
   )
 

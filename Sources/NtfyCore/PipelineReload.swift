@@ -51,15 +51,20 @@ extension Settings {
   }
 
   /// `scheme://host[:port]` in lower case, the key the history stores a server under.
-  public var origin: String {
-    let scheme = url.scheme?.lowercased() ?? "https"
-    let host = url.host()?.lowercased() ?? ""
-    guard let port = url.port else { return "\(scheme)://\(host)" }
-    return "\(scheme)://\(host):\(port)"
-  }
+  public var origin: String { ServerOrigin.key(for: url) }
 
   /// The topic selection for the stream supervisor.
   public var topicSelection: TopicSelection {
     TopicSelection(override: topics, extra: extraTopics)
+  }
+}
+
+public enum ServerOrigin {
+  /// `scheme://host[:port]` in lower case, the key the history stores a server under.
+  public static func key(for url: URL) -> String {
+    let scheme = url.scheme?.lowercased() ?? "https"
+    let host = url.host()?.lowercased() ?? ""
+    guard let port = url.port else { return "\(scheme)://\(host)" }
+    return "\(scheme)://\(host):\(port)"
   }
 }

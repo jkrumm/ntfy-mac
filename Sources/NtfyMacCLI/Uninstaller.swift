@@ -27,6 +27,7 @@ struct Uninstaller {
 
   let paths: CLIPaths
   let secrets: any SecretStore
+  let app: any AppControlling
 
   var items: [Item] {
     [
@@ -40,6 +41,7 @@ struct Uninstaller {
   func run() async -> Report {
     var removed: [String] = []
     var failed: [String] = []
+    if await removeLoginItem() { removed.append("login item") }
     for item in items where FileManager.default.fileExists(atPath: item.url.path) {
       do {
         try FileManager.default.removeItem(at: item.url)
@@ -58,6 +60,17 @@ struct Uninstaller {
     return Report(
       removed: removed, failed: failed,
       removeApp: ["brew uninstall jkrumm/tap/ntfy-mac", "or delete NtfyMac.app"])
+  }
+
+  /// Unregisters the login item through the app, which alone can. Best effort: with the app
+  /// not running there is nothing to ask, and the entry then disappears with the app bundle.
+  /// True when a registration was removed.
+  private func removeLoginItem() async -> Bool {
+    let client = LoginItemClient(app: app)
+    guard let before = try? await client.state(launch: false),
+      before == .enabled || before == .requiresApproval
+    else { return false }
+    return (try? await client.state(.disable, launch: false)) == .notRegistered
   }
 
   /// `rmdir` only succeeds on an empty directory, which is exactly the rule.

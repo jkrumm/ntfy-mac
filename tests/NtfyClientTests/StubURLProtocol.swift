@@ -53,6 +53,16 @@ final class StubURLProtocol: URLProtocol {
     records.withLock { $0[base.host ?? ""]?.stopped ?? false }
   }
 
+  /// Polls until the request was torn down, up to `timeout` (real time: teardown runs on the
+  /// URL loading system's own queue, so yielding alone races it under load).
+  static func waitUntilStopped(_ base: URL, timeout: Duration = .seconds(5)) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while !isStopped(base), ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+    return isStopped(base)
+  }
+
   private static func response(_ url: URL, status: Int, headers: [String: String])
     -> HTTPURLResponse
   {
