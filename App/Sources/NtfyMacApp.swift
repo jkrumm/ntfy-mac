@@ -1,5 +1,6 @@
 import AppKit
 import NtfyAppLogic
+import NtfyClient
 import NtfyCore
 import NtfyPlatform
 import SwiftUI
@@ -17,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let model: AppModel
   /// The History window's model; the window starts and stops it.
   let historyModel: HistoryModel
+  /// The Settings window's model; the window starts and stops it.
+  let settingsModel: SettingsModel
+  let onboardingModel: OnboardingModel
   let coordinator: WindowCoordinator
 
   override init() {
@@ -35,6 +39,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     historyModel = HistoryModel(
       source: controller, opener: WorkspaceLinkOpener(), clock: services.clock,
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
+    let configChanges: @Sendable () -> AsyncStream<Void> = { ConfigWatcher().changes() }
+    let secrets = KeychainSecretStore()
+    let tester = NtfyServerTester()
+    let loginItem = SMAppServiceLoginItem()
+    func permissionFlow() -> NotificationPermissionFlow {
+      NotificationPermissionFlow(
+        permissions: UserNotificationPermissionProvider(center: services.center),
+        opener: WorkspaceLinkOpener(), quitGuard: ProcessQuitGuard(), source: controller,
+        clock: services.clock)
+    }
+    settingsModel = SettingsModel(
+      SettingsModel.Dependencies(
+        config: services.config, secrets: secrets, tester: tester,
+        topicSource: ConfiguredTopicSource(config: services.config, secrets: secrets),
+        source: controller, loginItem: loginItem, sounds: SystemSoundList(),
+        preview: NSSoundPreview(), configChanges: configChanges),
+      app: model, permission: permissionFlow(), windows: windows,
+      log: { Log.logger(.interface).info("\($0, privacy: .private)") })
+    onboardingModel = OnboardingModel(
+      config: services.config, secrets: secrets, tester: tester, loginItem: loginItem,
+      permission: permissionFlow())
     let onboarding = onboarding
     coordinator = WindowCoordinator { window in
       if window == .onboarding { onboarding.dismiss() }
@@ -108,7 +133,7 @@ struct NtfyMacApp: App {
     .restorationBehavior(.disabled)
 
     Window(AppWindow.settings.title, id: AppWindow.settings.rawValue) {
-      SettingsWindow(model: delegate.model)
+      SettingsWindow(model: delegate.settingsModel)
     }
     .defaultLaunchBehavior(.suppressed)
     .restorationBehavior(.disabled)
@@ -120,7 +145,7 @@ struct NtfyMacApp: App {
     }
 
     Window(AppWindow.onboarding.title, id: AppWindow.onboarding.rawValue) {
-      OnboardingWindow(model: delegate.model)
+      OnboardingWindow(model: delegate.onboardingModel)
     }
     .defaultLaunchBehavior(.suppressed)
     .restorationBehavior(.disabled)

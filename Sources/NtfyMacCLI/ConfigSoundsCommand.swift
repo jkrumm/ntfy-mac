@@ -1,5 +1,6 @@
 import ArgumentParser
 import NtfyCore
+import NtfyPlatform
 
 struct ConfigSoundsCommand: CLICommand {
   static let configuration = CommandConfiguration(

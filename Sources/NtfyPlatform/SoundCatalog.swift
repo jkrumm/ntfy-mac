@@ -1,18 +1,26 @@
 import Foundation
 
-struct Sound: Sendable, Hashable {
-  let name: String
-  let file: URL
+public struct Sound: Sendable, Hashable {
+  public let name: String
+  public let file: URL
 }
 
 /// The sounds macOS can play for a notification: `.aiff`, `.wav` and `.caf` files in the system
 /// and user sound directories.
-enum SoundCatalog {
-  static let silent = "silent"
+public enum SoundCatalog {
+  public static let silent = "silent"
   private static let extensions: Set<String> = ["aiff", "wav", "caf"]
 
+  /// The system sounds, then the user's own in `~/Library/Sounds`.
+  public static func directories(home: URL) -> [URL] {
+    [
+      URL(fileURLWithPath: "/System/Library/Sounds", isDirectory: true),
+      home.appending(path: "Library/Sounds", directoryHint: .isDirectory),
+    ]
+  }
+
   /// Sorted by name, one entry per name; the first directory wins.
-  static func sounds(in directories: [URL]) -> [Sound] {
+  public static func sounds(in directories: [URL]) -> [Sound] {
     var byName: [String: Sound] = [:]
     for directory in directories {
       let files =

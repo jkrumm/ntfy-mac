@@ -1,5 +1,6 @@
 import AppKit
 import NtfyAppLogic
+import NtfyClient
 import NtfyCore
 import NtfyPlatform
 import OSLog
@@ -60,5 +61,50 @@ struct NoImageFetcher: ImageFetching {
 struct NoAttachmentFetcher: AttachmentFetching {
   func fetch(_ attachment: MessageAttachment) async throws(NtfyError) -> URL {
     throw .invalidResponse("There is no server to download attachments from.")
+  }
+}
+
+/// Opens System Settings URLs with the workspace.
+extension WorkspaceLinkOpener: SystemSettingsOpening {}
+
+/// The sounds on this Mac, from the same directories the CLI lists.
+struct SystemSoundList: SoundListing {
+  func names() -> [String] {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    return SoundCatalog.sounds(in: SoundCatalog.directories(home: home)).map(\.name)
+  }
+}
+
+/// Plays a system sound by name.
+@MainActor
+struct NSSoundPreview: SoundPreviewing {
+  func play(_ name: String) {
+    NSSound(named: NSSound.Name(name))?.play()
+  }
+}
+
+/// Keeps the process from quitting while the system prompt is open.
+struct ProcessQuitGuard: QuitGuarding {
+  func hold(reason: String) -> @Sendable () -> Void {
+    let activity = ProcessActivity(
+      options: [.automaticTerminationDisabled, .suddenTerminationDisabled], reason: reason)
+    return { activity.end() }
+  }
+}
+
+/// The account's topics for whatever server the config and the Keychain hold now. Without a
+/// server or a token there is nothing to ask and the list is empty.
+struct ConfiguredTopicSource: TopicSource {
+  let config: any ConfigStore
+  let secrets: any SecretStore
+
+  func subscribedTopics() async throws(NtfyError) -> [String] {
+    let stored = try await config.load()
+    guard let address = stored.url, let base = try? ServerAddress.parse(address),
+      let token = try await secrets.token(), !token.isEmpty
+    else { return [] }
+    return try await NtfyAccountClient(
+      base: base, token: token, allowInsecure: stored.allowInsecure
+    ).subscribedTopics()
   }
 }

@@ -24,15 +24,7 @@ struct PriorityRow: Encodable, Sendable, Hashable {
     customDismiss = config.dismiss[priority] != nil
   }
 
-  static func label(_ priority: Int) -> String {
-    switch priority {
-    case 5: "urgent"
-    case 4: "high"
-    case 3: "default"
-    case 2: "low"
-    default: "min"
-    }
-  }
+  static func label(_ priority: Int) -> String { Priority(clamping: priority).label }
 
   var title: String { "\(priority) (\(label))" }
   var soundText: String { sound ?? "(silent)" }

@@ -1,5 +1,6 @@
 import Foundation
 import NtfyIPC
+import NtfyPlatform
 import NtfyStore
 
 /// Every location the CLI reads or writes, derived from the home directory and two overrides,
@@ -30,10 +31,7 @@ struct CLIPaths: Sendable, Hashable {
       applicationSupport = systemApplicationSupport
       stateDirectory = home.appending(path: ".local/share/ntfy-mac", directoryHint: .isDirectory)
     }
-    soundDirectories = [
-      URL(fileURLWithPath: "/System/Library/Sounds", isDirectory: true),
-      home.appending(path: "Library/Sounds", directoryHint: .isDirectory),
-    ]
+    soundDirectories = SoundCatalog.directories(home: home)
   }
 
   static func live(environment: [String: String]) -> CLIPaths {

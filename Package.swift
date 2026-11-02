@@ -55,7 +55,7 @@ let package = Package(
       swiftSettings: strict),
     .testTarget(
       name: "NtfyAppLogicTests",
-      dependencies: ["NtfyAppLogic", "NtfyCore", "NtfyIPC", "NtfyTesting"],
+      dependencies: ["NtfyAppLogic", "NtfyCore", "NtfyIPC", "NtfyPlatform", "NtfyTesting"],
       path: "tests/NtfyAppLogicTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore", "NtfyTesting"],
@@ -71,7 +71,7 @@ let package = Package(
       path: "tests/NtfyTestingTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyMacCLITests",
-      dependencies: ["NtfyMacCLI", "NtfyCore", "NtfyIPC", "NtfyTesting"],
+      dependencies: ["NtfyMacCLI", "NtfyAppLogic", "NtfyCore", "NtfyIPC", "NtfyTesting"],
       path: "tests/NtfyMacCLITests", swiftSettings: strict),
   ],
   swiftLanguageModes: [.v6]

@@ -35,6 +35,17 @@ public struct Priority: Sendable, Hashable, Comparable, Codable {
     try container.encode(rawValue)
   }
 
+  /// The name the CLI and the settings window use: min, low, default, high, urgent.
+  public var label: String {
+    switch rawValue {
+    case 5: "urgent"
+    case 4: "high"
+    case 3: "default"
+    case 2: "low"
+    default: "min"
+    }
+  }
+
   public static func < (lhs: Priority, rhs: Priority) -> Bool {
     lhs.rawValue < rhs.rawValue
   }

@@ -81,6 +81,8 @@ Prompts for your ntfy server URL and access token, tests the connection, and sav
 
 Get your access token at `https://<your-ntfy-server>/account` → **Access Tokens**.
 
+The first launch of the app opens a short welcome: test the server, allow notifications, and choose whether to start at login. You can run it again from **Settings → General → Set up again**.
+
 For scripts or automation:
 
 ```bash
@@ -161,6 +163,10 @@ ntfy-mac config                                          # show it all
 ```
 
 [docs/settings.md](docs/settings.md) lists every setting, where it lives and the command that sets it.
+
+## Settings
+
+Open **Settings** from the menu bar, or launch the app a second time. Changes apply as you make them and are written to the same `config.json` the CLI edits, so the window and the terminal never disagree. The one exception is the server: the URL and token are tested first, and saved only if the server accepts them. The token goes to the Keychain and is never shown again. Every setting in the window has a command; [docs/settings.md](docs/settings.md) is the table.
 
 ---
 
