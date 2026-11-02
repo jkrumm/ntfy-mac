@@ -596,7 +596,7 @@ Pause notifications automatically during video meetings.
 ntfy-mac config meeting
 ```
 
-With the mode on, the app watches which apps use the microphone and whether a camera is running (Zoom, Teams, Webex, FaceTime, a Slack huddle, a browser call with the camera on) and holds banners and sounds back while a meeting is going on. Messages are stored and shown as one summary when it ends. Nothing is recorded and no macOS permission is needed: the app only learns that audio or a camera is in use, never what is said or shown. It cannot see a screen share by itself; `ntfy-mac present on` says so by hand.
+With the mode on, the app watches which apps use the microphone and whether a camera is running (Zoom, Teams, Webex, FaceTime, a Slack huddle, a browser call with the camera on) and holds banners and sounds back while a meeting is going on. Messages are stored and shown as one summary when it ends. Nothing is recorded and no macOS permission is needed: the app only learns that audio or a camera is in use, never what is said or shown. It cannot see a screen share by itself; `ntfy-mac present on` says so by hand. A call muted for more than 45 seconds is no longer detected; `present on` covers that.
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
@@ -1241,10 +1241,10 @@ ntfy-mac resume
 Say you are presenting: hold notifications back.
 
 ```
-ntfy-mac present <off|on> [--for <duration>]
+ntfy-mac present <off|on> [--for <duration>] [--indefinitely]
 ```
 
-The app cannot tell that you share your screen, so this is the manual switch. `present on` holds banners and sounds back like a detected meeting (priority 5 still gets through unless the urgent bypass is off, see `config meeting`), whatever the meeting mode is. Without --for it lasts until `ntfy-mac present off`. Held messages are stored and shown as one summary afterwards. Writes meeting.presentingUntil to the config file; the running app picks it up through its config watcher, so it need not be reachable. Durations use s, m, h and d, alone or combined: 30m, 2h, 1h30m.
+The app cannot tell that you share your screen, so this is the manual switch. `present on` holds banners and sounds back like a detected meeting (priority 5 still gets through unless the urgent bypass is off, see `config meeting`), whatever the meeting mode is. Without --for it lasts one hour, so it cannot be forgotten; --indefinitely keeps it until `ntfy-mac present off`. Held messages are stored and shown as one summary afterwards. Writes meeting.presentingUntil to the config file; the running app picks it up through its config watcher, so it need not be reachable. Durations use s, m, h and d, alone or combined: 30m, 2h, 1h30m.
 
 macOS also hides banners by itself while the display is shared or mirrored, if System Settings > Notifications > "Allow notifications when mirroring or sharing the display" is off.
 
@@ -1252,6 +1252,7 @@ macOS also hides banners by itself while the display is shared or mirrored, if S
 |-|-|-|-|-|-|
 | `state` | positional | `off`, `on` |  | yes | on or off. |
 | `--for` | option | duration |  | no | With on: present for this long, like 30m, 2h or 1h30m. |
+| `--indefinitely` | flag | boolean | `false` | no | With on: present until `present off`, not for an hour. |
 | `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
 **Needs**
@@ -1265,7 +1266,8 @@ macOS also hides banners by itself while the display is shared or mirrored, if S
 
 ```sh
 ntfy-mac present on
-ntfy-mac present on --for 1h
+ntfy-mac present on --for 2h
+ntfy-mac present on --indefinitely
 ntfy-mac present off
 ```
 

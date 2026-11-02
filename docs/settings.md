@@ -58,7 +58,7 @@ Settings in `config.json` apply to the running app through its config watcher; n
 |-|-|-|-|-|
 | Pause notifications during meetings | config.json: `meeting.mode` | `ntfy-mac config meeting set` | `ntfy-mac config meeting set --mode pause` | `--mode off` turns it off; `config meeting reset` restores the defaults. |
 | Urgent messages bypass meetings | config.json: `meeting.urgentBypass` | `ntfy-mac config meeting set` | `ntfy-mac config meeting set --no-urgent-bypass` |  |
-| I am presenting | config.json: `meeting.presentingUntil` | `ntfy-mac present` | `ntfy-mac present on --for 1h` | Holds notifications whatever the detection says, even with the mode off. `ntfy-mac present off` ends it. |
+| I am presenting | config.json: `meeting.presentingUntil` | `ntfy-mac present` | `ntfy-mac present on --for 2h` | Holds notifications whatever the detection says, even with the mode off. It lasts one hour unless you pass `--for` or `--indefinitely`; `ntfy-mac present off` ends it. |
 
 ## Message actions
 
