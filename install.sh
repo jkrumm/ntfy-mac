@@ -1,107 +1,120 @@
 #!/usr/bin/env bash
+# Installs NtfyMac.app into ~/Applications and links the CLI into ~/.local/bin.
+# The download is checked against the release's SHA256SUMS before anything is extracted, and a
+# failed check installs nothing. Rerun to update.
+#
+# Environment:
+#   NTFY_MAC_VERSION    version to install (default: the latest GitHub release)
+#   NTFY_MAC_APP_DIR    where NtfyMac.app goes (default: ~/Applications)
+#   NTFY_MAC_BIN_DIR    where the ntfy-mac link goes (default: ~/.local/bin)
+#   NTFY_MAC_NO_LAUNCH  set to 1 to skip opening the app
+#   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download URL)
 set -euo pipefail
 
-INSTALL_DIR="$HOME/.local/bin"
-BINARY="$INSTALL_DIR/ntfy-mac"
-STATE_DIR="$HOME/.local/share/ntfy-mac"
-LABEL="com.jkrumm.ntfy-mac"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+REPO="jkrumm/ntfy-mac"
+APP_DIR="${NTFY_MAC_APP_DIR:-$HOME/Applications}"
+BIN_DIR="${NTFY_MAC_BIN_DIR:-$HOME/.local/bin}"
+SEMVER='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 
-# ── Architecture ──────────────────────────────────────────────────────────────
-
-ARCH=$(uname -m)
-if [[ "$ARCH" != "arm64" ]]; then
-  echo "ntfy-mac requires Apple Silicon (arm64). Got: $ARCH" >&2
+fail() {
+  echo "ntfy-mac install: $*" >&2
   exit 1
+}
+
+# ── Platform ──────────────────────────────────────────────────────────────────
+
+[[ "$(uname -m)" == "arm64" ]] || fail "requires Apple Silicon (arm64), got $(uname -m)"
+macos_major="$(sw_vers -productVersion | cut -d. -f1)"
+[[ "$macos_major" -ge 15 ]] || fail "requires macOS 15 or later, got $(sw_vers -productVersion)"
+
+# ── Version ───────────────────────────────────────────────────────────────────
+
+version="${NTFY_MAC_VERSION:-}"
+if [[ -z "$version" ]]; then
+  echo "Looking up the latest release..."
+  tag="$(curl -fsSL --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases/latest" \
+    | sed -nE 's/.*"tag_name": *"([^"]*)".*/\1/p' | head -1)"
+  [[ -n "$tag" ]] || fail "could not read the latest release"
+  version="$tag"
 fi
+version="${version#v}"
+[[ "$version" =~ $SEMVER ]] || fail "not a version: $version"
 
-# ── Latest version ────────────────────────────────────────────────────────────
+archive="ntfy-mac-$version-arm64.tar.gz"
+base_url="${NTFY_MAC_BASE_URL:-https://github.com/$REPO/releases/download/v$version}"
+curl_opts=(-fsSL)
+[[ -n "${NTFY_MAC_BASE_URL:-}" ]] || curl_opts+=(--proto '=https' --tlsv1.2)
 
-echo "Fetching latest version..."
-LATEST=$(curl -fsSL "https://api.github.com/repos/jkrumm/ntfy-mac/releases/latest" \
-  | grep '"tag_name"' \
-  | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-if [[ -z "$LATEST" ]]; then
-  echo "Failed to fetch latest version" >&2
-  exit 1
-fi
+work="$(mktemp -d)"
+cleanup() {
+  rm -rf "$work"
+  [[ -z "${stage:-}" ]] || rm -rf "$stage"
+}
+trap cleanup EXIT
 
-# ── Download binary ───────────────────────────────────────────────────────────
+# ── Download and verify ───────────────────────────────────────────────────────
 
-echo "Installing ntfy-mac $LATEST (arm64)..."
-mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$(dirname "$PLIST")"
+echo "Downloading ntfy-mac $version (arm64)..."
+mkdir "$work/download" "$work/extract"
+curl "${curl_opts[@]}" "$base_url/$archive" -o "$work/download/$archive" || fail "download of $archive failed"
+curl "${curl_opts[@]}" "$base_url/SHA256SUMS" -o "$work/download/SHA256SUMS" || fail "download of SHA256SUMS failed"
 
-# ── Main binary ────────────────────────────────────────────────────────────────
-curl -fsSL \
-  "https://github.com/jkrumm/ntfy-mac/releases/download/$LATEST/ntfy-mac" \
-  -o "$BINARY.tmp"
-chmod +x "$BINARY.tmp"
-mv "$BINARY.tmp" "$BINARY"
+listed="$(awk -v f="$archive" '$2 == f' "$work/download/SHA256SUMS" | wc -l | tr -d ' ')"
+[[ "$listed" == "1" ]] || fail "SHA256SUMS must list $archive exactly once (found $listed)"
+(cd "$work/download" && shasum -a 256 -c --ignore-missing --strict SHA256SUMS >/dev/null) \
+  || fail "checksum mismatch for $archive; nothing was installed"
 
-# ── Swift notification helper (.app bundle) ────────────────────────────────────
-curl -fsSL \
-  "https://github.com/jkrumm/ntfy-mac/releases/download/$LATEST/ntfy-notify.app.tar.gz" \
-  -o "$STATE_DIR/ntfy-notify.app.tar.gz"
-tar -xzf "$STATE_DIR/ntfy-notify.app.tar.gz" -C "$STATE_DIR"
-rm -f "$STATE_DIR/ntfy-notify.app.tar.gz"
+# ── Extract ───────────────────────────────────────────────────────────────────
 
-# ── LaunchAgent ───────────────────────────────────────────────────────────────
+entries="$(tar -tzf "$work/download/$archive")" || fail "cannot read $archive"
+while IFS= read -r entry; do
+  [[ "$entry" =~ ^(\./)?(NtfyMac\.app(/.*)?|LICENSE)$ && ! "$entry" =~ (^|/)\.\.(/|$) ]] \
+    || fail "unexpected entry in $archive: $entry"
+done <<<"$entries"
+tar -xzf "$work/download/$archive" -C "$work/extract"
+cli_in_bundle="$work/extract/NtfyMac.app/Contents/MacOS/ntfy-mac"
+[[ -x "$cli_in_bundle" ]] || fail "$archive has no NtfyMac.app/Contents/MacOS/ntfy-mac"
 
-IS_UPDATE=false
-if [[ -f "$PLIST" ]]; then
-  IS_UPDATE=true
-fi
+# ── Install ───────────────────────────────────────────────────────────────────
 
-if [[ "$IS_UPDATE" == false ]]; then
-  # First install: write plist and register service
-  cat > "$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>$LABEL</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>$BINARY</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>$STATE_DIR/ntfy-mac.log</string>
-  <key>StandardErrorPath</key>
-  <string>$STATE_DIR/ntfy-mac-error.log</string>
-</dict>
-</plist>
-EOF
-  launchctl load -w "$PLIST"
+mkdir -p "$APP_DIR" "$BIN_DIR"
+target="$APP_DIR/NtfyMac.app"
+stage="$APP_DIR/.NtfyMac.app.new.$$"
+ditto "$work/extract/NtfyMac.app" "$stage"
+if [[ -e "$target" ]]; then
+  old="$APP_DIR/.NtfyMac.app.old.$$"
+  mv "$target" "$old"
+  mv "$stage" "$target" || { mv "$old" "$target"; fail "could not replace $target"; }
+  rm -rf "$old"
 else
-  # Update: restart the running daemon with the new binary
-  launchctl kickstart -k "gui/$(id -u)/$LABEL" 2>/dev/null \
-    || launchctl load -w "$PLIST"
+  mv "$stage" "$target"
 fi
+stage=""
+
+cli="$target/Contents/MacOS/ntfy-mac"
+ln -sfn "$cli" "$BIN_DIR/ntfy-mac"
+echo "Installed $target"
+echo "Linked $BIN_DIR/ntfy-mac"
+
+# ── Migrate from 1.x ──────────────────────────────────────────────────────────
+
+"$cli" migrate || fail "ntfy-mac migrate failed; the app is installed, rerun this script or run '$BIN_DIR/ntfy-mac migrate'"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 
-echo ""
-if [[ "$IS_UPDATE" == true ]]; then
-  echo "ntfy-mac updated to $LATEST."
-else
-  echo "ntfy-mac $LATEST installed."
-  echo ""
-  echo "Next: run ntfy-mac setup"
+if [[ "${NTFY_MAC_NO_LAUNCH:-}" != "1" ]]; then
+  open "$target"
+  echo "If ntfy-mac was already running, quit it from the menu bar and open it again to load $version."
 fi
 
-# Warn if the shell would resolve a different ntfy-mac than the one just installed
-resolved_bin="$(command -v ntfy-mac 2>/dev/null || true)"
-if [[ "$resolved_bin" != "$BINARY" ]]; then
-  echo ""
-  if [[ -n "$resolved_bin" ]]; then
-    echo "Note: your shell currently resolves ntfy-mac to: $resolved_bin"
-  fi
-  echo "Add $INSTALL_DIR to the front of your PATH:"
-  echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
-  echo "Or run setup explicitly: $BINARY setup"
-fi
+echo ""
+echo "ntfy-mac $version installed. Next: ntfy-mac setup"
+
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *)
+    echo ""
+    echo "$BIN_DIR is not on your PATH. Add it:"
+    echo "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+    ;;
+esac

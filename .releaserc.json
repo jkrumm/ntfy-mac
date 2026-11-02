@@ -1,0 +1,30 @@
+{
+  "branches": ["master"],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "scripts/stamp-version.sh ${nextRelease.version} && make package VERSION=${nextRelease.version}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          { "path": "dist/ntfy-mac-*-arm64.tar.gz", "label": "ntfy-mac arm64 app (tar.gz)" },
+          { "path": "dist/SHA256SUMS", "label": "SHA256SUMS" }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.version}"
+      }
+    ]
+  ]
+}

@@ -3,6 +3,8 @@
 # Usage: scripts/tools.sh <swiftlint|periphery|xcodegen>
 #        scripts/tools.sh --self-test   (proves a checksum mismatch is rejected)
 # Bump a tool by changing its version and checksum below (checksum: `gh release view` asset digest).
+# The tool variables are read through indirect expansion (${!var}), which shellcheck cannot follow.
+# shellcheck disable=SC2034
 set -euo pipefail
 
 SWIFTLINT_VERSION="0.65.1"

@@ -5,9 +5,9 @@ MACBOOK := iumac
 MACBOOK_APP := Applications/NtfyMac.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check toolchain format lint-format lint analyze build test app docs docs-check legacy install-macbook
+.PHONY: check toolchain format lint-format lint lint-sh analyze build test app package installer-check docs docs-check install-macbook
 
-check: toolchain lint-format lint build docs-check test app legacy
+check: toolchain lint-format lint lint-sh build docs-check test installer-check app
 
 # Runs once, as the first step of `check`. Fails closed: an unparseable version is an error.
 # The other targets skip it: Package.swift's tools version already rejects a Swift older than 6.2.
@@ -28,6 +28,11 @@ lint-format:
 lint:
 	$(TOOLS) --self-test
 	"$$($(TOOLS) swiftlint)" lint --strict --no-cache
+
+# Fails when shellcheck is missing: a skipped lint must never look like a pass.
+lint-sh:
+	@command -v shellcheck > /dev/null || { echo "shellcheck not found (brew install shellcheck)"; exit 1; }
+	shellcheck install.sh scripts/*.sh
 
 # Not part of `check` yet: joins once the tree is clean.
 analyze:
@@ -64,8 +69,16 @@ app:
 	test -x $(APP)/Contents/MacOS/ntfy-mac
 	$(APP)/Contents/MacOS/ntfy-mac version
 
-legacy:
-	@if [ -d src ]; then bun run validate; fi
+# Builds, signs and packages the release assets into dist/. The version must already be stamped into the
+# tree (scripts/stamp-version.sh); package.sh refuses a CLI that reports another version.
+package:
+	@test -n "$(VERSION)" || { echo "usage: make package VERSION=x.y.z"; exit 1; }
+	$(MAKE) app
+	scripts/package.sh $(VERSION)
+
+# install.sh against a fake release: temp HOME and dirs, no app build, no launch.
+installer-check:
+	scripts/test-install.sh
 
 # Copies the ad-hoc-signed app to ~/Applications on the MacBook (ssh host $(MACBOOK)). Never launches it.
 install-macbook: app

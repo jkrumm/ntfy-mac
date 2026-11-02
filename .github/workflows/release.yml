@@ -2,17 +2,12 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: "Release type (leave blank for auto from commits)"
-        required: false
-        type: choice
-        default: ""
-        options: ["", patch, minor, major]
 
 jobs:
   release:
-    runs-on: macos-26 # required: bun cross-compile targets need macOS
+    runs-on: macos-26 # the app needs Xcode
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     permissions:
       contents: write
       issues: write
@@ -23,116 +18,93 @@ jobs:
       new_release_version: ${{ steps.release.outputs.new_release_version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # semantic-release needs full history
           token: ${{ secrets.RELEASE_TOKEN }} # PAT as jkrumm — bypasses branch protection ruleset
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - uses: actions/setup-node@v7
         with:
-          bun-version: 1.4.2
+          node-version: 24 # semantic-release 25 needs Node >= 22.14
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Install shellcheck
+        run: command -v shellcheck || brew install shellcheck
 
-      - name: Validate
-        run: bun run validate
+      - name: Check
+        run: make check
 
-      # cycjimmy/semantic-release-action wraps semantic-release and correctly
-      # exposes new_release_published + new_release_version as step outputs.
-      # Plain `bunx semantic-release` does NOT write to $GITHUB_OUTPUT.
-      # extra_plugins required: action does not auto-discover from package.json.
+      # The plugins in .releaserc.json run in order: exec stamps the version and builds, signs and packages
+      # dist/, github creates a draft release, uploads the assets and publishes it, git commits CHANGELOG.md.
+      # No skip_npm_plugin: it replaces the plugin list from .releaserc.json with three plugins.
+      # The action has no floating major tag, so pin the full version.
       - name: Release
         id: release
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@v8.1.4
         with:
+          semantic_version: 25.0.9
           extra_plugins: |
             @semantic-release/changelog@7.0.0
-            @semantic-release/git@11.0.1
+            @semantic-release/exec@7.1.0
             @semantic-release/github@12.0.10
-          extra_args: ${{ inputs.release_type != '' && format('--release-as {0}', inputs.release_type) || '' }}
+            @semantic-release/git@11.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }} # must be PAT, not default token — github-actions[bot] has no bypass rights
 
-  # Separated from the release job so that update-formula only runs after
-  # binaries are fully uploaded. A build failure won't orphan a released
-  # version without assets — the formula stays on the previous good version.
-  build-and-upload:
+  # Runs only after the release is published with its assets, so the formula never points at a missing file.
+  tap:
     needs: release
-    runs-on: macos-26
     if: needs.release.outputs.new_release_published == 'true'
+    runs-on: macos-26 # brew style needs Homebrew
     permissions:
-      contents: write
+      contents: read
 
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build binaries
-        env:
-          VERSION: ${{ needs.release.outputs.new_release_version }}
-        run: |
-          npm_package_version="${VERSION}" bun run build
-
-      - name: Upload release assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.release.outputs.new_release_version }}
-        run: |
-          gh release upload "v${VERSION}" \
-            dist/ntfy-mac \
-            dist/ntfy-notify.app.tar.gz
-
-  update-formula:
-    needs: [release, build-and-upload]
-    runs-on: ubuntu-latest
-    if: needs.release.outputs.new_release_published == 'true'
-    permissions:
-      contents: read # no longer needs write to own repo
-
-    steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: jkrumm/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
 
-      - name: Download release assets
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.new_release_version }}
+          path: source
+
+      - name: Download and verify the release tarball
         env:
-          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
-          gh release download "v${VERSION}" \
-            --repo jkrumm/ntfy-mac \
-            --pattern "ntfy-mac" \
-            --pattern "ntfy-notify.app.tar.gz" \
-            --dir dist/
+          gh release download "v${VERSION}" --repo jkrumm/ntfy-mac \
+            --pattern "ntfy-mac-${VERSION}-arm64.tar.gz" --pattern SHA256SUMS --dir dist
+          (cd dist && shasum -a 256 -c --ignore-missing --strict SHA256SUMS)
+          sha256="$(shasum -a 256 "dist/ntfy-mac-${VERSION}-arm64.tar.gz" | cut -d' ' -f1)"
+          echo "SHA256=${sha256}" >> "$GITHUB_ENV"
 
-      - name: Compute checksums
-        run: |
-          echo "SHA256_BIN=$(sha256sum dist/ntfy-mac | cut -d' ' -f1)" >> $GITHUB_ENV
-          echo "SHA256_HELPER=$(sha256sum dist/ntfy-notify.app.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
-
-      - name: Update formula
+      - name: Render the formula
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
-        run: |
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/ntfy-mac.rb
-          sed -i "s|/download/v[^/]*/ntfy-notify|/download/v${VERSION}/ntfy-notify|" Formula/ntfy-mac.rb
-          sed -i "s/sha256 \".*\" # ntfy-mac/sha256 \"${SHA256_BIN}\" # ntfy-mac/" Formula/ntfy-mac.rb
-          sed -i "s/sha256 \".*\" # ntfy-notify/sha256 \"${SHA256_HELPER}\" # ntfy-notify/" Formula/ntfy-mac.rb
+        run: source/scripts/render-formula.sh "${VERSION}" "${SHA256}" > tap/Formula/ntfy-mac.rb
 
-      - name: Commit and push
+      - name: Commit
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
+          cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/ntfy-mac.rb
+          git diff --cached --quiet && { echo "formula already up to date"; exit 0; }
           git commit -m "chore(ntfy-mac): update to v${VERSION}"
-          git push
+
+      # Taps the local checkout (with the new commit) so brew style applies the tap rules.
+      - name: Style
+        run: |
+          brew tap jkrumm/tap "${GITHUB_WORKSPACE}/tap"
+          brew style jkrumm/tap/ntfy-mac
+
+      - name: Push
+        run: git -C tap push
