@@ -1,0 +1,19 @@
+# Periphery 3.8.0, pinned by scripts/tools.sh. Run via `make analyze`.
+# Scans the SwiftPM package (all library targets, the CLI and the test targets).
+#
+# retain_public stays off (the default) on purpose: every module here is internal to this
+# repo, not a published library, so a `public` symbol nothing else uses is dead code.
+# Public API consumed only by the app target (App/, built through XcodeGen) is not visible
+# to a package scan and will be reported until an app scan joins in a later wave.
+strict: true
+retain_public: false
+retain_objc_accessible: false
+# The module boundary is `public`; the app target links these products but is not part of the
+# package scan, and tests use @testable. "Redundant public" would be noise until an app scan joins.
+disable_redundant_public_analysis: true
+disable_update_check: true
+# Swift 6.4 defaults to the swiftbuild engine, which writes no index store where Periphery looks.
+# The native engine does, and is what Swift 6.2 (CI) uses anyway.
+build_arguments:
+  - --build-system
+  - native

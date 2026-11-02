@@ -20,3 +20,5 @@ DerivedData
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+.tools/
+.swiftpm/

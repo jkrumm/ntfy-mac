@@ -1,0 +1,49 @@
+# SwiftLint 0.65.1, pinned by scripts/tools.sh. Run with --strict (warnings fail).
+# swift-format owns layout; SwiftLint owns correctness and complexity.
+
+included:
+  - Sources
+  - tests
+  - App/Sources
+  - Package.swift
+
+excluded:
+  - .build
+  - .tools
+  - node_modules
+  - App/NtfyMac.xcodeproj
+
+# Formatting rules that swift-format already enforces (derived from `swiftlint rules`,
+# kind "style" and enabled by default). Leaving them on would make the two tools fight
+# over the same lines.
+disabled_rules:
+  - attribute_name_spacing
+  - closing_brace
+  - colon
+  - comma
+  - control_statement
+  - function_name_whitespace
+  - leading_whitespace
+  - no_space_in_method_call
+  - opening_brace
+  - return_arrow_whitespace
+  - statement_position
+  - switch_case_alignment
+  - trailing_comma
+  - trailing_newline
+  - trailing_whitespace
+  - vertical_parameter_alignment
+  - vertical_whitespace
+  - void_return
+
+opt_in_rules:
+  - force_unwrapping
+  - force_try
+  - implicitly_unwrapped_optional
+  - cyclomatic_complexity
+  - function_body_length
+  - type_body_length
+  - file_length
+  - nesting
+  - fatal_error_message
+  - discouraged_optional_boolean

@@ -1,9 +1,13 @@
 APP := .build/xcode/Build/Products/Release/NtfyMac.app
 SWIFT_FILES := Sources tests App/Sources Package.swift
+TOOLS := scripts/tools.sh
+MACBOOK := iumac
+MACBOOK_APP := Applications/NtfyMac.app
+LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check toolchain fmt fmt-check build test app legacy
+.PHONY: check toolchain format lint-format lint analyze build test app legacy install-macbook
 
-check: fmt-check build test app legacy
+check: toolchain lint-format lint build test app legacy
 
 toolchain:
 	@xcodebuild -version | head -1
@@ -11,11 +15,18 @@ toolchain:
 	@swift --version 2>&1 | sed -nE 's/.*Swift version ([0-9]+)\.([0-9]+).*/\1 \2/p' | \
 		awk '{ if ($$1 < 6 || ($$1 == 6 && $$2 < 2)) { print "Swift >= 6.2 required"; exit 1 } }'
 
-fmt:
-	xcrun swift-format format --in-place -r $(SWIFT_FILES)
+format:
+	swift format --in-place -r $(SWIFT_FILES)
 
-fmt-check:
-	xcrun swift-format lint --strict -r $(SWIFT_FILES)
+lint-format:
+	swift format lint --strict -r $(SWIFT_FILES)
+
+lint:
+	"$$($(TOOLS) swiftlint)" lint --strict --no-cache
+
+# Not part of `check` yet: joins once the tree is clean.
+analyze:
+	"$$($(TOOLS) periphery)" scan
 
 build: toolchain
 	swift build
@@ -33,3 +44,12 @@ app: toolchain
 
 legacy:
 	@if [ -d src ]; then bun run validate; fi
+
+# Copies the ad-hoc-signed app to ~/Applications on the MacBook (ssh host $(MACBOOK)). Never launches it.
+install-macbook: app
+	ssh -o BatchMode=yes $(MACBOOK) 'mkdir -p ~/Applications'
+	rsync -a --delete -e 'ssh -o BatchMode=yes' $(APP)/ $(MACBOOK):$(MACBOOK_APP)/
+	ssh -o BatchMode=yes $(MACBOOK) '$(LSREGISTER) -f ~/$(MACBOOK_APP) && \
+		codesign --verify --deep --strict ~/$(MACBOOK_APP) && \
+		echo "installed: $$HOME/$(MACBOOK_APP)" && \
+		codesign -dv ~/$(MACBOOK_APP) 2>&1 | grep -E "^(Identifier|Signature|Format|CodeDirectory)"'

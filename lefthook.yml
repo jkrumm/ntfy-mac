@@ -1,3 +1,9 @@
+pre-commit:
+  commands:
+    swift-format:
+      glob: "*.swift"
+      run: swift format lint --strict {staged_files}
+
 commit-msg:
   commands:
     commitlint:
