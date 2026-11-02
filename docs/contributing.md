@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) (`brew install bun`)
+- [Bun](https://bun.sh) (`brew install bun`), still needed while the legacy 1.x code exists
+- Xcode with Swift ≥ 6.2 and XcodeGen (`brew install xcodegen`) for the 2.0 Swift rewrite
 - macOS (required for UserNotifications and the Swift helper)
 
 ## Setup
@@ -13,7 +14,16 @@ cd ntfy-mac
 bun install
 ```
 
-## Development
+## 2.0 (Swift)
+
+```bash
+make check   # swift-format lint, swift build, swift test, app build, legacy validate
+make fmt     # format Swift sources in place
+```
+
+See `AGENTS.md` for the layout and `docs/waves/PLAN.md` for the rewrite plan.
+
+## Development (1.x)
 
 ```bash
 bun src/index.ts setup     # Configure credentials interactively
