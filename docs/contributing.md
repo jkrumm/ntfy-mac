@@ -17,8 +17,9 @@ bun install
 ## 2.0 (Swift)
 
 ```bash
-make check   # swift-format lint, swift build, swift test, app build, legacy validate
-make fmt     # format Swift sources in place
+make check    # format lint, SwiftLint, build, test, app build, legacy validate
+make format   # format Swift sources in place
+make analyze  # Periphery dead-code scan
 ```
 
 See `AGENTS.md` for the layout and `docs/waves/PLAN.md` for the rewrite plan.

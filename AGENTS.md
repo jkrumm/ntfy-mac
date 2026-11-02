@@ -12,20 +12,34 @@ Native macOS client for ntfy servers. **1.x** (Bun/TypeScript daemon + Swift hel
 
 ## Layout
 
-| Path                                            | Purpose                                                                                                                      |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Package.swift`                                 | SwiftPM: `NtfyCore` library, `ntfy-mac` CLI (`NtfyMacCLI`), `NtfyCoreTests`                                                  |
-| `Sources/NtfyCore`, `Sources/NtfyMacCLI`        | Library and CLI                                                                                                              |
-| `tests/NtfyCoreTests`                           | Swift Testing suites (shares `tests/` with the legacy `*.test.ts`; lowercase on purpose, the filesystem is case-insensitive) |
-| `App/project.yml`                               | XcodeGen spec for the thin app target; `App/NtfyMac.xcodeproj` is generated, not committed                                   |
-| `scripts/sign.sh`                               | Code signing                                                                                                                 |
-| `src/`, `tests/*.ts`, `assets/`, `package.json` | Legacy 1.x. Reference for edge cases; deleted in the cutover wave only                                                       |
+Dependency direction is enforced in `Package.swift`. `NtfyCore` depends on nothing; every adapter sees the core and nothing else; executables are the only composition roots.
+
+| Path                                            | Purpose                                                                                                                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sources/NtfyCore`                              | Pure domain and policy, no I/O: messages, priority mapping, errors, and the ports (`Clock`, `MessageStream`, `SecretStore`, `NotificationPoster`, `HistoryStore`, `ConfigStore`) |
+| `Sources/NtfyClient`                            | HTTP and NDJSON stream adapter                                                                                                                                                   |
+| `Sources/NtfyStore`                             | History store adapter (GRDB arrives in Wave 3)                                                                                                                                   |
+| `Sources/NtfyPlatform`                          | UserNotifications, Keychain, SMAppService, wake and path monitors, `os.Logger` helper                                                                                            |
+| `Sources/NtfyIPC`                               | Versioned Codable socket protocol (NDJSON)                                                                                                                                       |
+| `Sources/NtfyTesting`                           | In-memory fakes for every port; linked by test targets only                                                                                                                      |
+| `Sources/NtfyMacCLI`                            | `ntfy-mac` CLI; typed errors map to exit codes only here (0 ok, 1 runtime, 2 usage, 3 auth, 4 app/permission unavailable, 7 server unreachable)                                  |
+| `App/`                                          | XcodeGen spec (`project.yml`) and SwiftUI app sources; `App/NtfyMac.xcodeproj` is generated, not committed                                                                       |
+| `tests/<Target>Tests`                           | Swift Testing suites (`tests/` is shared with the legacy `*.test.ts`; lowercase on purpose, the filesystem is case-insensitive)                                                  |
+| `scripts/tools.sh`                              | Pinned, SHA-256-verified tool binaries in `.tools/` (SwiftLint, Periphery, XcodeGen)                                                                                             |
+| `scripts/sign.sh`                               | Code signing, the single entry point                                                                                                                                             |
+| `src/`, `tests/*.ts`, `assets/`, `package.json` | Legacy 1.x. Reference for edge cases; deleted in the cutover wave only                                                                                                           |
+
+Rules: actors own mutable state (stream supervisor, delivery queue); no singletons or global state; one composition root each in the app and the CLI; logging via `os.Logger` (subsystem `com.jkrumm.ntfy-mac`, categories per area); tests go through module interfaces, not internals.
 
 ## Gate
 
-`make check` = `swift-format` lint (strict) + `swift build` + `swift test` + `xcodebuild` of the app scheme (signed, bundled CLI smoke-run) + `bun run validate` while `src/` exists. CI runs the same target on a pinned runner and Xcode. Toolchain: Swift ≥ 6.2 (the mini has Xcode 27.1 / Swift 6.4; hosted CI uses Xcode 26.6). `make fmt` formats in place.
+`make check` = `toolchain` + `lint-format` (`swift format lint --strict`) + `lint` (pinned SwiftLint `--strict`) + `build` (warnings are errors for our targets) + `test` (Swift Testing) + `app` (xcodebuild, ad-hoc sign, bundled CLI smoke-run) + `legacy` (`bun run validate` while `src/` exists). CI runs the same target on a pinned runner and Xcode. `make format` writes formatting; `make analyze` runs Periphery and joins the gate once the tree is clean; `make install-macbook` installs the signed build into `~/Applications` on the MacBook over `ssh iumac` (never launches it).
 
-Commits: Conventional Commits (commitlint via lefthook). Releases: semantic-release via the Release workflow; do not tag or publish by hand.
+Toolchain: Swift ≥ 6.2 (the mini has Xcode 27.1 / Swift 6.4; hosted CI uses Xcode 26.6). Tool versions are pinned and verified with `/research`; never use `brew` for the pinned tools.
+
+Human checks: never ask the owner to look at the mini's screen. Install on the MacBook (`make install-macbook`), batch the checks into one checklist per wave, and name the machine in every step.
+
+Commits: Conventional Commits (commitlint via lefthook; the pre-commit hook lints staged Swift). Releases: semantic-release via the Release workflow; do not tag or publish by hand.
 
 ## Compatibility contract (2.0 must keep, or migrate on first run)
 
