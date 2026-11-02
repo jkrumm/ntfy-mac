@@ -26,6 +26,12 @@ public final class AppModel {
   public private(set) var pausedUntil: Date?
   /// Nil until the first check.
   public private(set) var permission: NotificationPermission?
+  /// What the meeting detection reports, whatever the mode is. Follows `MeetingSource`.
+  public private(set) var detectedMeeting = MeetingState.inactive
+  /// The meeting mode as last read from the config.
+  public private(set) var meetingMode = MeetingMode.off
+  /// The end of the manual "I am presenting" override while it runs, nil when it is off.
+  public private(set) var presentingUntil: Date?
 
   @ObservationIgnored let source: any PipelineSource
   @ObservationIgnored let config: any ConfigStore
@@ -40,6 +46,7 @@ public final class AppModel {
   @ObservationIgnored private var tasks: [Task<Void, Never>] = []
   @ObservationIgnored private var pipelineTasks: [Task<Void, Never>] = []
   @ObservationIgnored private var expiry: Task<Void, Never>?
+  @ObservationIgnored private var presentingExpiry: Task<Void, Never>?
 
   public init(
     source: any PipelineSource, config: any ConfigStore,
@@ -76,6 +83,19 @@ public final class AppModel {
   /// Notifications are held back and the end is not a time but "until I resume".
   public var isPausedIndefinitely: Bool { pausedUntil.map(PauseWindow.isIndefinite) ?? false }
 
+  /// Notifications are held back because of a meeting: the override, or a detected meeting with
+  /// the mode on.
+  public var meetingActive: Bool { meetingReason != nil }
+
+  /// Why, nil when no meeting holds notifications back. The override wins.
+  public var meetingReason: MeetingReason? {
+    if isPresentingOverride { return .presenting }
+    return meetingMode == .pause ? detectedMeeting.reason : nil
+  }
+
+  /// The manual override is on.
+  public var isPresentingOverride: Bool { presentingUntil != nil }
+
   // MARK: Lifecycle
 
   /// Subscribes first, then attaches, so a rebuild during startup is not missed. Idempotent.
@@ -93,6 +113,12 @@ public final class AppModel {
       },
       Task { await refreshPermission() },
     ]
+    if let meetings = (source as? any MeetingSource)?.meetingState.changes() {
+      tasks.append(
+        Task {
+          for await state in meetings { detectedMeeting = state }
+        })
+    }
   }
 
   /// Stops following. The last values stay readable.
@@ -102,6 +128,8 @@ public final class AppModel {
     pipelineTasks = []
     expiry?.cancel()
     expiry = nil
+    presentingExpiry?.cancel()
+    presentingExpiry = nil
     lastRefresh = nil
   }
 
@@ -149,6 +177,7 @@ public final class AppModel {
     let until = await activePause()
     pausedUntil = until
     scheduleExpiry(of: until)
+    await readMeeting()
     guard let inbox = handles?.inbox else { return }
     do throws(NtfyError) {
       let rows = try await inbox.entries(HistoryQuery(limit: recentLimit))
@@ -186,6 +215,33 @@ public final class AppModel {
     guard let until, !PauseWindow.isIndefinite(until) else { return }
     let wait = max(until.timeIntervalSince(clock.now()), 0)
     expiry = Task {
+      do { try await clock.sleep(for: .seconds(wait)) } catch { return }
+      await refresh()
+    }
+  }
+}
+
+extension AppModel {
+  /// Re-reads the meeting mode and the override from the config, and arms the end of a timed
+  /// override.
+  func readMeeting() async {
+    do throws(NtfyError) {
+      let settings = try await config.load().meeting
+      meetingMode = settings.mode
+      let until = settings.presentingUntil.flatMap { $0 > clock.now() ? $0 : nil }
+      presentingUntil = until
+      schedulePresentingExpiry(of: until)
+    } catch {
+      log("config not read: \(error)")
+    }
+  }
+
+  private func schedulePresentingExpiry(of until: Date?) {
+    presentingExpiry?.cancel()
+    presentingExpiry = nil
+    guard let until, !PauseWindow.isIndefinite(until) else { return }
+    let wait = max(until.timeIntervalSince(clock.now()), 0)
+    presentingExpiry = Task {
       do { try await clock.sleep(for: .seconds(wait)) } catch { return }
       await refresh()
     }

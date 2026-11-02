@@ -12,6 +12,8 @@ struct AppServices: Sendable {
   let router: ResponseRouter
   let clock: SystemClock
   let windows: WindowRouter
+  /// The meeting detection, which runs only while the meeting mode is on.
+  let meeting: MeetingMonitor
 }
 
 /// Everything that runs for one resolved configuration: store, delivery, response handling and
@@ -47,7 +49,8 @@ final class AppPipeline: Sendable {
       log: { log.info("\($0, privacy: .private)") })
     let delivery = DeliveryService(
       poster: poster, history: store, inbox: store, config: services.config,
-      clock: services.clock, log: { log.info("\($0, privacy: .private)") })
+      clock: services.clock, meeting: services.meeting,
+      log: { log.info("\($0, privacy: .private)") })
 
     await delivery.start()
     await poster.restoreDeliveredCategories(inbox: store, config: services.config.load())
