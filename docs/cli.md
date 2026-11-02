@@ -53,7 +53,11 @@ Every command takes --json for machine-readable output on stdout.
 | setup-cancelled | 1 | The setup wizard was cancelled. |
 | logs-failed | 1 | The log tool failed. |
 | update-unsupported | 1 | This install cannot update itself. |
-| update-failed | 1 | The upgrade command failed. |
+| update-disabled | 1 | Self-update is turned off by NTFY_MAC_NO_SELF_UPDATE=1. |
+| update-not-writable | 1 | The folder that holds NtfyMac.app is not writable. |
+| update-invalid | 1 | The downloaded release failed verification; nothing was installed. |
+| checksum-mismatch | 1 | The download does not match the release's SHA256SUMS; nothing was installed. |
+| update-failed | 1 | The upgrade failed. |
 | error | 1 | Any other failure. |
 
 ## UI actions and their CLI equivalents
@@ -82,7 +86,7 @@ Everything the History window does to a message has a command. A test fails when
 | [`ntfy-mac notify`](#ntfy-mac-notify) | Send a local notification through the app (no server needed). |
 | [`ntfy-mac sounds`](#ntfy-mac-sounds) | Preview the notification sounds. |
 | [`ntfy-mac logs`](#ntfy-mac-logs) | Show the app's log from the unified log. |
-| [`ntfy-mac update`](#ntfy-mac-update) | Update ntfy-mac (Homebrew installs) or check for a newer release. |
+| [`ntfy-mac update`](#ntfy-mac-update) | Update ntfy-mac to the latest release (Homebrew or a verified in-place download). |
 | [`ntfy-mac uninstall`](#ntfy-mac-uninstall) | Remove ntfy-mac's config, history, state and token. |
 | [`ntfy-mac version`](#ntfy-mac-version) | Print the version. |
 | [`ntfy-mac start`](#ntfy-mac-start) | Start the ntfy-mac app if it is not running. |
@@ -677,7 +681,7 @@ ntfy-mac logs --error --follow
 
 ## `ntfy-mac update`
 
-Update ntfy-mac (Homebrew installs) or check for a newer release.
+Update ntfy-mac to the latest release (Homebrew or a verified in-place download).
 
 ```
 ntfy-mac update [--check]
@@ -692,7 +696,7 @@ ntfy-mac update [--check]
 
 - Does not use the app.
 
-**Error codes:** `usage`, `server-unreachable`, `update-failed`, `update-unsupported`. See [Error codes](#error-codes).
+**Error codes:** `usage`, `checksum-mismatch`, `server-unreachable`, `update-disabled`, `update-failed`, `update-invalid`, `update-not-writable`, `update-unsupported`. See [Error codes](#error-codes).
 
 **Examples**
 

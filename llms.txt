@@ -67,7 +67,7 @@ ntfy-mac wait --topic approvals --match '/^(yes|no)/i' --timeout 600 --json
 - [`ntfy-mac notify [--message <string>] [--title <string>] [--priority <integer>] [--tag <string>...] [--url <url>] [--dismiss-after <number>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-notify): Send a local notification through the app (no server needed).
 - [`ntfy-mac sounds [<filter>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-sounds): Preview the notification sounds.
 - [`ntfy-mac logs [--error] [--follow] [--last <duration>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-logs): Show the app's log from the unified log.
-- [`ntfy-mac update [--check]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-update): Update ntfy-mac (Homebrew installs) or check for a newer release.
+- [`ntfy-mac update [--check]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-update): Update ntfy-mac to the latest release (Homebrew or a verified in-place download).
 - [`ntfy-mac uninstall [--yes]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-uninstall): Remove ntfy-mac's config, history, state and token.
 - [`ntfy-mac version`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-version): Print the version.
 - [`ntfy-mac start`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-start): Start the ntfy-mac app if it is not running.

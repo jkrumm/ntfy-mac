@@ -23,21 +23,28 @@ final class ChunkedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendab
 
   private let handle: FileHandle
   private let limit: Int64
+  private let followRedirect: (@Sendable (URL) -> Bool)?
   private let state = Mutex(State())
   // Delegate queue only (serial).
   private var total: Int64 = 0
   private var failure: (any Error)?
 
-  private init(handle: FileHandle, limit: Int64) {
+  private init(
+    handle: FileHandle, limit: Int64, followRedirect: (@Sendable (URL) -> Bool)?
+  ) {
     self.handle = handle
     self.limit = limit
+    self.followRedirect = followRedirect
   }
 
+  /// Redirects are refused unless `followRedirect` accepts the target URL.
   static func run(
-    _ request: URLRequest, on session: URLSession, limit: Int64, into handle: FileHandle
+    _ request: URLRequest, on session: URLSession, limit: Int64, into handle: FileHandle,
+    followRedirect: (@Sendable (URL) -> Bool)? = nil
   ) async throws {
     try Task.checkCancellation()
-    let download = ChunkedDownload(handle: handle, limit: limit)
+    let download = ChunkedDownload(
+      handle: handle, limit: limit, followRedirect: followRedirect)
     let task = session.dataTask(with: request)
     task.delegate = download
     try await withTaskCancellationHandler {
@@ -99,7 +106,11 @@ final class ChunkedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendab
     willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
     completionHandler: @escaping @Sendable (URLRequest?) -> Void
   ) {
-    completionHandler(nil)
+    guard let target = request.url, followRedirect?(target) == true else {
+      completionHandler(nil)
+      return
+    }
+    completionHandler(request)
   }
 
   func urlSession(

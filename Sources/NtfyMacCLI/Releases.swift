@@ -1,22 +1,49 @@
 import Foundation
 import NtfyCore
 
+/// The newest published release: its tag and its assets' download URLs by file name.
+struct LatestRelease: Sendable, Equatable {
+  var tag: String
+  var assets: [String: URL] = [:]
+
+  /// The tag without its `v` (`2.1.0`).
+  var version: String { tag.hasPrefix("v") ? String(tag.dropFirst()) : tag }
+}
+
 /// The newest published release, from GitHub.
 protocol ReleaseLookup: Sendable {
+  func latest() async throws(NtfyError) -> LatestRelease
+}
+
+extension ReleaseLookup {
   /// The latest release tag, as published (`v2.1.0`).
-  func latestTag() async throws(NtfyError) -> String
+  func latestTag() async throws(NtfyError) -> String { try await latest().tag }
+}
+
+private struct ReleaseAsset: Decodable {
+  let name: String
+  let url: URL
+
+  private enum CodingKeys: String, CodingKey {
+    case name
+    case url = "browser_download_url"
+  }
 }
 
 private struct Release: Decodable {
   let tagName: String?
+  let assets: [ReleaseAsset]?
 
-  private enum CodingKeys: String, CodingKey { case tagName = "tag_name" }
+  private enum CodingKeys: String, CodingKey {
+    case tagName = "tag_name"
+    case assets
+  }
 }
 
 struct GitHubReleases: ReleaseLookup {
   static let endpoint = "https://api.github.com/repos/jkrumm/ntfy-mac/releases/latest"
 
-  func latestTag() async throws(NtfyError) -> String {
+  func latest() async throws(NtfyError) -> LatestRelease {
     guard let url = URL(string: Self.endpoint) else { throw .invalidResponse("bad release URL") }
     var request = URLRequest(url: url)
     request.timeoutInterval = 10
@@ -31,11 +58,14 @@ struct GitHubReleases: ReleaseLookup {
     guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
       throw .invalidResponse("GitHub answered \((response as? HTTPURLResponse)?.statusCode ?? 0)")
     }
-    guard let tag = try? JSONDecoder().decode(Release.self, from: data).tagName, !tag.isEmpty
+    guard let release = try? JSONDecoder().decode(Release.self, from: data),
+      let tag = release.tagName, !tag.isEmpty
     else {
       throw .invalidResponse("the latest release has no tag")
     }
-    return tag
+    let assets = (release.assets ?? []).map { ($0.name, $0.url) }
+    return LatestRelease(
+      tag: tag, assets: Dictionary(assets, uniquingKeysWith: { first, _ in first }))
   }
 }
 

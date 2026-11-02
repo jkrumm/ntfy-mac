@@ -28,6 +28,10 @@ extension CLIEnvironment {
       runUntilInterrupted: Interrupt.runUntilInterrupted,
       processes: SystemProcessRunner(),
       releases: GitHubReleases(),
+      update: SelfUpdatePorts(
+        assets: URLSessionReleaseAssetFetcher(), archive: TarArchive(),
+        signature: CodesignVerifier(), swapper: AtomicBundleSwapper(),
+        restarter: RunningAppRestarter(launch: AppLink.openWithLaunchServices)),
       legacy: .live(
         home: paths.home, stateDirectory: paths.stateDirectory,
         runningExecutable: AppBundle.executable()),

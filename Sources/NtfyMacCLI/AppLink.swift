@@ -120,7 +120,13 @@ enum AppBundle {
 
   /// The enclosing `.app`; nil when the executable does not live inside one.
   static func enclosing() -> URL? {
-    guard var url = executable() else { return nil }
+    guard let url = executable() else { return nil }
+    return enclosing(of: url)
+  }
+
+  /// The `.app` that contains `executable`; nil when there is none.
+  static func enclosing(of executable: URL) -> URL? {
+    var url = executable
     while url.path != "/" {
       if url.pathExtension == "app" { return url }
       url.deleteLastPathComponent()

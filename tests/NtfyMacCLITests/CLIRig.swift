@@ -1,6 +1,7 @@
 import Foundation
 import NtfyCore
 import NtfyIPC
+import NtfyPlatform
 import NtfyTesting
 import Synchronization
 
@@ -149,11 +150,12 @@ struct FakeHistory: HistoryOpening {
 
 struct FakeReleases: ReleaseLookup {
   var tag = "v2.0.0"
+  var assets: [String: URL] = [:]
   var failure: NtfyError?
 
-  func latestTag() async throws(NtfyError) -> String {
+  func latest() async throws(NtfyError) -> LatestRelease {
     if let failure { throw failure }
-    return tag
+    return LatestRelease(tag: tag, assets: assets)
   }
 }
 
@@ -197,8 +199,10 @@ struct CLIRig {
   var prompter = ScriptedPrompter()
   var terminal = Terminal(stdinIsTTY: false, stdoutIsTTY: false)
   var stdin = Data()
-  var executablePath = "/Applications/NtfyMac.app/Contents/MacOS/ntfy-mac"
+  var executablePath: String
   var variables: [String: String] = [:]
+  /// Replaces the self-updater's default fakes (nothing to download, nothing running).
+  var update: SelfUpdatePorts?
 
   init(
     configured: Bool = true, topics: [String] = ["alerts"], topicFailure: NtfyError? = nil,
@@ -210,6 +214,7 @@ struct CLIRig {
     self.app = app
     self.processes = processes
     store = InMemoryHistoryStore(clock: clock)
+    executablePath = scratch.file("Applications/NtfyMac.app/Contents/MacOS/ntfy-mac").path
     let sounds = scratch.file("sounds")
     for name in ["Ping.aiff", "Pop.aiff", "Sosumi.aiff", "Tink.aiff"] {
       try? scratch.write("", to: "sounds/\(name)")
@@ -227,6 +232,13 @@ struct CLIRig {
     return paths
   }
 
+  static var defaultUpdatePorts: SelfUpdatePorts {
+    SelfUpdatePorts(
+      assets: ScriptedAssetFetcher(assets: [:]), archive: TarArchive(),
+      signature: ScriptedCodeSignature(), swapper: AtomicBundleSwapper(),
+      restarter: RecordingAppRestarter(running: false, log: UpdateEventLog()))
+  }
+
   var environment: CLIEnvironment {
     let source = topics
     let input = stdin
@@ -237,6 +249,7 @@ struct CLIRig {
       topicSource: { _, _, _ in source }, publisher: { _, _, _ in publisher },
       history: FakeHistory(store: store, absent: historyAbsent), clock: clock,
       runUntilInterrupted: { try await $0() }, processes: processes, releases: releases,
+      update: update ?? Self.defaultUpdatePorts,
       legacy: LegacyInstallCleanup(
         layout: LegacyInstallLayout(
           home: scratch.url, uid: 501, stateDirectory: paths.stateDirectory,

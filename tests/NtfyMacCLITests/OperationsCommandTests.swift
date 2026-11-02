@@ -27,14 +27,6 @@ import Testing
     #expect(result.stderr.contains("brew upgrade failed"))
   }
 
-  @Test func anotherInstallGetsAnActionableError() async {
-    let rig = CLIRig()
-    let result = await rig.run("update")
-    #expect(result.exit == .runtime)
-    #expect(result.stderr.contains("Rerun the installer"))
-    #expect(await rig.processes.runs.isEmpty)
-  }
-
   @Test func checkReportsANewerRelease() async throws {
     var rig = CLIRig()
     rig.releases = FakeReleases(tag: "v9.0.0")
