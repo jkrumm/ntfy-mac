@@ -111,3 +111,32 @@ import Testing
     #expect(token["configKey"] == nil)
   }
 }
+
+/// The same contract for the History window: every action on a message has a command.
+@Suite struct UIActionParityTests {
+  @Test func everyActionHasExactlyOneEntry() {
+    let ids = UIActionCatalog.entries.map(\.id)
+    #expect(ids == UIActionID.allCases)
+  }
+
+  @Test func everyCommandResolvesAndEveryExampleParsesAndUsesIt() throws {
+    let document = try SchemaBuilder.build(root: NtfyMac.self)
+    let names = Set(document.commands.map(\.name))
+    for entry in UIActionCatalog.entries {
+      #expect(names.contains(entry.command), "\(entry.id): no command \(entry.command)")
+      let words = ExampleWords.split(entry.example)
+      #expect(words.prefix(2) == ["ntfy-mac", entry.command], "\(entry.id): \(entry.example)")
+      #expect(throws: Never.self, Comment(rawValue: entry.example)) {
+        _ = try NtfyMac.parseAsRoot(Array(words.dropFirst()))
+      }
+    }
+  }
+
+  @Test func theSchemaCarriesTheActions() async throws {
+    let document = try await CLIRig().run("schema", "--json").json()
+    let actions = try #require(document["uiActions"] as? [[String: Any]])
+    #expect(actions.compactMap { $0["id"] as? String } == UIActionID.allCases.map(\.rawValue))
+    let remind = try #require(actions.first { $0["id"] as? String == "remind" })
+    #expect(remind["command"] as? String == "remind")
+  }
+}

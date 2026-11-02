@@ -16,6 +16,8 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
   public let attachment: MessageAttachment?
   public let actions: [MessageAction]
   public let expires: Date?
+  /// The server's `content_type`; `text/markdown` marks a markdown body. Nil when not sent.
+  public let contentType: String?
 
   public init(
     id: String,
@@ -30,7 +32,8 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
     icon: URL? = nil,
     attachment: MessageAttachment? = nil,
     actions: [MessageAction] = [],
-    expires: Date? = nil
+    expires: Date? = nil,
+    contentType: String? = nil
   ) {
     self.id = id
     self.topic = topic
@@ -45,6 +48,14 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
     self.attachment = attachment
     self.actions = actions
     self.expires = expires
+    self.contentType = contentType
+  }
+
+  /// The body is markdown (`text/markdown`, parameters such as a charset ignored).
+  public var isMarkdown: Bool {
+    guard let contentType else { return false }
+    let media = contentType.split(separator: ";").first ?? ""
+    return media.trimmingCharacters(in: .whitespaces).lowercased() == "text/markdown"
   }
 
   /// Rows stored before a field existed still decode: every later addition is optional here.
@@ -63,5 +74,6 @@ public struct NtfyMessage: Sendable, Hashable, Codable, Identifiable {
     attachment = try container.decodeIfPresent(MessageAttachment.self, forKey: .attachment)
     actions = try container.decodeIfPresent([MessageAction].self, forKey: .actions) ?? []
     expires = try container.decodeIfPresent(Date.self, forKey: .expires)
+    contentType = try container.decodeIfPresent(String.self, forKey: .contentType)
   }
 }

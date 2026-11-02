@@ -24,7 +24,8 @@ struct HandlerRig {
     self.permission = InMemoryNotificationPermission(permission)
     service = DeliveryService(
       poster: poster, history: history, inbox: history, config: config, clock: clock)
-    let handles = PipelineHandles(store: history, delivery: service, supervisor: nil)
+    let handles = PipelineHandles(
+      store: history, delivery: service, supervisor: nil, attachments: StubAttachmentFetcher())
     handler = IPCRequestHandler(
       pipeline: { pipelineAvailable ? handles : nil }, config: config,
       permissions: self.permission, clock: clock, loginItem: InMemoryLoginItem())

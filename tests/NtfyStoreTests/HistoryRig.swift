@@ -57,10 +57,11 @@ struct HistoryRig {
   /// A message `offset` seconds after the clock's start.
   func message(
     _ id: String, topic: String = "alerts", at offset: TimeInterval = 0, title: String? = nil,
-    body: String = "body", priority: Priority = .default, sequenceID: String? = nil
+    body: String = "body", priority: Priority = .default, sequenceID: String? = nil,
+    contentType: String? = nil
   ) -> NtfyMessage {
     NtfyMessage(
       id: id, topic: topic, time: clock.now().addingTimeInterval(offset), title: title,
-      body: body, priority: priority, sequenceID: sequenceID)
+      body: body, priority: priority, sequenceID: sequenceID, contentType: contentType)
   }
 }

@@ -96,6 +96,20 @@ import Testing
     #expect(message.actions[2].kind == .unknown("future"))
   }
 
+  @Test func decodesTheContentTypeAndIgnoresAMalformedOne() throws {
+    let markdown = try #require(
+      try decodeMessage(
+        #"{"id":"a","time":1,"event":"message","topic":"t","content_type":"text/markdown"}"#))
+    #expect(markdown.contentType == "text/markdown")
+    #expect(markdown.isMarkdown)
+    let broken = try #require(
+      try decodeMessage(
+        #"{"id":"a","time":1,"event":"message","topic":"t","message":"hi","content_type":5}"#))
+    #expect(broken.body == "hi")
+    #expect(broken.contentType == nil)
+    #expect(!broken.isMarkdown)
+  }
+
   @Test func newFieldsDefaultWhenAbsent() throws {
     let message = try #require(
       try decodeMessage(#"{"id":"a","time":1,"event":"message","topic":"t"}"#))

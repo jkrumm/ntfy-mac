@@ -44,6 +44,7 @@ Every command takes --json for machine-readable output on stdout.
 | app-unavailable | 4 | The app is not running or not reachable. |
 | permission-denied | 4 | Notifications are not allowed. |
 | invalid-response | 1 | An answer that could not be read. |
+| app-outdated | 1 | The running app is older than the CLI and does not know the command. |
 | storage | 1 | Reading or writing local state failed. |
 | internal | 1 | The app failed while handling the request. |
 | topic-not-local | 1 | Only local topics can be removed. |
@@ -54,6 +55,20 @@ Every command takes --json for machine-readable output on stdout.
 | update-unsupported | 1 | This install cannot update itself. |
 | update-failed | 1 | The upgrade command failed. |
 | error | 1 | Any other failure. |
+
+## UI actions and their CLI equivalents
+
+Everything the History window does to a message has a command. A test fails when an action has no command here.
+
+| Action in the window | Command | Example | Notes |
+|-|-|-|-|
+| Acknowledge | `ntfy-mac ack` | `ntfy-mac ack alerts m1` | `--all --topic <topic>` acknowledges a whole topic. |
+| Mark read | `ntfy-mac read` | `ntfy-mac read alerts m1 --json` | Reading a message marks it read; `--no-mark` leaves it. Mark unread and mark all read have no command; `ack --all --topic <topic>` also marks a topic read, and acknowledges it. |
+| Remind me | `ntfy-mac remind` | `ntfy-mac remind alerts m1 --in 1h` | The window offers 15 minutes, 1 hour and tomorrow 08:00; `--until` takes any time. |
+| Delete | `ntfy-mac delete` | `ntfy-mac delete alerts m1` | `--topic <topic> --all` deletes every message of a topic. |
+| Open click URL | `ntfy-mac read` | `ntfy-mac read alerts m1 --no-mark --json` | Read only: the URL is the `click` field. The window opens http, https and mailto links only. |
+| Export (JSON or CSV) | `ntfy-mac ls` | `ntfy-mac ls --json --topic alerts --limit 1000` | The window's JSON export has the same fields as `ls --json`. |
+| Search and filter | `ntfy-mac search` | `ntfy-mac search deploy --topic builds --min-priority 4 --since 7d` | Topic, minimum priority, date and unread filters; `ls` takes the same without text. |
 
 ## Commands
 
@@ -76,6 +91,8 @@ Every command takes --json for machine-readable output on stdout.
 | [`ntfy-mac search`](#ntfy-mac-search) | Search the history by text, newest first. |
 | [`ntfy-mac read`](#ntfy-mac-read) | Show one message in full and mark it read. |
 | [`ntfy-mac ack`](#ntfy-mac-ack) | Acknowledge a message, or every unacknowledged one. |
+| [`ntfy-mac remind`](#ntfy-mac-remind) | Show a message again later. |
+| [`ntfy-mac delete`](#ntfy-mac-delete) | Delete a message, or every message of a topic. |
 | [`ntfy-mac tail`](#ntfy-mac-tail) | Print messages as NDJSON, optionally following new ones. |
 | [`ntfy-mac wait`](#ntfy-mac-wait) | Block until a matching message arrives. |
 | [`ntfy-mac publish`](#ntfy-mac-publish) | Publish a message to a topic on the ntfy server. |
@@ -918,6 +935,68 @@ Goes through the app (started if needed): it withdraws the notification and stop
 ```sh
 ntfy-mac ack alerts m1
 ntfy-mac ack --all --topic alerts
+```
+
+## `ntfy-mac remind`
+
+Show a message again later.
+
+```
+ntfy-mac remind <topic> <id> [--in <duration>] [--until <timestamp>]
+```
+
+Goes through the app (started if needed): the message is shown again as a notification when the time comes (the app checks every 30 seconds). Pass --in with a duration (s, m, h and d, alone or combined: 15m, 1h, 1h30m) or --until with an ISO 8601 time in the future. An unknown message exits 1 with the error code not-found.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `topic` | positional | string |  | yes | The topic. |
+| `id` | positional | string |  | yes | The message id. |
+| `--in` | option | duration |  | no | Remind after this long, like 15m, 1h or 1d. |
+| `--until` | option | timestamp |  | no | Remind at this ISO 8601 time. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+**Needs**
+
+- Starts the app when it is down.
+
+**Error codes:** `usage`, `app-unavailable`, `internal`, `not-found`, `permission-denied`. See [Error codes](#error-codes).
+
+**Examples**
+
+```sh
+ntfy-mac remind alerts m1 --in 1h
+ntfy-mac remind alerts m1 --until 2030-01-01T08:00:00Z
+```
+
+## `ntfy-mac delete`
+
+Delete a message, or every message of a topic.
+
+```
+ntfy-mac delete [<topic>] [<id>] [--all] [--topic <string>]
+```
+
+Goes through the app (started if needed): the message leaves the history, its notification and re-alerts stop, and it is never shown again. delete <topic> <id> removes one message and exits 1 with the error code not-found for an unknown one; delete --topic T --all removes the whole topic. There is no undo and no prompt. An app from before this command exists answers with the error code app-outdated.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `topic` | positional | string |  | no | The topic. |
+| `id` | positional | string |  | no | The message id. |
+| `--all` | flag | boolean | `false` | no | Delete every message of --topic. |
+| `--topic` | option | string |  | no | With --all: the topic to empty. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+**Needs**
+
+- Starts the app when it is down.
+
+**Error codes:** `usage`, `app-outdated`, `app-unavailable`, `internal`, `not-found`, `permission-denied`. See [Error codes](#error-codes).
+
+**Examples**
+
+```sh
+ntfy-mac delete alerts m1
+ntfy-mac delete --topic alerts --all
 ```
 
 ## `ntfy-mac tail`

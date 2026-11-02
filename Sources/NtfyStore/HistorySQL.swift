@@ -37,6 +37,25 @@ struct HistorySelect: Sendable {
     tail += " LIMIT \(max(limit, 0)) OFFSET \(max(offset, 0))"
   }
 
+  func count(_ database: Database) throws -> Int {
+    let sql =
+      "SELECT COUNT(*) FROM message m \(join) WHERE \(conditions.joined(separator: " AND "))"
+    return try Int.fetchOne(database, sql: sql, arguments: StatementArguments(arguments)) ?? 0
+  }
+
+  func topics(_ database: Database) throws -> [TopicSummary] {
+    let sql = """
+      SELECT m.topic AS topic, COUNT(*) AS total, SUM(m.read_at IS NULL) AS unread,
+        MAX(m.time) AS newest
+      FROM message m \(join) WHERE \(conditions.joined(separator: " AND "))
+      GROUP BY m.topic ORDER BY newest DESC, m.topic ASC
+      """
+    return try Row.fetchAll(database, sql: sql, arguments: StatementArguments(arguments)).map {
+      TopicSummary(
+        topic: $0["topic"], total: $0["total"], unread: $0["unread"], newest: $0["newest"])
+    }
+  }
+
   func fetch(_ database: Database) throws -> [MessageRecord] {
     let sql =
       "SELECT m.* FROM message m \(join) WHERE \(conditions.joined(separator: " AND ")) \(tail)"
@@ -46,7 +65,7 @@ struct HistorySelect: Sendable {
 
 extension HistoryQuery {
   /// The select for these filters, or `nil` when the text yields no searchable word.
-  func select(server: String) -> HistorySelect? {
+  func select(server: String, paged: Bool = true) -> HistorySelect? {
     var select = HistorySelect(server: server)
     if let topic { select.and("m.topic = ?", topic) }
     if unreadOnly { select.and("m.read_at IS NULL") }
@@ -56,7 +75,7 @@ extension HistoryQuery {
       guard let pattern = FTS5Pattern(matchingAllPrefixesIn: text) else { return nil }
       select.matching(pattern)
     }
-    select.ordered("m.time DESC, m.pk DESC", limit: limit, offset: offset)
+    if paged { select.ordered("m.time DESC, m.pk DESC", limit: limit, offset: offset) }
     return select
   }
 }

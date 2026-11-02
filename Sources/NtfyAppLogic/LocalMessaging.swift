@@ -42,6 +42,17 @@ public struct LocalMessaging: Sendable {
     try await history.snooze(topic: topic, id: id, until: until)
     return true
   }
+
+  /// Removes the message (its whole sequence) from the history and its notification from the
+  /// screen. False when the history does not know the message.
+  public func delete(topic: String, id: String) async -> Bool {
+    await delivery.delete(topic: topic, id: id)
+  }
+
+  /// Removes every message of the topic the same way; returns how many went.
+  public func deleteAll(topic: String) async -> Int {
+    await delivery.deleteAll(topic: topic)
+  }
 }
 
 /// What a running pipeline offers the socket handler and the UI.
@@ -53,16 +64,19 @@ public struct PipelineHandles: Sendable {
   public let delivery: DeliveryService
   /// Nil in the local pipeline, which has no stream.
   public let supervisor: StreamSupervisor?
+  /// Downloads attachments for the History window's preview.
+  public let attachments: any AttachmentFetching
 
   public init(
     store: any HistoryStore & HistoryInbox & HistoryObserving, delivery: DeliveryService,
-    supervisor: StreamSupervisor?
+    supervisor: StreamSupervisor?, attachments: any AttachmentFetching
   ) {
     messages = LocalMessaging(history: store, delivery: delivery)
     inbox = store
     changes = store
     self.delivery = delivery
     self.supervisor = supervisor
+    self.attachments = attachments
   }
 }
 

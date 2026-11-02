@@ -110,6 +110,8 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 | `ntfy-mac search`      | Search the history by text, newest first.                         |
 | `ntfy-mac read`        | Show one message in full and mark it read.                        |
 | `ntfy-mac ack`         | Acknowledge a message, or every unacknowledged one.               |
+| `ntfy-mac remind`      | Show a message again later.                                       |
+| `ntfy-mac delete`      | Delete a message, or every message of a topic.                    |
 | `ntfy-mac tail`        | Print messages as NDJSON, optionally following new ones.          |
 | `ntfy-mac wait`        | Block until a matching message arrives.                           |
 | `ntfy-mac publish`     | Publish a message to a topic on the ntfy server.                  |

@@ -55,3 +55,10 @@ final class ProcessActivity: @unchecked Sendable {
 struct NoImageFetcher: ImageFetching {
   func fetch(_ url: URL) async -> URL? { nil }
 }
+
+/// Fetches nothing: the local pipeline has no server to fetch from.
+struct NoAttachmentFetcher: AttachmentFetching {
+  func fetch(_ attachment: MessageAttachment) async throws(NtfyError) -> URL {
+    throw .invalidResponse("There is no server to download attachments from.")
+  }
+}

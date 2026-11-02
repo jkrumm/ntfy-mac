@@ -28,6 +28,7 @@ struct PipelineFixture {
   let delivery: DeliveryService
   let stream = ManualMessageStream()
   let supervisor: StreamSupervisor?
+  let attachments = StubAttachmentFetcher()
   let handles: PipelineHandles
 
   init(withServer: Bool = false, config initial: Config = Config()) {
@@ -46,7 +47,8 @@ struct PipelineFixture {
     } else {
       supervisor = nil
     }
-    handles = PipelineHandles(store: history, delivery: delivery, supervisor: supervisor)
+    handles = PipelineHandles(
+      store: history, delivery: delivery, supervisor: supervisor, attachments: attachments)
   }
 
   func message(

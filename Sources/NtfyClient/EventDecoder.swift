@@ -16,10 +16,12 @@ private struct WireEvent: Decodable {
   let attachment: Lenient<WireAttachment>?
   let actions: Lenient<[Lenient<WireAction>]>?
   let expires: Lenient<TimeInterval>?
+  let contentType: Lenient<String>?
 
   private enum CodingKeys: String, CodingKey {
     case id, time, event, topic, message, title, priority, tags, click, icon
     case attachment, actions, expires
+    case contentType = "content_type"
     case sequenceID = "sequence_id"
   }
 }
@@ -65,7 +67,8 @@ public enum EventDecoder {
       icon: event.icon?.value,
       attachment: event.attachment?.value?.model,
       actions: (event.actions?.value ?? []).compactMap { $0.value?.model },
-      expires: event.expires?.value.map { Date(timeIntervalSince1970: $0) }
+      expires: event.expires?.value.map { Date(timeIntervalSince1970: $0) },
+      contentType: event.contentType?.value
     )
   }
 }

@@ -150,6 +150,16 @@ extension CommandSpec {
       "ack", app: .launches, errors: appErrors,
       examples: ["ntfy-mac ack alerts m1", "ntfy-mac ack --all --topic alerts"]),
     CommandSpec(
+      "remind", app: .launches, errors: appErrors,
+      domains: ["--in": .duration, "--until": .timestamp],
+      examples: [
+        "ntfy-mac remind alerts m1 --in 1h",
+        "ntfy-mac remind alerts m1 --until 2030-01-01T08:00:00Z",
+      ]),
+    CommandSpec(
+      "delete", app: .launches, errors: appErrors + ["app-outdated"],
+      examples: ["ntfy-mac delete alerts m1", "ntfy-mac delete --topic alerts --all"]),
+    CommandSpec(
       "tail", files: true, errors: history, domains: filters,
       examples: [
         "ntfy-mac tail --topic alerts --since 1h --limit 10",
@@ -220,6 +230,9 @@ enum ErrorCatalog {
       code: "app-unavailable", exitCode: 4, meaning: "The app is not running or not reachable."),
     Entry(code: "permission-denied", exitCode: 4, meaning: "Notifications are not allowed."),
     Entry(code: "invalid-response", exitCode: 1, meaning: "An answer that could not be read."),
+    Entry(
+      code: "app-outdated", exitCode: 1,
+      meaning: "The running app is older than the CLI and does not know the command."),
     Entry(code: "storage", exitCode: 1, meaning: "Reading or writing local state failed."),
     Entry(code: "internal", exitCode: 1, meaning: "The app failed while handling the request."),
     Entry(code: "topic-not-local", exitCode: 1, meaning: "Only local topics can be removed."),

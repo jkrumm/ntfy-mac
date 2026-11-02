@@ -134,3 +134,29 @@ public struct StubHostResolver: HostResolving {
     table[host.lowercased()] ?? table["*"]
   }
 }
+
+/// Hands out a fixed file (or a failure) for every attachment; `hold()` keeps a fetch pending
+/// until `release()`, and a cancelled fetch fails.
+public actor StubAttachmentFetcher: AttachmentFetching {
+  public private(set) var requested: [MessageAttachment] = []
+  private var outcome: Result<URL, NtfyError>
+  private var isHeld = false
+
+  public init(file: URL? = nil, failure: NtfyError? = nil) {
+    outcome = failure.map { .failure($0) } ?? .success(file ?? URL(fileURLWithPath: "/tmp/stub"))
+  }
+
+  public func set(file: URL) { outcome = .success(file) }
+  public func set(failure: NtfyError) { outcome = .failure(failure) }
+  public func hold() { isHeld = true }
+  public func release() { isHeld = false }
+
+  public func fetch(_ attachment: MessageAttachment) async throws(NtfyError) -> URL {
+    requested.append(attachment)
+    while isHeld {
+      try? await Task.sleep(for: .milliseconds(1))
+      if Task.isCancelled { throw .serverUnreachable }
+    }
+    return try outcome.get()
+  }
+}

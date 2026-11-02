@@ -25,6 +25,8 @@ import Testing
       Request(id: "7", command: .remind, remind: RemindPayload(topic: "t", id: "m", until: until)),
       Request(id: "8", command: .ackAll, ackAll: AckAllPayload(topic: "t")),
       Request(id: "9", command: .loginItem, loginItem: LoginItemPayload(action: .enable)),
+      Request(id: "10", command: .delete, delete: DeletePayload(topic: "t", id: "m")),
+      Request(id: "11", command: .delete, delete: DeletePayload(topic: "t")),
     ]
     #expect(Set(requests.map(\.command)) == Set(Command.allCases))
     for request in requests { #expect(try roundTrip(request) == request) }
@@ -39,7 +41,8 @@ import Testing
       id: "1",
       result: ResultPayload(
         status: status, notify: NotifyResult(posted: true), permission: permission,
-        ackAll: AckAllResult(acknowledged: 3), loginItem: LoginItemResult(state: "enabled"))
+        ackAll: AckAllResult(acknowledged: 3), loginItem: LoginItemResult(state: "enabled"),
+        delete: DeleteResult(deleted: 2))
     )
     #expect(try roundTrip(success) == success)
     let failed = Response.failure(id: "2", code: .permissionDenied, message: "no")
@@ -54,6 +57,14 @@ import Testing
         .utf8)
     let response = try NDJSON.decode(Response.self, from: line)
     #expect(response.code == ErrorCode(rawValue: "from-the-future"))
+  }
+
+  @Test func requestsFromBeforeDeleteExistedStillDecode() throws {
+    let line = Data(
+      #"{"command":"ack","id":"1","protocolVersion":1,"ack":{"topic":"t","id":"m"}}"#.utf8)
+    let request = try NDJSON.decode(Request.self, from: line)
+    #expect(request.delete == nil)
+    #expect(request.ack == MessageTarget(topic: "t", id: "m"))
   }
 
   @Test func notifyNeedsOnlyABody() throws {

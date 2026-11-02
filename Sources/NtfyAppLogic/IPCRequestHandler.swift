@@ -40,6 +40,7 @@ public struct IPCRequestHandler: Sendable {
     case .notify: return await notify(request)
     case .ack: return await ack(request)
     case .remind: return await remind(request)
+    case .delete: return await delete(request)
     case .ackAll: return await ackAll(request)
     case .loginItem: return loginItemResponse(request)
     }
@@ -136,6 +137,19 @@ public struct IPCRequestHandler: Sendable {
     } catch {
       return internalError(request, "remind", error)
     }
+  }
+
+  private func delete(_ request: Request) async -> Response {
+    guard let target = request.delete else { return badRequest(request, "delete needs a topic") }
+    guard let messages = await pipeline()?.messages else { return unavailable(request) }
+    guard let id = target.id else {
+      let count = await messages.deleteAll(topic: target.topic)
+      return .success(id: request.id, result: ResultPayload(delete: DeleteResult(deleted: count)))
+    }
+    guard await messages.delete(topic: target.topic, id: id) else {
+      return notFound(request, target.topic, id)
+    }
+    return .success(id: request.id, result: ResultPayload(delete: DeleteResult(deleted: 1)))
   }
 
   /// Reads the registration, or changes it first when the request says so.

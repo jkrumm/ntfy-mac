@@ -1,5 +1,4 @@
-#!/usr/bin/env swift  // Generates docs/cli.md, docs/settings.md and llms.txt from the CLI's own command tree.
-// Run: ntfy-mac schema --json | swift scripts/generate-cli-docs.swift [--out <dir>]
+#!/usr/bin/env swift  // Generates docs/cli.md, docs/settings.md and llms.txt from the CLI's own command tree.  // Run: ntfy-mac schema --json | swift scripts/generate-cli-docs.swift [--out <dir>]
 //      swift scripts/generate-cli-docs.swift <schema.json> [--out <dir>]
 // Without --out the files go to the repo root. `make docs` and `make docs-check` wrap this.
 // The output is deterministic and carries no version, so a release does not dirty the docs.
@@ -43,6 +42,7 @@ guard let root = try? JSONSerialization.jsonObject(with: input) as? JSON,
   let exitCodes = root["exitCodes"] as? [JSON],
   let errorCodes = root["errorCodes"] as? [JSON],
   let settings = root["settings"] as? [JSON],
+  let uiActions = root["uiActions"] as? [JSON],
   let schemaVersion = root["schemaVersion"] as? Int
 else { fail("input is not an ntfy-mac schema document") }
 guard schemaVersion == 3 else { fail("schemaVersion \(schemaVersion) is not supported (3)") }
@@ -215,6 +215,19 @@ doc += ["", "## Error codes", ""]
 doc += table(
   ["Code", "Exit", "Meaning"],
   errorCodes.map { [text($0, "code"), String($0["exitCode"] as? Int ?? -1), text($0, "meaning")] })
+doc += [
+  "", "## UI actions and their CLI equivalents", "",
+  "Everything the History window does to a message has a command. A test fails when an action has no command here.",
+  "",
+]
+doc += table(
+  ["Action in the window", "Command", "Example", "Notes"],
+  uiActions.map {
+    [
+      text($0, "label"), "`ntfy-mac \(text($0, "command"))`", "`\(text($0, "example"))`",
+      text($0, "note"),
+    ]
+  })
 doc += ["", "## Commands", ""]
 doc += table(
   ["Command", "Description"],

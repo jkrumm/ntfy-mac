@@ -32,3 +32,21 @@ struct SettingSchema: Encodable, Sendable {
     note = entry.note
   }
 }
+
+/// One row of `UIActionCatalog` as `schema --json` prints it.
+struct UIActionSchema: Encodable, Sendable {
+  let id: String
+  let label: String
+  /// The command path without the program name.
+  let command: String
+  let example: String
+  let note: String?
+
+  init(_ entry: UIActionEntry) {
+    id = entry.id.rawValue
+    label = entry.label
+    command = entry.command
+    example = entry.example
+    note = entry.note
+  }
+}

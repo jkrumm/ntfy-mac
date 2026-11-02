@@ -19,6 +19,23 @@ import Testing
     #expect(message.expires == nil)
   }
 
+  @Test func rowsStoredBeforeTheContentTypeExistedAreNotMarkdown() throws {
+    let old = #"{"id":"a","topic":"t","time":1,"body":"title","priority":3}"#
+    let message = try JSONDecoder().decode(NtfyMessage.self, from: Data(old.utf8))
+    #expect(message.contentType == nil)
+    #expect(!message.isMarkdown)
+  }
+
+  @Test(arguments: [
+    ("text/markdown", true), ("text/markdown; charset=utf-8", true), (" Text/Markdown ", true),
+    ("text/plain", false), ("text/markdownish", false), ("", false),
+  ])
+  func onlyTheMarkdownMediaTypeIsMarkdown(_ type: String, _ expected: Bool) {
+    let message = NtfyMessage(
+      id: "a", topic: "t", time: Date(timeIntervalSince1970: 1), body: "", contentType: type)
+    #expect(message.isMarkdown == expected)
+  }
+
   @Test func minimalRowDecodesWithDefaults() throws {
     let minimal = #"{"id":"a","topic":"t","time":1,"body":""}"#
     let message = try JSONDecoder().decode(NtfyMessage.self, from: Data(minimal.utf8))
@@ -40,7 +57,7 @@ import Testing
           headers: ["X": "1"], body: "b", clear: true),
         MessageAction(kind: .unknown("future"), label: "F"),
       ],
-      expires: Date(timeIntervalSince1970: 1_700_001_000))
+      expires: Date(timeIntervalSince1970: 1_700_001_000), contentType: "text/markdown")
     let data = try JSONEncoder().encode(message)
     #expect(try JSONDecoder().decode(NtfyMessage.self, from: data) == message)
   }

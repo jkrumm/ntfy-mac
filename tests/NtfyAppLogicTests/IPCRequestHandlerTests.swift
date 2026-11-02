@@ -74,6 +74,46 @@ import Testing
     #expect(all.result?.ackAll?.acknowledged == 1)
   }
 
+  @Test func deleteRemovesOneMessageAndItsNotification() async {
+    let rig = HandlerRig()
+    _ = await rig.notify(NotifyPayload(body: "one"))
+    _ = await rig.notify(NotifyPayload(body: "two"))
+    #expect(await rig.waitForPosts(1))
+    let stored = await rig.history.recent(limit: 5)
+    let first = stored[0]
+    let response = await rig.send(
+      Request(id: "1", command: .delete, delete: DeletePayload(topic: first.topic, id: first.id)))
+    #expect(response.status == .success)
+    #expect(response.result?.delete?.deleted == 1)
+    #expect(await rig.history.recent(limit: 5).map(\.id) == [stored[1].id])
+    let again = await rig.send(
+      Request(id: "2", command: .delete, delete: DeletePayload(topic: first.topic, id: first.id)))
+    #expect(again.code == .notFound)
+  }
+
+  @Test func deleteWithoutAnIdClearsTheTopic() async {
+    let rig = HandlerRig()
+    _ = await rig.notify(NotifyPayload(body: "one"))
+    _ = await rig.notify(NotifyPayload(body: "two"))
+    let response = await rig.send(
+      Request(id: "1", command: .delete, delete: DeletePayload(topic: IPCRequestHandler.localTopic))
+    )
+    #expect(response.result?.delete?.deleted == 2)
+    #expect(await rig.history.recent(limit: 5).isEmpty)
+    let empty = await rig.send(
+      Request(id: "2", command: .delete, delete: DeletePayload(topic: "nothing")))
+    #expect(empty.status == .success)
+    #expect(empty.result?.delete?.deleted == 0)
+  }
+
+  @Test func deleteNeedsATargetAndAPipeline() async {
+    #expect(await HandlerRig().send(Request(id: "1", command: .delete)).code == .badRequest)
+    let rig = HandlerRig(pipelineAvailable: false)
+    let response = await rig.send(
+      Request(id: "1", command: .delete, delete: DeletePayload(topic: "local", id: "x")))
+    #expect(response.code == .appUnavailable)
+  }
+
   @Test func noPipelineIsAppUnavailable() async {
     let rig = HandlerRig(pipelineAvailable: false)
     #expect(await rig.notify(NotifyPayload(body: "x")).code == .appUnavailable)

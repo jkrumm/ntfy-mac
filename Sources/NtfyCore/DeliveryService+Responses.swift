@@ -39,6 +39,29 @@ extension DeliveryService {
     await poster.remove(identifiers: [identifier])
   }
 
+  /// The user deleted the message (its whole sequence) from the history: the rows are hidden and
+  /// its notification, timers and re-alerts are gone. `false` when the history does not know it.
+  public func delete(topic: String, id: String) async -> Bool {
+    guard let stored = try? await inbox.message(topic: topic, id: id) else { return false }
+    await withdraw(topic: topic, sequenceID: stored.message.sequenceID ?? stored.message.id)
+    return true
+  }
+
+  /// Deletes every message of the topic the way `delete` does one; returns how many went.
+  public func deleteAll(topic: String) async -> Int {
+    var sequences: [String] = []
+    var offset = 0
+    while let page = try? await inbox.entries(
+      HistoryQuery(topic: topic, limit: Self.reconcileLimit, offset: offset)), !page.isEmpty
+    {
+      sequences += page.map { $0.message.sequenceID ?? $0.message.id }
+      offset += page.count
+      if page.count < Self.reconcileLimit { break }
+    }
+    for sequence in sequences { await withdraw(topic: topic, sequenceID: sequence) }
+    return sequences.count
+  }
+
   // MARK: Helpers
 
   /// Drops everything pending for one message: queued posts, timers, a post in flight.

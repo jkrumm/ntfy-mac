@@ -153,6 +153,25 @@ extension InMemoryHistoryStore {
     visible().map(\.stored).first { $0.message.topic == topic && $0.message.id == id }
   }
 
+  public func count(_ query: HistoryQuery) -> Int {
+    let words = SearchWords(query.text)
+    guard words.isSearchable else { return 0 }
+    return visible().map(\.stored).filter { query.accepts($0) && words.match($0.message) }.count
+  }
+
+  public func topics() -> [TopicSummary] {
+    let grouped = Dictionary(grouping: visible().map(\.stored), by: { $0.message.topic })
+    return grouped.map { topic, entries in
+      TopicSummary(
+        topic: topic, total: entries.count, unread: entries.filter { !$0.isRead }.count,
+        newest: entries.map(\.message.time).max() ?? .distantPast)
+    }.sorted { ($1.newest, $0.topic) < ($0.newest, $1.topic) }
+  }
+
+  public func markUnread(topic: String, id: String) {
+    change(topic: topic, id: id) { $0.readAt = nil }
+  }
+
   public func markRead(topic: String, id: String) {
     let now = clock.now()
     change(topic: topic, id: id) { $0.readAt = $0.readAt ?? now }

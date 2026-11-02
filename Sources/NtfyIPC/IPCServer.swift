@@ -239,7 +239,7 @@ public final class IPCServer: Sendable {
         id: "", code: .unsupportedVersion,
         message: "protocol version \(version) is not supported (expected \(IPC.protocolVersion))")
     case .malformedFrame:
-      .failure(id: "", code: .badRequest, message: "request is not a valid frame")
+      .failure(id: "", code: .badRequest, message: IPC.invalidFrameMessage)
     case .frameTooLarge:
       .failure(id: "", code: .badRequest, message: "request is too large")
     default:

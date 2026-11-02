@@ -16,6 +16,20 @@ extension SQLiteHistoryStore: HistoryInbox {
     return try await fetchStored(select).first
   }
 
+  public func count(_ query: HistoryQuery) async throws(NtfyError) -> Int {
+    guard let select = query.select(server: server, paged: false) else { return 0 }
+    return try await read { try select.count($0) }
+  }
+
+  public func topics() async throws(NtfyError) -> [TopicSummary] {
+    let select = HistorySelect(server: server)
+    return try await read { try select.topics($0) }
+  }
+
+  public func markUnread(topic: String, id: String) async throws(NtfyError) {
+    try await update("read_at = NULL", where: "topic = ? AND id = ?", [topic, id])
+  }
+
   public func markRead(topic: String, id: String) async throws(NtfyError) {
     let now = clock.now()
     try await update(

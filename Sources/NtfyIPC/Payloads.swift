@@ -37,6 +37,24 @@ public struct AckAllResult: Codable, Sendable, Hashable {
   public init(acknowledged: Int) { self.acknowledged = acknowledged }
 }
 
+public struct DeletePayload: Codable, Sendable, Hashable {
+  public let topic: String
+  /// The message to delete; nil deletes every message of the topic.
+  public let id: String?
+
+  public init(topic: String, id: String? = nil) {
+    self.topic = topic
+    self.id = id
+  }
+}
+
+public struct DeleteResult: Codable, Sendable, Hashable {
+  /// How many messages were deleted.
+  public let deleted: Int
+
+  public init(deleted: Int) { self.deleted = deleted }
+}
+
 public struct LoginItemPayload: Codable, Sendable, Hashable {
   public enum Action: String, Codable, Sendable {
     /// Only read the state.
@@ -151,15 +169,17 @@ public struct ResultPayload: Codable, Sendable, Hashable {
   public let permission: PermissionSummary?
   public let ackAll: AckAllResult?
   public let loginItem: LoginItemResult?
+  public let delete: DeleteResult?
 
   public init(
     status: StatusResult? = nil, notify: NotifyResult? = nil, permission: PermissionSummary? = nil,
-    ackAll: AckAllResult? = nil, loginItem: LoginItemResult? = nil
+    ackAll: AckAllResult? = nil, loginItem: LoginItemResult? = nil, delete: DeleteResult? = nil
   ) {
     self.status = status
     self.notify = notify
     self.permission = permission
     self.ackAll = ackAll
     self.loginItem = loginItem
+    self.delete = delete
   }
 }

@@ -48,6 +48,25 @@ public struct HistoryQuery: Sendable, Hashable {
   }
 }
 
+/// One topic as the sidebar of the History window shows it.
+public struct TopicSummary: Sendable, Hashable, Identifiable {
+  public let topic: String
+  /// Visible messages (not withdrawn, newest of their sequence).
+  public let total: Int
+  public let unread: Int
+  /// Time of the newest message.
+  public let newest: Date
+
+  public var id: String { topic }
+
+  public init(topic: String, total: Int, unread: Int, newest: Date) {
+    self.topic = topic
+    self.total = total
+    self.unread = unread
+    self.newest = newest
+  }
+}
+
 /// How much history is kept: the newest `maxPerTopic` rows per topic, none older than `maxAge`.
 public struct RetentionPolicy: Sendable, Hashable {
   public var maxPerTopic: Int

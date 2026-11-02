@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let onboarding = OnboardingState(defaults: .standard)
   let windows = WindowRouter()
   let model: AppModel
+  /// The History window's model; the window starts and stops it.
+  let historyModel: HistoryModel
   let coordinator: WindowCoordinator
 
   override init() {
@@ -29,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       source: controller, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
       clock: services.clock, configChanges: { ConfigWatcher().changes() },
+      log: { Log.logger(.interface).info("\($0, privacy: .private)") })
+    historyModel = HistoryModel(
+      source: controller, opener: WorkspaceLinkOpener(), clock: services.clock,
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
     let onboarding = onboarding
     coordinator = WindowCoordinator { window in

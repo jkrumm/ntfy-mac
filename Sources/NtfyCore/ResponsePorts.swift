@@ -32,6 +32,13 @@ public protocol ImageFetching: Sendable {
   func fetch(_ url: URL) async -> URL?
 }
 
+/// Downloads a message's attachment so the History window can preview it.
+public protocol AttachmentFetching: Sendable {
+  /// A local file holding the attachment. Fails with an `NtfyError` the window can show; the
+  /// caller cancels by cancelling its task.
+  func fetch(_ attachment: MessageAttachment) async throws(NtfyError) -> URL
+}
+
 /// Turns a host name into the numeric addresses it points to.
 ///
 /// Known residual: the answer can change between this check and the connection that follows

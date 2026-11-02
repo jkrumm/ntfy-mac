@@ -56,6 +56,8 @@ struct SchemaDocument: Encodable, Sendable {
   let commands: [CommandSchema]
   /// Every setting the UI exposes and the command that sets it (`SettingsCatalog`).
   let settings: [SettingSchema]
+  /// What the History window does to a message and the command that does the same.
+  let uiActions: [UIActionSchema]
 
   struct ExitCodeEntry: Encodable, Sendable {
     let code: Int32
@@ -82,7 +84,8 @@ enum SchemaBuilder {
           code: $0.rawValue, name: "\($0)", meaning: ErrorCatalog.exitMeanings[$0] ?? "")
       },
       errorCodes: ErrorCatalog.errors, commands: commands,
-      settings: SettingsCatalog.entries.map(SettingSchema.init))
+      settings: SettingsCatalog.entries.map(SettingSchema.init),
+      uiActions: UIActionCatalog.entries.map(UIActionSchema.init))
   }
 
   /// The top-level command names of the tree, for the completeness check.

@@ -86,6 +86,7 @@ actor FakeApp: AppControlling {
       case .permission: ResultPayload(permission: PermissionSummary(usable: true))
       case .notify: ResultPayload(notify: NotifyResult(posted: true))
       case .ackAll: ResultPayload(ackAll: AckAllResult(acknowledged: 0))
+      case .delete: ResultPayload(delete: DeleteResult(deleted: request.delete?.id == nil ? 0 : 1))
       case .loginItem:
         ResultPayload(
           loginItem: LoginItemResult(

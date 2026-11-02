@@ -30,6 +30,7 @@ final class AppPipeline: Sendable {
   let delivery: DeliveryService
   /// Nil in the local pipeline.
   let supervisor: StreamSupervisor?
+  let attachments: any AttachmentFetching
   private let retention: Task<Void, Never>
 
   /// Opens the store and starts everything; `settings` nil starts the local pipeline. Throws
@@ -62,14 +63,16 @@ final class AppPipeline: Sendable {
       await supervisor?.start()
     }
     return AppPipeline(
-      services: services, store: store, delivery: delivery, supervisor: supervisor)
+      services: services, store: store, delivery: delivery, supervisor: supervisor,
+      attachments: attachments(settings: settings))
   }
 
   private init(
     services: AppServices, store: SQLiteHistoryStore, delivery: DeliveryService,
-    supervisor: StreamSupervisor?
+    supervisor: StreamSupervisor?, attachments: any AttachmentFetching
   ) {
     self.services = services
+    self.attachments = attachments
     self.store = store
     self.delivery = delivery
     self.supervisor = supervisor
@@ -100,6 +103,15 @@ final class AppPipeline: Sendable {
     guard let settings else { return NoImageFetcher() }
     let token = settings.token
     return URLSessionImageFetcher(
+      server: settings.url, token: { token }, allowInsecure: settings.allowInsecure)
+  }
+
+  /// The History window previews attachments of the configured server; the local pipeline has
+  /// none.
+  private static func attachments(settings: Settings?) -> any AttachmentFetching {
+    guard let settings else { return NoAttachmentFetcher() }
+    let token = settings.token
+    return URLSessionAttachmentFetcher(
       server: settings.url, token: { token }, allowInsecure: settings.allowInsecure)
   }
 
@@ -175,6 +187,7 @@ final class AppPipeline: Sendable {
 extension AppPipeline {
   /// What the socket handler may use of this pipeline.
   var handles: PipelineHandles {
-    PipelineHandles(store: store, delivery: delivery, supervisor: supervisor)
+    PipelineHandles(
+      store: store, delivery: delivery, supervisor: supervisor, attachments: attachments)
   }
 }

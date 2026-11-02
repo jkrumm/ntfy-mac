@@ -4,6 +4,9 @@ import Foundation
 public enum IPC {
   /// Bumped on every incompatible change; peers reject any other value.
   public static let protocolVersion = 1
+  /// What a server answers (`bad-request`) when it cannot decode a frame, which includes a
+  /// command it does not know. A newer CLI recognises an older app by it.
+  public static let invalidFrameMessage = "request is not a valid frame"
 }
 
 /// Something that carries a protocol version on the wire.
@@ -30,6 +33,9 @@ public enum Command: String, Codable, Sendable, CaseIterable {
   case ackAll
   /// Reads or changes the login item registration (`Request.loginItem`).
   case loginItem
+  /// Deletes one message, or every message of a topic, from the history (`Request.delete`).
+  /// Added after the first v1 release: an older app answers `bad-request`.
+  case delete
 }
 
 public struct Request: Versioned, Hashable {
@@ -46,11 +52,14 @@ public struct Request: Versioned, Hashable {
   public let ackAll: AckAllPayload?
   /// Payload of `Command.loginItem`.
   public let loginItem: LoginItemPayload?
+  /// Payload of `Command.delete`.
+  public let delete: DeletePayload?
 
   public init(
     id: String, command: Command, notify: NotifyPayload? = nil, ack: MessageTarget? = nil,
     remind: RemindPayload? = nil, ackAll: AckAllPayload? = nil,
-    loginItem: LoginItemPayload? = nil, protocolVersion: Int = IPC.protocolVersion
+    loginItem: LoginItemPayload? = nil, delete: DeletePayload? = nil,
+    protocolVersion: Int = IPC.protocolVersion
   ) {
     self.protocolVersion = protocolVersion
     self.id = id
@@ -60,6 +69,7 @@ public struct Request: Versioned, Hashable {
     self.remind = remind
     self.ackAll = ackAll
     self.loginItem = loginItem
+    self.delete = delete
   }
 }
 
