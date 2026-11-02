@@ -15,8 +15,9 @@ struct SupervisorRig {
   let poller: ScriptedMessagePoller
   let topics: ScriptedTopicSource
   let cursor: InMemoryCursorStore
-  let history = InMemoryHistoryStore()
-  let poster: RecordingNotificationPoster
+  let history: InMemoryHistoryStore
+  /// What the supervisor handed to delivery, unless `delivery` replaced it.
+  let recorder = RecordingDelivery()
   let events = ManualSystemEvents()
   let sink = SinkRecorder()
   let supervisor: StreamSupervisor
@@ -29,15 +30,16 @@ struct SupervisorRig {
     topics: ScriptedTopicSource = ScriptedTopicSource(topics: ["alpha"]),
     customTopics: (any TopicSource)? = nil,
     customPoller: (any MessagePoller)? = nil,
-    poster: RecordingNotificationPoster = RecordingNotificationPoster(),
+    delivery: (any Delivering)? = nil,
+    history: InMemoryHistoryStore = InMemoryHistoryStore(),
     configure: (inout StreamSupervisor.Options) -> Void = { _ in }
   ) {
     let poller = ScriptedMessagePoller(polls)
     let cursorStore = InMemoryCursorStore(cursor)
     self.poller = poller
+    self.history = history
     self.topics = topics
     self.cursor = cursorStore
-    self.poster = poster
     var options = StreamSupervisor.Options()
     options.jitter = { 1 }
     let sink = self.sink
@@ -48,7 +50,7 @@ struct SupervisorRig {
       ports: StreamSupervisor.Ports(
         stream: stream, poller: customPoller ?? poller, topics: customTopics ?? topics,
         cursor: cursorStore, history: history,
-        poster: poster, systemEvents: events, clock: clock),
+        delivery: delivery ?? recorder, systemEvents: events, clock: clock),
       options: options)
   }
 

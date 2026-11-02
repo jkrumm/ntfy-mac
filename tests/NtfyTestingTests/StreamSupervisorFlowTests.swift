@@ -6,13 +6,13 @@ import Testing
 private let hour: TimeInterval = 3600
 
 @Suite struct SupervisorCatchUpTests {
-  @Test func startupReplayOfRecentMessagesIsIndividual() async {
+  @Test func startupReplayOfRecentMessagesIsOneBatch() async {
     let batch = [
       SupervisorRig.message("m1", age: 30 * 60), SupervisorRig.message("m2", age: 10 * 60),
     ]
     let rig = SupervisorRig(cursor: "c0", polls: [.messages(batch)])
     #expect(await rig.connect())
-    #expect(await rig.poster.posted.map(\.id) == ["m1", "m2"])
+    #expect(await rig.recorder.announced.map { $0.map(\.id) } == [["m1", "m2"]])
     #expect(rig.stream.calls[0].since == "m2")
     let polls = await rig.poller.calls
     #expect(polls.map(\.since) == ["c0"])
@@ -20,22 +20,22 @@ private let hour: TimeInterval = 3600
     await rig.supervisor.stop()
   }
 
-  @Test func startupReplayOfOlderMessagesIsOneSummary() async {
+  @Test func startupReplayOfOlderMessagesIsOneBatch() async {
     let batch = (0..<3).map { SupervisorRig.message("m\($0)", age: 3 * hour - Double($0)) }
     let rig = SupervisorRig(cursor: "c0", polls: [.messages(batch)])
     #expect(await rig.connect())
-    #expect(await rig.poster.posted.isEmpty)
-    #expect(await rig.poster.summaries == [.init(count: 3, oldestTopic: "alpha")])
+    #expect(await rig.recorder.delivered.isEmpty)
+    #expect(await rig.recorder.announced.map { $0.map(\.id) } == [["m0", "m1", "m2"]])
     #expect(await rig.history.recent(limit: 10).count == 3)
     await rig.supervisor.stop()
   }
 
-  @Test func startupReplayOfAncientMessagesIsSilent() async {
+  @Test func startupReplayOfAncientMessagesIsStillHandedToDelivery() async {
     let rig = SupervisorRig(
       cursor: "c0", polls: [.messages([SupervisorRig.message("old", age: 15 * hour)])])
     #expect(await rig.connect())
-    #expect(await rig.poster.posted.isEmpty)
-    #expect(await rig.poster.summaries.isEmpty)
+    #expect(await rig.recorder.delivered.isEmpty)
+    #expect(await rig.recorder.announced.map { $0.map(\.id) } == [["old"]])
     #expect(await rig.history.recent(limit: 10).count == 1)
     #expect(await rig.cursor.load() == "old")
     await rig.supervisor.stop()
@@ -64,7 +64,10 @@ private let hour: TimeInterval = 3600
     let polled = SupervisorRig(cursor: "c0", polls: [.messages([]), .messages([late])])
     #expect(await polled.connect())
     polled.stream.send(.pollRequest)
-    #expect(await polled.eventually { await polled.poster.posted.map(\.id) == ["late"] })
+    #expect(
+      await polled.eventually {
+        await polled.recorder.announced.flatMap { $0 }.map(\.id) == ["late"]
+      })
     #expect(await polled.cursor.load() == "late")
     await polled.supervisor.stop()
   }
@@ -76,7 +79,7 @@ private let hour: TimeInterval = 3600
     #expect(await rig.connect())
     rig.stream.send(rig.message("m1"))
     #expect(await rig.eventually { await rig.cursor.load() == "m1" })
-    #expect(await rig.poster.posted.map(\.id) == ["m1"])
+    #expect(await rig.recorder.delivered.map(\.id) == ["m1"])
     #expect(await rig.history.recent(limit: 5).map(\.id) == ["m1"])
     await rig.supervisor.stop()
   }
@@ -90,7 +93,7 @@ private let hour: TimeInterval = 3600
     rig.stream.send(rig.message("fresh"))
     rig.stream.send(rig.message("last"))
     #expect(await rig.eventually { await rig.cursor.load() == "last" })
-    #expect(await rig.poster.posted.map(\.id) == ["fresh", "last"])
+    #expect(await rig.recorder.delivered.map(\.id) == ["fresh", "last"])
     await rig.supervisor.stop()
   }
 
@@ -102,27 +105,33 @@ private let hour: TimeInterval = 3600
     rig.stream.send(late)
     #expect(await rig.waitForBackoff()?.attempt == 1)
     #expect(await rig.cursor.load() == "c0")
-    #expect(await rig.poster.posted.isEmpty)
+    #expect(await rig.recorder.delivered.isEmpty)
 
     await rig.history.setAppendFailure(nil)
     #expect(await rig.waitForSleepers(1))
     await rig.advance(5)
     #expect(await rig.waitForCalls(2))
-    #expect(await rig.eventually { await rig.poster.posted.map(\.id) == ["m1"] })
+    #expect(
+      await rig.eventually { await rig.recorder.announced.flatMap { $0 }.map(\.id) == ["m1"] })
     #expect(await rig.cursor.load() == "m1")
     #expect(rig.stream.calls[1].since == "m1")
     await rig.supervisor.stop()
   }
 
   @Test func aFailingPosterNeverBlocksTheStream() async {
-    let rig = SupervisorRig(
-      cursor: "c0", poster: RecordingNotificationPoster(failingWith: .permissionDenied))
+    let clock = FakeClock()
+    let service = DeliveryService(
+      poster: RecordingNotificationPoster(failingWith: .permissionDenied),
+      history: InMemoryHistoryStore(), inbox: InMemoryHistoryStore(), config: InMemoryConfigStore(),
+      clock: clock)
+    let rig = SupervisorRig(cursor: "c0", delivery: service)
     #expect(await rig.connect())
     rig.stream.send(rig.message("m1"))
     rig.stream.send(rig.message("m2"))
     #expect(await rig.eventually { await rig.cursor.load() == "m2" })
     #expect(await rig.supervisor.currentStatus == .connected)
     await rig.supervisor.stop()
+    await service.shutdown()
   }
 
   @Test func deleteAndClearEventsReachTheSinkVerbatim() async {
@@ -134,7 +143,7 @@ private let hour: TimeInterval = 3600
     rig.stream.send(clear)
     #expect(await rig.eventually { await rig.sink.events.count == 2 })
     #expect(await rig.sink.events == [delete, clear])
-    #expect(await rig.poster.posted.isEmpty)
+    #expect(await rig.recorder.delivered.isEmpty)
     await rig.supervisor.stop()
   }
 }

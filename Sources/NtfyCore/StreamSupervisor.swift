@@ -8,7 +8,7 @@ public typealias StreamEventSink = @Sendable (StreamEvent) async -> Void
 /// failure becomes a `ConnectionStatus`.
 ///
 /// Delivery: every message reaches history at least once (the cursor only passes stored
-/// messages); a notification is posted at most once (see `MessageIngest`).
+/// messages) and is handed to `Delivering` once (see `MessageIngest`).
 public actor StreamSupervisor {
   /// Everything the supervisor talks to.
   public struct Ports: Sendable {
@@ -17,13 +17,13 @@ public actor StreamSupervisor {
     public let topics: any TopicSource
     public let cursor: any CursorStore
     public let history: any HistoryStore
-    public let poster: any NotificationPoster
+    public let delivery: any Delivering
     public let systemEvents: any SystemEvents
     public let clock: any Clock
 
     public init(
       stream: any MessageStream, poller: any MessagePoller, topics: any TopicSource,
-      cursor: any CursorStore, history: any HistoryStore, poster: any NotificationPoster,
+      cursor: any CursorStore, history: any HistoryStore, delivery: any Delivering,
       systemEvents: any SystemEvents, clock: any Clock
     ) {
       self.stream = stream
@@ -31,7 +31,7 @@ public actor StreamSupervisor {
       self.topics = topics
       self.cursor = cursor
       self.history = history
-      self.poster = poster
+      self.delivery = delivery
       self.systemEvents = systemEvents
       self.clock = clock
     }
@@ -79,8 +79,7 @@ public actor StreamSupervisor {
     machine = ReconnectMachine(
       timing: options.timing, online: options.initiallyOnline, jitter: options.jitter)
     ingest = MessageIngest(
-      history: ports.history, poster: ports.poster, cursor: ports.cursor, clock: ports.clock,
-      log: options.log)
+      history: ports.history, delivery: ports.delivery, cursor: ports.cursor, log: options.log)
   }
 
   /// Every status change, starting with the current one. Any number of subscribers.

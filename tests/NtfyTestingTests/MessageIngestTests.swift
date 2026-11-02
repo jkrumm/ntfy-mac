@@ -12,97 +12,105 @@ private func message(_ id: String, topic: String = "t", age: TimeInterval = 0) -
 
 private struct Parts {
   let history = InMemoryHistoryStore()
-  let poster: RecordingNotificationPoster
+  let recorder = RecordingDelivery()
   let cursor: InMemoryCursorStore
 
-  init(poster: RecordingNotificationPoster = RecordingNotificationPoster(), cursor: String? = nil) {
-    self.poster = poster
+  init(cursor: String? = nil) {
     self.cursor = InMemoryCursorStore(cursor)
   }
 
-  var ingest: MessageIngest {
-    MessageIngest(history: history, poster: poster, cursor: cursor, clock: clock)
+  var ingest: MessageIngest { ingest(delivering: recorder) }
+
+  func ingest(delivering delivery: any Delivering) -> MessageIngest {
+    MessageIngest(history: history, delivery: delivery, cursor: cursor)
+  }
+
+  /// A real delivery service whose poster always fails.
+  func failingService() -> DeliveryService {
+    DeliveryService(
+      poster: RecordingNotificationPoster(failingWith: .permissionDenied), history: history,
+      inbox: history, config: InMemoryConfigStore(), clock: clock)
   }
 }
 
 @Suite struct LiveIngestTests {
-  @Test func storesPostsAndThenMovesTheCursor() async throws {
+  @Test func storesDeliversAndThenMovesTheCursor() async throws {
     let parts = Parts()
     try await parts.ingest.ingest(message("1"))
     #expect(await parts.history.recent(limit: 5).map(\.id) == ["1"])
-    #expect(await parts.poster.posted.map(\.id) == ["1"])
+    #expect(await parts.recorder.delivered.map(\.id) == ["1"])
     #expect(await parts.cursor.load() == "1")
   }
 
-  @Test func aDuplicateIsNotPostedAgain() async throws {
+  @Test func aDuplicateIsNotDeliveredAgain() async throws {
     let parts = Parts()
     try await parts.ingest.ingest(message("1"))
     try await parts.ingest.ingest(message("1"))
-    #expect(await parts.poster.posted.count == 1)
+    #expect(await parts.recorder.delivered.count == 1)
   }
 
-  @Test func aStoreFailureThrowsAndLeavesTheCursorAndThePosterAlone() async throws {
+  @Test func aStoreFailureThrowsAndLeavesTheCursorAndDeliveryAlone() async throws {
     let parts = Parts(cursor: "old")
     await parts.history.setAppendFailure(.storage("disk full"))
     await #expect(throws: NtfyError.storage("disk full")) {
       try await parts.ingest.ingest(message("1"))
     }
     #expect(await parts.cursor.load() == "old")
-    #expect(await parts.poster.posted.isEmpty)
+    #expect(await parts.recorder.delivered.isEmpty)
   }
 
-  @Test func aPosterFailureDoesNotBlockTheCursor() async throws {
-    let parts = Parts(poster: RecordingNotificationPoster(failingWith: .permissionDenied))
-    try await parts.ingest.ingest(message("1"))
+  @Test func aFailingPosterDoesNotBlockTheCursor() async throws {
+    let parts = Parts()
+    let service = parts.failingService()
+    try await parts.ingest(delivering: service).ingest(message("1"))
     #expect(await parts.cursor.load() == "1")
     #expect(await parts.history.recent(limit: 5).count == 1)
+    await service.shutdown()
   }
 
   @Test func aCursorFailureIsIgnored() async throws {
     let parts = Parts()
     await parts.cursor.setSaveFailure(.storage("readonly"))
     try await parts.ingest.ingest(message("1"))
-    #expect(await parts.poster.posted.count == 1)
+    #expect(await parts.recorder.delivered.count == 1)
   }
 }
 
 @Suite struct CatchUpIngestTests {
-  @Test func recentMessagesAreStoredAndPostedIndividually() async throws {
+  @Test func theNewMessagesAreStoredAndAnnouncedAsOneBatch() async throws {
     let parts = Parts()
     let batch = [message("1", age: 30 * 60), message("2", age: 10 * 60)]
     let cursor = try await parts.ingest.ingestCatchUp(batch)
-    #expect(await parts.poster.posted.map(\.id) == ["1", "2"])
+    #expect(await parts.recorder.announced.map { $0.map(\.id) } == [["1", "2"]])
+    #expect(await parts.recorder.delivered.isEmpty)
     #expect(await parts.history.recent(limit: 5).count == 2)
     #expect(cursor == "2")
     #expect(await parts.cursor.load() == "2")
   }
 
-  @Test func olderMessagesCollapseIntoOneSummaryButAreAllStored() async throws {
+  @Test func oldMessagesAreStoredAndHandedOverToo() async throws {
     let parts = Parts()
     let batch = (0..<4).map { message("\($0)", topic: "t\($0)", age: 3 * hour - Double($0)) }
     _ = try await parts.ingest.ingestCatchUp(batch)
-    #expect(await parts.poster.posted.isEmpty)
-    #expect(await parts.poster.summaries == [.init(count: 4, oldestTopic: "t0")])
+    #expect(await parts.recorder.announced.map(\.count) == [4])
     #expect(await parts.history.recent(limit: 10).count == 4)
   }
 
-  @Test func ancientMessagesAreStoredSilently() async throws {
-    let parts = Parts()
-    _ = try await parts.ingest.ingestCatchUp([message("1", age: 13 * hour)])
-    #expect(await parts.poster.posted.isEmpty)
-    #expect(await parts.poster.summaries.isEmpty)
-    #expect(await parts.history.recent(limit: 10).count == 1)
-    #expect(await parts.cursor.load() == "1")
-  }
-
-  @Test func messagesAlreadyKnownDoNotCountTowardsThePolicy() async throws {
+  @Test func messagesAlreadyKnownAreLeftOutOfTheBatch() async throws {
     let parts = Parts()
     let old = message("old", age: 5 * hour)
     try await parts.history.append(old)
     let fresh = message("new", age: 10 * 60)
     _ = try await parts.ingest.ingestCatchUp([old, fresh])
-    #expect(await parts.poster.posted.map(\.id) == ["new"])
-    #expect(await parts.poster.summaries.isEmpty)
+    #expect(await parts.recorder.announced.map { $0.map(\.id) } == [["new"]])
+  }
+
+  @Test func aBatchOfOnlyKnownMessagesAnnouncesNothing() async throws {
+    let parts = Parts()
+    let known = message("1", age: 60)
+    try await parts.history.append(known)
+    _ = try await parts.ingest.ingestCatchUp([known])
+    #expect(await parts.recorder.announced.isEmpty)
   }
 
   @Test func theCursorIsTheNewestMessageOfTheBatch() async throws {
@@ -115,6 +123,7 @@ private struct Parts {
     let parts = Parts(cursor: "keep")
     #expect(try await parts.ingest.ingestCatchUp([]) == nil)
     #expect(await parts.cursor.load() == "keep")
+    #expect(await parts.recorder.announced.isEmpty)
   }
 
   @Test func aStoreFailureKeepsTheCursorAnnouncesWhatWasStoredAndDoesNotRepeatItOnRetry()
@@ -127,18 +136,21 @@ private struct Parts {
       try await parts.ingest.ingestCatchUp(batch)
     }
     #expect(await parts.cursor.load() == "old")
-    #expect(await parts.poster.posted.map(\.id) == ["1"])
+    #expect(await parts.recorder.announced.map { $0.map(\.id) } == [["1"]])
     #expect(await parts.history.recent(limit: 5).map(\.id) == ["1"])
 
     await parts.history.setAppendFailure(nil)
     #expect(try await parts.ingest.ingestCatchUp(batch) == "2")
-    #expect(await parts.poster.posted.map(\.id) == ["1", "2"])
+    #expect(await parts.recorder.announced.map { $0.map(\.id) } == [["1"], ["2"]])
     #expect(await parts.cursor.load() == "2")
   }
 
-  @Test func aPosterFailureStillMovesTheCursor() async throws {
-    let parts = Parts(poster: RecordingNotificationPoster(failingWith: .permissionDenied))
-    #expect(try await parts.ingest.ingestCatchUp([message("1", age: 60)]) == "1")
+  @Test func aFailingPosterStillMovesTheCursor() async throws {
+    let parts = Parts()
+    let service = parts.failingService()
+    let id = try await parts.ingest(delivering: service).ingestCatchUp([message("1", age: 60)])
+    #expect(id == "1")
     #expect(await parts.cursor.load() == "1")
+    await service.shutdown()
   }
 }

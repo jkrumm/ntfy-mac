@@ -8,6 +8,10 @@ private func message(_ id: String) -> NtfyMessage {
   NtfyMessage(id: id, topic: "t", time: Date(timeIntervalSince1970: 1), body: "b")
 }
 
+private func content(_ id: String) -> NotificationContent {
+  DeliveryPolicy.content(for: message(id), config: Config())
+}
+
 @Suite struct FakesTests {
   @Test func secretStoreRoundTrips() async {
     let store = InMemorySecretStore()
@@ -33,10 +37,11 @@ private func message(_ id: String) -> NtfyMessage {
 
   @Test func posterRecordsOrFails() async throws {
     let recorder = RecordingNotificationPoster()
-    try await recorder.post(message("1"))
-    #expect(await recorder.posted.map(\.id) == ["1"])
+    try await recorder.post(content("1"))
+    #expect(await recorder.postedIDs == ["1"])
+    #expect(await recorder.delivered == ["t/1"])
     let failing = RecordingNotificationPoster(failingWith: .permissionDenied)
-    await #expect(throws: NtfyError.permissionDenied) { try await failing.post(message("2")) }
+    await #expect(throws: NtfyError.permissionDenied) { try await failing.post(content("2")) }
   }
 
   @Test func historyDedupsByTopicAndID() async throws {
@@ -46,6 +51,28 @@ private func message(_ id: String) -> NtfyMessage {
     let other = NtfyMessage(id: "1", topic: "u", time: Date(timeIntervalSince1970: 1), body: "b")
     #expect(try await store.append(other))
     #expect(await store.recent(limit: 10).count == 2)
+  }
+
+  @Test func posterFailsTheNextCallsOnly() async throws {
+    let recorder = RecordingNotificationPoster()
+    await recorder.failNext(2)
+    await #expect(throws: NtfyError.permissionDenied) { try await recorder.post(content("1")) }
+    await #expect(throws: NtfyError.permissionDenied) {
+      try await recorder.postMissedSummary(count: 1, oldestTopic: "t")
+    }
+    try await recorder.post(content("1"))
+    #expect(await recorder.attempts == 3)
+    #expect(await recorder.postedIDs == ["1"])
+  }
+
+  @Test func posterTracksDeliveredAndRemovals() async throws {
+    let recorder = RecordingNotificationPoster()
+    try await recorder.post(content("1"))
+    await recorder.remove(identifiers: ["t/1", "t/unknown"])
+    #expect(await recorder.deliveredIdentifiers().isEmpty)
+    #expect(await recorder.removed == ["t/1", "t/unknown"])
+    await recorder.setDelivered(["a/b"])
+    #expect(await recorder.deliveredIdentifiers() == ["a/b"])
   }
 
   @Test func posterRecordsSummaries() async throws {

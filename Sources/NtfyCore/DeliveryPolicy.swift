@@ -12,7 +12,7 @@ public enum DeliveryPolicy {
     let emojis = TagEmoji.render(message.tags)
     let ref = MessageRef(topic: message.topic, id: message.id)
     return NotificationContent(
-      identifier: "\(message.topic)/\(message.sequenceID ?? message.id)",
+      identifier: message.notificationIdentifier,
       threadID: message.topic,
       title: message.title ?? capitalized(message.topic),
       subtitle: emojis.isEmpty ? message.topic : "\(message.topic) • \(emojis)",
@@ -86,4 +86,9 @@ public enum DeliveryPolicy {
     usedIDs.insert(id)
     return id
   }
+}
+
+extension NtfyMessage {
+  /// Stable per notification, so an update of a sequence replaces the notification it updates.
+  var notificationIdentifier: String { "\(topic)/\(sequenceID ?? id)" }
 }
