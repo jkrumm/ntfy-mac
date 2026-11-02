@@ -51,17 +51,33 @@ public protocol SecretStore: Sendable {
   func deleteToken() async throws(NtfyError)
 }
 
+/// Why a summary notification stands in for messages.
+public enum MissedSummaryCause: Sendable, Hashable {
+  /// They arrived while the app was away, or during quiet hours.
+  case away
+  /// They arrived while a video meeting was going on.
+  case meeting
+}
+
 /// Shows notifications and withdraws them again.
 public protocol NotificationPoster: Sendable {
   /// Shows `content`. A notification already delivered under the same `identifier` is replaced:
   /// the adapter removes it, then adds the new one, so an update (or a re-alert) makes noise again.
   func post(_ content: NotificationContent) async throws(NtfyError)
-  /// One notification standing in for `count` messages that were missed while away.
-  func postMissedSummary(count: Int, oldestTopic: String) async throws(NtfyError)
+  /// One notification standing in for `count` messages that were held back or missed.
+  func postMissedSummary(count: Int, oldestTopic: String, cause: MissedSummaryCause)
+    async throws(NtfyError)
   /// Withdraws delivered notifications. Unknown identifiers are ignored.
   func remove(identifiers: [String]) async
   /// The identifiers of the notifications currently shown.
   func deliveredIdentifiers() async -> Set<String>
+}
+
+extension NotificationPoster {
+  /// A summary of messages missed while away.
+  public func postMissedSummary(count: Int, oldestTopic: String) async throws(NtfyError) {
+    try await postMissedSummary(count: count, oldestTopic: oldestTopic, cause: .away)
+  }
 }
 
 /// Persistent message history as the ingest and delivery layers use it.

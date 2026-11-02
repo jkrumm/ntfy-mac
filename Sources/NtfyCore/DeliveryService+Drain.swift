@@ -50,8 +50,8 @@ extension DeliveryService {
     switch item.payload {
     case .message(let message, let repeatsLeft):
       return await postMessage(message, repeatsLeft: repeatsLeft)
-    case .summary(let count, let oldestTopic, let covers):
-      return await postSummary(count: count, oldestTopic: oldestTopic, covers: covers)
+    case .summary(let count, let oldestTopic, let covers, let cause):
+      return await postSummary(count: count, oldestTopic: oldestTopic, covers: covers, cause: cause)
     }
   }
 
@@ -69,7 +69,7 @@ extension DeliveryService {
       await discard(message, ref: ref, repeating: repeatsLeft != nil)
       return .skipped
     }
-    if holdBack(loaded, for: message, quietExempt: isLocal) {
+    if await holdBack(loaded, for: message, exempt: isLocal) {
       inFlight = nil
       return .skipped
     }
@@ -106,10 +106,12 @@ extension DeliveryService {
     await settleReminder(ref)
   }
 
-  private func postSummary(count: Int, oldestTopic: String, covers: [MessageRef]) async -> Outcome {
-    if holdBack(await currentConfig(), for: nil) { return .skipped }
+  private func postSummary(
+    count: Int, oldestTopic: String, covers: [MessageRef], cause: MissedSummaryCause
+  ) async -> Outcome {
+    if await holdBack(await currentConfig(), for: nil) { return .skipped }
     do throws(NtfyError) {
-      try await poster.postMissedSummary(count: count, oldestTopic: oldestTopic)
+      try await poster.postMissedSummary(count: count, oldestTopic: oldestTopic, cause: cause)
     } catch {
       log("missed-message summary not posted: \(error)")
       return .failed

@@ -25,12 +25,18 @@ public enum UserNotificationMapper {
       userInfo: userInfo(for: content.messageRef), category: category, attachment: attachment)
   }
 
-  public static func summarySpec(count: Int, oldestTopic: String, identifier: String)
-    -> UserNotificationSpec
-  {
-    UserNotificationSpec(
+  public static func summarySpec(
+    count: Int, oldestTopic: String, cause: MissedSummaryCause = .away, identifier: String
+  ) -> UserNotificationSpec {
+    let body =
+      switch cause {
+      case .away: "\(count) notifications while you were away (\(oldestTopic))"
+      case .meeting:
+        "\(count) \(count == 1 ? "message" : "messages") while you were in a meeting"
+      }
+    return UserNotificationSpec(
       identifier: identifier, title: "ntfy-mac", subtitle: "Open ntfy to review",
-      body: "\(count) notifications while you were away (\(oldestTopic))", threadID: nil,
+      body: body, threadID: nil,
       sound: "Pop", interruption: .active, relevance: 0.5, userInfo: [:], category: nil,
       attachment: nil)
   }

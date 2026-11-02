@@ -6,10 +6,12 @@ public actor RecordingNotificationPoster: NotificationPoster {
   public struct MissedSummary: Sendable, Hashable {
     public let count: Int
     public let oldestTopic: String
+    public let cause: MissedSummaryCause
 
-    public init(count: Int, oldestTopic: String) {
+    public init(count: Int, oldestTopic: String, cause: MissedSummaryCause = .away) {
       self.count = count
       self.oldestTopic = oldestTopic
+      self.cause = cause
     }
   }
 
@@ -51,9 +53,11 @@ public actor RecordingNotificationPoster: NotificationPoster {
     delivered.insert(content.identifier)
   }
 
-  public func postMissedSummary(count: Int, oldestTopic: String) throws(NtfyError) {
+  public func postMissedSummary(
+    count: Int, oldestTopic: String, cause: MissedSummaryCause
+  ) throws(NtfyError) {
     try check()
-    summaries.append(MissedSummary(count: count, oldestTopic: oldestTopic))
+    summaries.append(MissedSummary(count: count, oldestTopic: oldestTopic, cause: cause))
   }
 
   public func remove(identifiers: [String]) {

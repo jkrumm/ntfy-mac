@@ -6,6 +6,8 @@ enum Announcement {
   case byAge
   /// As one summary, whatever the age (the end of quiet hours with `digest`).
   case summary
+  /// As one summary that says the messages came in during a meeting.
+  case meetingSummary
   /// Each one through the queue, whatever the age (the end of quiet hours without `digest`).
   case each
 }
@@ -35,6 +37,12 @@ enum InFlightFate {
 ///   urgent bypass is on. When the window ends, `reconcile` shows what was held: as one summary
 ///   with `digest`, else individually. A manual pause that outlasts the window wins; one
 ///   reconcile covers both.
+/// - While a meeting is going on (`Config.meeting`: detected with `mode` `pause`, or the manual
+///   override) messages are held back like quiet hours, priority 5 excepted with the urgent
+///   bypass. The end of the meeting is not a time: the meeting source's change signal, the
+///   override's end, or the reminder poll wakes the service, and `reconcile` shows what was
+///   held as one summary that says it came in during a meeting. Local messages (`notify`)
+///   are exempt, as with quiet hours.
 /// - A topic that is muted, or a message below the topic's minimum priority, is stored and marked
 ///   notified without a notification, so a later reconcile never shows it.
 /// - Reminders that came due in the history are shown again, polled every
@@ -66,6 +74,8 @@ public actor DeliveryService: Delivering {
   let clock: any Clock
   /// Decides what wall-clock time the quiet hours mean.
   let calendar: Calendar
+  /// The detected meeting state; nil where the app has no detection (the CLI's one-shot uses).
+  let meeting: (any MeetingStateProviding)?
   let log: @Sendable (String) -> Void
 
   var queue: DeliveryQueue
@@ -73,12 +83,16 @@ public actor DeliveryService: Delivering {
   var inFlight: InFlight?
   var drainTask: Task<Void, Never>?
   var reminderTask: Task<Void, Never>?
+  var meetingTask: Task<Void, Never>?
   var isFiringReminders = false
   /// Set when a post was held back by `Config.pausedUntil`; the resume reconciles once.
   var heldBack = false
   /// Set when quiet hours (not only a pause) held something back; the resume then digests.
   var quietHeld = false
-  /// Identifiers of `deliverLocal` messages, which topic settings and quiet hours do not apply to.
+  /// Set when a meeting held something back; the resume then summarises it as such.
+  var meetingHeldBack = false
+  /// Identifiers of `deliverLocal` messages, which topic settings, quiet hours
+  /// and meetings do not apply to.
   /// Entries stay for the process lifetime: a handful of explicit `notify` calls.
   var localIdentifiers: Set<String> = []
   /// Auto-dismiss seconds for locally posted messages (`deliverLocal`), by notification
@@ -94,7 +108,7 @@ public actor DeliveryService: Delivering {
   public init(
     poster: any NotificationPoster, history: any HistoryStore, inbox: any HistoryInbox,
     config: any ConfigStore, clock: any Clock, minimumInterval: TimeInterval = 1.5,
-    calendar: Calendar = .current,
+    calendar: Calendar = .current, meeting: (any MeetingStateProviding)? = nil,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.poster = poster
@@ -103,16 +117,22 @@ public actor DeliveryService: Delivering {
     configStore = config
     self.clock = clock
     self.calendar = calendar
+    self.meeting = meeting
     self.log = log
     queue = DeliveryQueue(minimumInterval: minimumInterval)
   }
 
   // MARK: Lifecycle
 
-  /// Starts the reminder poll. Idempotent.
+  /// Starts the reminder poll and, with a meeting source, the watch for the end of a meeting.
+  /// Idempotent.
   public func start() {
     guard !stopped, reminderTask == nil else { return }
     reminderTask = Task { await self.pollReminders() }
+    guard let meeting else { return }
+    meetingTask = Task {
+      for await _ in meeting.changes() { await self.resumeIfPauseOver() }
+    }
   }
 
   /// Cancels every task the service owns and returns once none is left running. Queued
@@ -121,10 +141,12 @@ public actor DeliveryService: Delivering {
     guard !stopped else { return }
     stopped = true
     queue.removeAll { _ in true }
-    let tasks = [drainTask, reminderTask, resumeTask].compactMap { $0 } + timers.cancelAll()
+    let tasks =
+      [drainTask, reminderTask, resumeTask, meetingTask].compactMap { $0 } + timers.cancelAll()
     drainTask = nil
     reminderTask = nil
     resumeTask = nil
+    meetingTask = nil
     for task in tasks { task.cancel() }
     for task in tasks { await task.value }
   }
@@ -143,7 +165,7 @@ public actor DeliveryService: Delivering {
   /// never.
   ///
   /// A local message is an explicit action of the user, so topic settings (mute, minimum
-  /// priority) and quiet hours do not apply to it. A manual pause still holds it back.
+  /// priority), quiet hours and meetings do not apply to it. A manual pause still holds it back.
   public func deliverLocal(_ message: NtfyMessage, dismissAfter: TimeInterval?) {
     localIdentifiers.insert(message.notificationIdentifier)
     if let dismissAfter { dismissOverrides[message.notificationIdentifier] = dismissAfter }
@@ -160,7 +182,7 @@ public actor DeliveryService: Delivering {
     let decision =
       switch announcement {
       case .byAge: MissedMessagePolicy.decide(fresh, now: clock.now())
-      case .summary: Self.digest(fresh)
+      case .summary, .meetingSummary: Self.digest(fresh)
       case .each: MissedMessageDecision.individual(fresh)
       }
     switch decision {
@@ -169,7 +191,9 @@ public actor DeliveryService: Delivering {
     case .summary(let count, let oldestTopic):
       let covers = fresh.map { MessageRef(topic: $0.topic, id: $0.id) }
       guard !stopped else { return }
-      queue.enqueue(.summary(count: count, oldestTopic: oldestTopic, covers: covers))
+      let cause: MissedSummaryCause = announcement == .meetingSummary ? .meeting : .away
+      queue.enqueue(
+        .summary(count: count, oldestTopic: oldestTopic, covers: covers, cause: cause))
       startDraining()
     case .silent:
       for message in fresh { await markNotified(MessageRef(topic: message.topic, id: message.id)) }

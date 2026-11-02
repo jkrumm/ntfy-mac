@@ -60,7 +60,7 @@ private func drainedIDs(_ queue: inout DeliveryQueue) -> [String] {
   @Test func messagesRetryThreeTimesAndSummariesOnce() {
     var queue = DeliveryQueue()
     queue.enqueue(message("m"))
-    queue.enqueue(.summary(count: 2, oldestTopic: "t", covers: []))
+    queue.enqueue(.summary(count: 2, oldestTopic: "t", covers: [], cause: .away))
     guard let first = queue.next(), let second = queue.next() else {
       Issue.record("queue is empty")
       return
