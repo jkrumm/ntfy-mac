@@ -1,4 +1,5 @@
 import Foundation
+import NtfyAppLogic
 import NtfyClient
 import NtfyCore
 import NtfyPlatform
@@ -14,30 +15,33 @@ struct AppServices: Sendable {
 
 /// Everything that runs for one resolved configuration: store, delivery, response handling and
 /// the stream. Built once per configuration; a changed connection setting means `shutdown()`
-/// and a new pipeline.
+/// and a new pipeline. Without a configured server it is the local pipeline: the same store,
+/// delivery and response handling under the `local` origin, and no stream, so `ntfy-mac notify`
+/// and acknowledging its messages work before `setup`.
 final class AppPipeline: Sendable {
   /// How often old history is pruned.
   static let retentionInterval: Duration = .seconds(60 * 60)
+  /// The history key of the local pipeline; no real origin has this shape.
+  static let localOrigin = "local"
 
   private let services: AppServices
   let store: SQLiteHistoryStore
   let delivery: DeliveryService
-  let supervisor: StreamSupervisor
+  /// Nil in the local pipeline.
+  let supervisor: StreamSupervisor?
   private let retention: Task<Void, Never>
 
-  /// Opens the store and starts everything. Throws only when the history cannot be opened.
-  static func start(settings: Settings, services: AppServices) async throws(NtfyError)
+  /// Opens the store and starts everything; `settings` nil starts the local pipeline. Throws
+  /// only when the history cannot be opened.
+  static func start(settings: Settings?, services: AppServices) async throws(NtfyError)
     -> AppPipeline
   {
     let log = Log.logger(.delivery)
     let store = try SQLiteHistoryStore.open(
       at: StoreLocation.databaseURL(applicationSupport: applicationSupport()),
-      server: settings.origin, clock: services.clock)
-    let token = settings.token
+      server: settings?.origin ?? localOrigin, clock: services.clock)
     let poster = UserNotificationPoster(
-      center: services.center,
-      images: URLSessionImageFetcher(
-        server: settings.url, token: { token }, allowInsecure: settings.allowInsecure),
+      center: services.center, images: images(settings: settings),
       log: { log.info("\($0, privacy: .private)") })
     let delivery = DeliveryService(
       poster: poster, history: store, inbox: store, config: services.config,
@@ -49,17 +53,20 @@ final class AppPipeline: Sendable {
     let responses = responseHandler(store: store, delivery: delivery, services: services)
     await services.router.use { await responses.handle($0) }
 
-    let supervisor = StreamSupervisor(
-      ports: ports(settings: settings, store: store, delivery: delivery, services: services),
-      options: options(settings: settings, delivery: delivery))
-    await supervisor.start()
+    var supervisor: StreamSupervisor?
+    if let settings {
+      supervisor = StreamSupervisor(
+        ports: ports(settings: settings, store: store, delivery: delivery, services: services),
+        options: options(settings: settings, delivery: delivery))
+      await supervisor?.start()
+    }
     return AppPipeline(
       services: services, store: store, delivery: delivery, supervisor: supervisor)
   }
 
   private init(
     services: AppServices, store: SQLiteHistoryStore, delivery: DeliveryService,
-    supervisor: StreamSupervisor
+    supervisor: StreamSupervisor?
   ) {
     self.services = services
     self.store = store
@@ -74,7 +81,7 @@ final class AppPipeline: Sendable {
   /// delivery; then supervisor, retention loop, delivery, and last the store is closed.
   func shutdown() async {
     await services.router.use(nil)
-    await supervisor.stop()
+    await supervisor?.stop()
     retention.cancel()
     await retention.value
     await delivery.shutdown()
@@ -86,6 +93,14 @@ final class AppPipeline: Sendable {
   }
 
   // MARK: Wiring
+
+  /// Local messages carry no attachment, so the local pipeline fetches nothing.
+  private static func images(settings: Settings?) -> any ImageFetching {
+    guard let settings else { return NoImageFetcher() }
+    let token = settings.token
+    return URLSessionImageFetcher(
+      server: settings.url, token: { token }, allowInsecure: settings.allowInsecure)
+  }
 
   private static func responseHandler(
     store: SQLiteHistoryStore, delivery: DeliveryService, services: AppServices
@@ -153,5 +168,13 @@ final class AppPipeline: Sendable {
     FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
       ?? FileManager.default.homeDirectoryForCurrentUser.appending(
         path: "Library/Application Support", directoryHint: .isDirectory)
+  }
+}
+
+extension AppPipeline {
+  /// What the socket handler may use of this pipeline.
+  var handles: PipelineHandles {
+    PipelineHandles(
+      messages: LocalMessaging(history: store, delivery: delivery), supervisor: supervisor)
   }
 }

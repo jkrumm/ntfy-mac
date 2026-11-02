@@ -1,32 +1,37 @@
 import Foundation
 import NtfyCore
 import NtfyIPC
-import NtfyPlatform
 
-/// Answers the CLI's requests. It holds the controller, not a pipeline, so it keeps working
-/// across pipeline rebuilds; commands that need the pipeline answer `app-unavailable` while
-/// there is none.
-struct AppIPCHandler: Sendable {
-  let controller: AppController
-  let config: FileConfigStore
-  let permissions: any NotificationPermissionProviding
-  let clock: SystemClock
-  let loginItem: any LoginItemControlling
-  private let log = Log.logger(.ipc)
+/// Answers the CLI's requests. It asks for the pipeline on every request instead of holding one,
+/// so it keeps working across pipeline rebuilds; commands that need a pipeline answer
+/// `app-unavailable` while there is none.
+public struct IPCRequestHandler: Sendable {
+  /// Local messages live under their own topic, so they never collide with a server's.
+  public static let localTopic = "local"
 
-  init(
-    controller: AppController, config: FileConfigStore,
-    permissions: any NotificationPermissionProviding, clock: SystemClock,
-    loginItem: any LoginItemControlling
+  public typealias PipelineProvider = @Sendable () async -> PipelineHandles?
+
+  private let pipeline: PipelineProvider
+  private let config: any ConfigStore
+  private let permissions: any NotificationPermissionProviding
+  private let clock: any NtfyCore.Clock
+  private let loginItem: any LoginItemControlling
+  private let log: @Sendable (String) -> Void
+
+  public init(
+    pipeline: @escaping PipelineProvider, config: any ConfigStore,
+    permissions: any NotificationPermissionProviding, clock: any NtfyCore.Clock,
+    loginItem: any LoginItemControlling, log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
-    self.controller = controller
+    self.pipeline = pipeline
     self.config = config
     self.permissions = permissions
     self.clock = clock
     self.loginItem = loginItem
+    self.log = log
   }
 
-  func handle(_ request: Request) async -> Response {
+  public func handle(_ request: Request) async -> Response {
     switch request.command {
     case .ping: return .success(id: request.id)
     case .status: return await status(request)
@@ -43,12 +48,10 @@ struct AppIPCHandler: Sendable {
   // MARK: Reads
 
   private func status(_ request: Request) async -> Response {
-    let connection = await controller.runningPipeline()?.connectionStatus() ?? .stopped
-    let pausedUntil = await activePause()
-    let permission = await permissions.current().summary
+    let connection = await pipeline()?.supervisor?.currentStatus ?? .stopped
     let result = StatusResult(
-      connection: connection.ipcName, pausedUntil: pausedUntil, appVersion: Version.current,
-      permission: permission)
+      connection: connection.ipcName, pausedUntil: await activePause(),
+      appVersion: Version.current, permission: await permissions.current().summary)
     return .success(id: request.id, result: ResultPayload(status: result))
   }
 
@@ -58,44 +61,53 @@ struct AppIPCHandler: Sendable {
   }
 
   private func activePause() async -> Date? {
-    guard let until = await config.load().pausedUntil, until > clock.now() else { return nil }
+    guard let until = try? await config.load().pausedUntil, until > clock.now() else { return nil }
     return until
   }
 
   // MARK: Actions
 
   private func reconnect(_ request: Request) async -> Response {
-    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
-    await pipeline.reconnect()
+    guard let supervisor = await pipeline()?.supervisor else {
+      return unavailable(request, "no server is connected; run `ntfy-mac setup`")
+    }
+    await supervisor.restart()
     return .success(id: request.id)
   }
 
   private func notify(_ request: Request) async -> Response {
-    guard let payload = request.notify, !payload.body.isEmpty else {
+    guard let payload = request.notify else {
       return badRequest(request, "notify needs a non-empty body")
+    }
+    let accepted: NotifyValidation.Accepted
+    switch NotifyValidation.check(payload) {
+    case .failure(let rejection): return badRequest(request, rejection.message)
+    case .success(let value): accepted = value
     }
     guard await permissions.current().isUsable else {
       return .failure(
         id: request.id, code: .permissionDenied,
         message: "notifications are not allowed for ntfy-mac; see `ntfy-mac doctor`")
     }
-    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
+    guard let messages = await pipeline()?.messages else { return unavailable(request) }
     let paused = await activePause() != nil
+    let message = NtfyMessage(
+      id: "local-\(UUID().uuidString.lowercased())", topic: Self.localTopic, time: clock.now(),
+      title: accepted.title, body: payload.body, priority: Priority(clamping: payload.priority),
+      tags: payload.tags, click: payload.clickURL)
     do throws(NtfyError) {
-      try await pipeline.postLocal(
-        Self.message(from: payload, at: clock.now()), dismissAfter: payload.dismissAfterSeconds)
+      try await messages.post(message, dismissAfter: accepted.dismissAfter)
     } catch {
       return internalError(request, "notify", error)
     }
-    return .success(
-      id: request.id, result: ResultPayload(notify: NotifyResult(posted: !paused)))
+    return .success(id: request.id, result: ResultPayload(notify: NotifyResult(posted: !paused)))
   }
 
   private func ack(_ request: Request) async -> Response {
     guard let target = request.ack else { return badRequest(request, "ack needs topic and id") }
-    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
+    guard let messages = await pipeline()?.messages else { return unavailable(request) }
     do throws(NtfyError) {
-      let found = try await pipeline.acknowledge(topic: target.topic, id: target.id)
+      let found = try await messages.acknowledge(topic: target.topic, id: target.id)
       return found ? .success(id: request.id) : notFound(request, target.topic, target.id)
     } catch {
       return internalError(request, "ack", error)
@@ -103,13 +115,26 @@ struct AppIPCHandler: Sendable {
   }
 
   private func ackAll(_ request: Request) async -> Response {
-    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
+    guard let messages = await pipeline()?.messages else { return unavailable(request) }
     do throws(NtfyError) {
-      let count = try await pipeline.acknowledgeAll(topic: request.ackAll?.topic)
+      let count = try await messages.acknowledgeAll(topic: request.ackAll?.topic)
       return .success(
         id: request.id, result: ResultPayload(ackAll: AckAllResult(acknowledged: count)))
     } catch {
       return internalError(request, "ack-all", error)
+    }
+  }
+
+  private func remind(_ request: Request) async -> Response {
+    guard let target = request.remind else {
+      return badRequest(request, "remind needs topic, id and until")
+    }
+    guard let messages = await pipeline()?.messages else { return unavailable(request) }
+    do throws(NtfyError) {
+      let found = try await messages.remind(topic: target.topic, id: target.id, until: target.until)
+      return found ? .success(id: request.id) : notFound(request, target.topic, target.id)
+    } catch {
+      return internalError(request, "remind", error)
     }
   }
 
@@ -128,36 +153,12 @@ struct AppIPCHandler: Sendable {
       id: request.id, result: ResultPayload(loginItem: LoginItemResult(state: state.rawValue)))
   }
 
-  private func remind(_ request: Request) async -> Response {
-    guard let target = request.remind else {
-      return badRequest(request, "remind needs topic, id and until")
-    }
-    guard let pipeline = await controller.runningPipeline() else { return unavailable(request) }
-    do throws(NtfyError) {
-      let found = try await pipeline.remind(topic: target.topic, id: target.id, until: target.until)
-      return found ? .success(id: request.id) : notFound(request, target.topic, target.id)
-    } catch {
-      return internalError(request, "remind", error)
-    }
-  }
-
   // MARK: Helpers
 
-  /// Local messages live under their own topic, so they never collide with a server's.
-  static let localTopic = "local"
-
-  private static func message(from payload: NotifyPayload, at time: Date) -> NtfyMessage {
-    NtfyMessage(
-      id: "local-\(UUID().uuidString.lowercased())", topic: localTopic, time: time,
-      title: payload.title.flatMap { $0.isEmpty ? nil : $0 }, body: payload.body,
-      priority: Priority(clamping: payload.priority), tags: payload.tags,
-      click: payload.clickURL)
-  }
-
-  private func unavailable(_ request: Request) -> Response {
-    .failure(
-      id: request.id, code: .appUnavailable,
-      message: "ntfy-mac is not configured or is restarting")
+  private func unavailable(
+    _ request: Request, _ message: String = "ntfy-mac is restarting; try again in a moment"
+  ) -> Response {
+    .failure(id: request.id, code: .appUnavailable, message: message)
   }
 
   private func badRequest(_ request: Request, _ message: String) -> Response {
@@ -169,7 +170,7 @@ struct AppIPCHandler: Sendable {
   }
 
   private func internalError(_ request: Request, _ what: String, _ error: NtfyError) -> Response {
-    log.error("\(what, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+    log("\(what) failed: \(String(describing: error))")
     return .failure(id: request.id, code: .internalError, message: "\(what) failed")
   }
 }

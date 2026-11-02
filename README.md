@@ -91,8 +91,34 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 
 ## Commands
 
-| Command | Description |
-| ----------
+| Command                | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `ntfy-mac setup`       | Connect ntfy-mac to your ntfy server.                             |
+| `ntfy-mac doctor`      | Check configuration, server, app and permissions.                 |
+| `ntfy-mac subscribe`   | Show the subscribed topics, add a local one, or reset.            |
+| `ntfy-mac unsubscribe` | Remove a locally added topic.                                     |
+| `ntfy-mac config`      | Show and change notification settings.                            |
+| `ntfy-mac notify`      | Send a local notification through the app (no server needed).     |
+| `ntfy-mac sounds`      | Preview the notification sounds.                                  |
+| `ntfy-mac logs`        | Show the app's log from the unified log.                          |
+| `ntfy-mac update`      | Update ntfy-mac (Homebrew installs) or check for a newer release. |
+| `ntfy-mac uninstall`   | Remove ntfy-mac's config, history, state and token.               |
+| `ntfy-mac version`     | Print the version.                                                |
+| `ntfy-mac start`       | Start the ntfy-mac app if it is not running.                      |
+| `ntfy-mac status`      | Show the connection, pause, permissions and history counts.       |
+| `ntfy-mac ls`          | List messages from the history, newest first.                     |
+| `ntfy-mac search`      | Search the history by text, newest first.                         |
+| `ntfy-mac read`        | Show one message in full and mark it read.                        |
+| `ntfy-mac ack`         | Acknowledge a message, or every unacknowledged one.               |
+| `ntfy-mac tail`        | Print messages as NDJSON, optionally following new ones.          |
+| `ntfy-mac wait`        | Block until a matching message arrives.                           |
+| `ntfy-mac publish`     | Publish a message to a topic on the ntfy server.                  |
+| `ntfy-mac pause`       | Hold notifications back for a while.                              |
+| `ntfy-mac resume`      | End a pause and show what was held back.                          |
+| `ntfy-mac login-item`  | Start ntfy-mac at login: on, off or status.                       |
+| `ntfy-mac schema`      | Describe every command, flag, exit code and error code.           |
+
+---
 
 ## Notification sounds
 

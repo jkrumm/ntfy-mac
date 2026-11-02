@@ -1,4 +1,5 @@
 import Foundation
+import NtfyAppLogic
 import NtfyCore
 import NtfyIPC
 import NtfyPlatform
@@ -64,7 +65,8 @@ actor AppController {
     await teardown()
   }
 
-  /// The running pipeline, nil while none is built (unconfigured, or being rebuilt).
+  /// The running pipeline, nil only while one is being rebuilt (or the history cannot be
+  /// opened). Without a configured server it is the local pipeline.
   func runningPipeline() -> AppPipeline? { pipeline }
 
   // MARK: Socket
@@ -72,13 +74,16 @@ actor AppController {
   /// The socket outlives pipeline rebuilds: its handler asks this controller for the pipeline
   /// each time. A socket that cannot be bound is logged; the stream still runs.
   private func startIPC() {
-    let handler = AppIPCHandler(
-      controller: self, config: services.config,
+    let log = Log.logger(.ipc)
+    let handler = IPCRequestHandler(
+      pipeline: { await self.runningPipeline()?.handles }, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
-      clock: services.clock, loginItem: SMAppServiceLoginItem())
+      clock: services.clock, loginItem: SMAppServiceLoginItem(),
+      log: { log.error("\($0, privacy: .public)") })
     let server = IPCServer(
-      path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport())
-    ) { await handler.handle($0) }
+      path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport()),
+      log: { log.error("\($0, privacy: .public)") },
+      handler: { await handler.handle($0) })
     do throws(IPCError) {
       try server.start()
       ipc = server
@@ -101,14 +106,18 @@ actor AppController {
       if case .resolved(let settings) = outcome { current = settings }
     case .idle:
       await teardown()
-      log.info("not configured; idle")
+      log.info("not configured; local pipeline only")
     case .rebuild:
       await teardown()
       if case .resolved(let settings) = outcome { await build(settings) }
     }
+    // Nothing runs yet (first start, idle, or a build that failed): the local pipeline keeps
+    // `notify` working and is retried on every reload.
+    if pipeline == nil { await build(nil) }
   }
 
-  private func build(_ settings: Settings) async {
+  /// Builds the pipeline for `settings`, or the local one for nil.
+  private func build(_ settings: Settings?) async {
     guard isActive else { return }
     do throws(NtfyError) {
       let started = try await AppPipeline.start(settings: settings, services: services)
@@ -118,7 +127,7 @@ actor AppController {
       }
       pipeline = started
       current = settings
-      log.info("pipeline started for \(settings.origin, privacy: .private)")
+      log.info("pipeline started for \(settings?.origin ?? "local", privacy: .private)")
     } catch {
       log.error("pipeline not started: \(String(describing: error), privacy: .public)")
     }

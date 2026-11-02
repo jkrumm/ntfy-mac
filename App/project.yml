@@ -34,6 +34,8 @@ targets:
         product: NtfyPlatform
       - package: NtfyMacPackage
         product: NtfyIPC
+      - package: NtfyMacPackage
+        product: NtfyAppLogic
     settings:
       base:
         PRODUCT_NAME: NtfyMac

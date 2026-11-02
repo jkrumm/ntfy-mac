@@ -50,21 +50,28 @@ struct AppLink: Sendable {
     }
   }
 
+  /// After a cold launch the socket can exist before the pipeline does, so an `app-unavailable`
+  /// answer is retried too; if it is still that at the deadline, it is returned as it is.
   private func launchAndRetry(_ request: Request) async throws(NtfyError) -> Response {
     guard let app, await launch(app) else { throw .appUnavailable }
     let deadline = ContinuousClock.now.advanced(by: launchTimeout)
     var delay = Duration.milliseconds(20)
+    var notReady: Response?
     while ContinuousClock.now < deadline {
       do throws(IPCError) {
-        return try await client.send(request)
+        let response = try await client.send(request)
+        guard response.code == .appUnavailable else { return response }
+        notReady = response
       } catch .appNotRunning {
-        try? await Task.sleep(for: delay)
-        delay = min(delay * 3 / 2, .milliseconds(250))
+        // Nothing listens yet.
       } catch {
         throw Self.map(error)
       }
+      try? await Task.sleep(for: delay)
+      delay = min(delay * 3 / 2, .milliseconds(250))
     }
-    throw .appUnavailable
+    guard let notReady else { throw .appUnavailable }
+    return notReady
   }
 
   private static func map(_ error: IPCError) -> NtfyError {

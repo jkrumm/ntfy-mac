@@ -1,5 +1,6 @@
 import Foundation
 import NtfyCore
+import Synchronization
 import Testing
 
 @testable import NtfyPlatform
@@ -47,5 +48,38 @@ import Testing
     try await store.save("abc")
     #expect(try await store.load() == "abc")
     #expect(FileManager.default.fileExists(atPath: dir.file("state.json.lock").path))
+  }
+
+  @Test func theLockIsReleasedWhenTheBodyThrows() async throws {
+    let dir = TempDirectory()
+    let lock = dir.file("x.lock")
+    #expect(throws: NtfyError.self) {
+      try FileLock.withExclusive(lock) { () throws(NtfyError) in throw .storage("boom") }
+    }
+    let ran = try FileLock.withExclusive(lock) { () throws(NtfyError) -> Bool in true }
+    #expect(ran)
+  }
+
+  @Test func aSecondHolderWaitsUntilTheFirstIsDone() async throws {
+    let dir = TempDirectory()
+    let lock = dir.file("x.lock")
+    let order = Mutex<[String]>([])
+    let held = Mutex(false)
+    let first = Task.detached {
+      try? FileLock.withExclusive(lock) { () throws(NtfyError) in
+        held.withLock { $0 = true }
+        Thread.sleep(forTimeInterval: 0.3)
+        order.withLock { $0.append("first") }
+      }
+    }
+    while !held.withLock({ $0 }) { try await Task.sleep(for: .milliseconds(5)) }
+    let second = Task.detached {
+      try? FileLock.withExclusive(lock) { () throws(NtfyError) in
+        order.withLock { $0.append("second") }
+      }
+    }
+    await first.value
+    await second.value
+    #expect(order.withLock { $0 } == ["first", "second"])
   }
 }

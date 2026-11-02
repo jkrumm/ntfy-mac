@@ -13,6 +13,7 @@ let package = Package(
     .library(name: "NtfyStore", targets: ["NtfyStore"]),
     .library(name: "NtfyPlatform", targets: ["NtfyPlatform"]),
     .library(name: "NtfyIPC", targets: ["NtfyIPC"]),
+    .library(name: "NtfyAppLogic", targets: ["NtfyAppLogic"]),
     .executable(name: "ntfy-mac", targets: ["NtfyMacCLI"]),
   ],
   dependencies: [
@@ -32,6 +33,9 @@ let package = Package(
     .target(name: "NtfyPlatform", dependencies: ["NtfyCore"], swiftSettings: strict),
     // Versioned CLI <-> app wire protocol. Standalone.
     .target(name: "NtfyIPC", swiftSettings: strict),
+    // What the app does with a socket request, behind ports, so tests can drive it. The app
+    // target has no test target of its own.
+    .target(name: "NtfyAppLogic", dependencies: ["NtfyCore", "NtfyIPC"], swiftSettings: strict),
     // In-memory fakes for every port; linked by test targets only.
     .target(name: "NtfyTesting", dependencies: ["NtfyCore"], swiftSettings: strict),
     // Composition root of the CLI: the one place that wires adapters.
@@ -49,6 +53,10 @@ let package = Package(
     .testTarget(
       name: "NtfyIPCTests", dependencies: ["NtfyIPC"], path: "tests/NtfyIPCTests",
       swiftSettings: strict),
+    .testTarget(
+      name: "NtfyAppLogicTests",
+      dependencies: ["NtfyAppLogic", "NtfyCore", "NtfyIPC", "NtfyTesting"],
+      path: "tests/NtfyAppLogicTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore", "NtfyTesting"],
       path: "tests/NtfyClientTests", swiftSettings: strict),

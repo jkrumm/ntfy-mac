@@ -70,7 +70,8 @@ import Testing
   }
 
   @Test(arguments: [
-    ["pause", "--for", "soon"], ["pause", "--for", "0m"],
+    ["pause", "--for", "soon"], ["pause", "--for", "0m"], ["pause", "--for", "0"],
+    ["pause", "--for", "0s"],
     ["pause", "--for", "5m", "--until", "2030-01-01T00:00:00Z"],
     ["pause", "--until", "tomorrow"], ["pause", "--for", "99999d"], ["resume", "--for", "5m"],
   ])
@@ -78,6 +79,27 @@ import Testing
     let rig = CLIRig()
     #expect(await rig.run(arguments).exit == .usage, "\(arguments)")
     #expect(await rig.config.load().pausedUntil == nil)
+  }
+
+  @Test func untilInThePastOrNowIsAUsageErrorAgainstTheInjectedClock() async {
+    let rig = CLIRig()
+    let now = rig.clock.now()
+    let format = Date.ISO8601FormatStyle()
+    for moment in [now.addingTimeInterval(-1), now] {
+      let result = await rig.run("pause", "--until", moment.formatted(format))
+      #expect(result.exit == .usage)
+    }
+    #expect(await rig.config.load().pausedUntil == nil)
+    let future = await rig.run("pause", "--until", now.addingTimeInterval(60).formatted(format))
+    #expect(future.exit == .success)
+  }
+
+  @Test func forIsMeasuredFromTheInjectedClock() async {
+    let rig = CLIRig()
+    #expect(await rig.run("pause", "--for", "365d").exit == .success)
+    #expect(
+      await rig.config.load().pausedUntil == rig.clock.now().addingTimeInterval(365 * 86400))
+    #expect(await rig.run("pause", "--for", "99999d").exit == .usage)
   }
 
   @Test func resumeWhenNotPausedIsFine() async {

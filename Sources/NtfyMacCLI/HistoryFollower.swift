@@ -6,10 +6,13 @@ import NtfyCore
 /// Rows are told apart by topic and id. Each poll asks for the rows newer than the newest one seen
 /// minus a window (a row can be stored a little after its server timestamp), so only the ids
 /// inside that window are remembered and memory stays bounded. A row whose timestamp is older
-/// than the window when it is stored (a catch-up after a long outage) is not reported.
+/// than the window when it is stored (a catch-up after a long outage) is not reported. A poll
+/// reads pages until a short one comes back, so a burst larger than a page loses nothing.
 actor HistoryFollower {
   static let window: TimeInterval = 60
   static let pageSize = 500
+  /// Pages one poll reads at most, so a huge backlog cannot hold a poll forever.
+  static let maxPages = 20
   static let defaultInterval = Duration.milliseconds(500)
 
   private struct Key: Hashable {
@@ -43,13 +46,22 @@ actor HistoryFollower {
     }
   }
 
+  /// How many ids are remembered; bounded by the window.
+  var seenCount: Int { seen.count }
+
   /// Rows not seen before, oldest first.
   func poll() async throws(NtfyError) -> [StoredMessage] {
     guard let inbox = try await feed.inbox() else { return [] }
     let since = watermark.addingTimeInterval(-Self.window)
-    let query = HistoryQuery(
-      topic: filter.topic, minPriority: filter.minPriority, since: since, limit: Self.pageSize)
-    let found = try await inbox.entries(query)
+    var found: [StoredMessage] = []
+    for page in 0..<Self.maxPages {
+      let query = HistoryQuery(
+        topic: filter.topic, minPriority: filter.minPriority, since: since,
+        limit: Self.pageSize, offset: page * Self.pageSize)
+      let rows = try await inbox.entries(query)
+      found += rows
+      if rows.count < Self.pageSize { break }
+    }
     var fresh: [StoredMessage] = []
     for entry in found.reversed() {
       let key = Key(topic: entry.message.topic, id: entry.message.id)

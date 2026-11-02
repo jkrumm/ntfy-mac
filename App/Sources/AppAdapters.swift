@@ -46,3 +46,8 @@ final class ProcessActivity: @unchecked Sendable {
 
   func end() { ProcessInfo.processInfo.endActivity(token) }
 }
+
+/// Fetches nothing: the local pipeline has no server to fetch from.
+struct NoImageFetcher: ImageFetching {
+  func fetch(_ url: URL) async -> URL? { nil }
+}

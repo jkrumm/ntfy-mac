@@ -45,13 +45,8 @@ struct PauseCommand: CLICommand {
     guard `for` == nil || until == nil else {
       throw ValidationError("Use either --for or --until, not both.")
     }
-    if let `for` {
-      guard let seconds = DurationParser.seconds(`for`) else {
-        throw ValidationError("--for must look like 30m, 2h, 1d or 1h30m (got \(`for`)).")
-      }
-      guard Date().addingTimeInterval(seconds) < PauseWindow.indefinite else {
-        throw ValidationError("--for is too long; omit it to pause until resume.")
-      }
+    if let `for`, DurationParser.seconds(`for`) == nil {
+      throw ValidationError("--for must look like 30m, 2h, 1d or 1h30m (got \(`for`)).")
     }
     if let until {
       guard TimePoint.iso8601(until) != nil else {
@@ -70,7 +65,11 @@ struct PauseCommand: CLICommand {
 
   private func end(now: Date) throws -> Date {
     if let `for`, let seconds = DurationParser.seconds(`for`) {
-      return now.addingTimeInterval(seconds)
+      let date = now.addingTimeInterval(seconds)
+      guard date < PauseWindow.indefinite else {
+        throw CLIFailure.usage("--for is too long; omit it to pause until resume.")
+      }
+      return date
     }
     if let until, let date = TimePoint.iso8601(until) {
       guard date > now else { throw CLIFailure.usage("--until must be in the future.") }

@@ -121,6 +121,37 @@ import Testing
     #expect(try await follower.poll().isEmpty)
   }
 
+  @Test func aBurstLargerThanOnePageLosesNothing() async throws {
+    let follower = follower()
+    let count = HistoryFollower.pageSize * 2 + 37
+    for index in 0..<count { await add("m\(index)", age: Double(count - index) / 100) }
+    let fresh = try await follower.poll()
+    #expect(fresh.count == count)
+    #expect(fresh.first?.message.id == "m0")
+    #expect(fresh.last?.message.id == "m\(count - 1)")
+    #expect(try await follower.poll().isEmpty)
+  }
+
+  @Test func aRowStoredLateInsideTheWindowIsReportedOneOutsideIsNot() async throws {
+    let follower = follower()
+    await add("m1")
+    #expect(try await follower.poll().count == 1)
+    await add("late", age: HistoryFollower.window / 2)
+    #expect(try await follower.poll().map(\.message.id) == ["late"])
+    await add("too-late", age: HistoryFollower.window * 2)
+    #expect(try await follower.poll().isEmpty)
+  }
+
+  @Test func theSeenMapIsPrunedToTheWindow() async throws {
+    let follower = follower()
+    await add("m1")
+    _ = try await follower.poll()
+    clock.advance(by: .seconds(HistoryFollower.window * 3))
+    await add("m2")
+    _ = try await follower.poll()
+    #expect(await follower.seenCount == 1)
+  }
+
   // MARK: Helpers
 
   private func waitForSleeper() async {

@@ -68,6 +68,21 @@ enum POSIXSocket {
     guard result == 0 else { throw .system("bind", errno) }
   }
 
+  /// An exclusive, non-blocking `flock` on `path` (created 0600), held until the descriptor is
+  /// closed. `alreadyRunning` when another descriptor holds it.
+  static func acquireLock(at path: String) throws(IPCError) -> Int32 {
+    let descriptor = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
+    guard descriptor >= 0 else { throw .system("open lock", errno) }
+    while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+      let code = errno
+      if code == EINTR { continue }
+      close(descriptor)
+      if code == EWOULDBLOCK { throw .alreadyRunning }
+      throw .system("flock", code)
+    }
+    return descriptor
+  }
+
   /// Whether the peer runs as the same user as this process.
   static func peerIsCurrentUser(_ descriptor: Int32) -> Bool {
     var uid: uid_t = 0

@@ -164,8 +164,21 @@ import Testing
     #expect(again.pausedUntil == config.pausedUntil)
   }
 
+  @Test func pausedUntilAcceptsFractionalAndWholeSecondTimestamps() throws {
+    let whole = try #require(parse(#"{"pausedUntil":"2026-11-02T10:00:00Z"}"#)).pausedUntil
+    let fractional = try #require(parse(#"{"pausedUntil":"2026-11-02T10:00:00.250Z"}"#)).pausedUntil
+    #expect(whole == Date(timeIntervalSince1970: 1_793_613_600))
+    #expect(fractional == Date(timeIntervalSince1970: 1_793_613_600.25))
+  }
+
+  /// The chosen behaviour: a value that cannot be read never pauses (the safe side: a typo must
+  /// not silence notifications), and the next write drops it, as for every known key.
   @Test func wrongTypedOrUnparsablePausedUntilReadsAsAbsent() throws {
     #expect(try #require(parse(#"{"pausedUntil":5}"#)).pausedUntil == nil)
     #expect(try #require(parse(#"{"pausedUntil":"soon"}"#)).pausedUntil == nil)
+    #expect(try #require(parse(#"{"pausedUntil":"2026-11-02"}"#)).pausedUntil == nil)
+    #expect(try #require(parse(#"{"pausedUntil":null}"#)).pausedUntil == nil)
+    let rewritten = try #require(parse(#"{"pausedUntil":"soon"}"#)).object
+    #expect(rewritten["pausedUntil"] == nil)
   }
 }

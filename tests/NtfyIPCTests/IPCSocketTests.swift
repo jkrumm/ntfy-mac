@@ -133,6 +133,87 @@ private func mode(_ url: URL) throws -> Int {
     await first.stop()
   }
 
+  @Test func aWedgedHandlerIsAnsweredWithInternalAndFreesItsSlot() async throws {
+    let directory = SocketDirectory()
+    var limits = IPCServer.Limits()
+    limits.handlerTimeout = .milliseconds(200)
+    limits.maxConnections = 1
+    let server = IPCServer(path: directory.socket, limits: limits) { request in
+      guard request.command == .status else { return .success(id: request.id) }
+      // Ignores cancellation and never returns, like a handler stuck on a lock.
+      await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+      return .success(id: request.id)
+    }
+    try server.start()
+    let client = IPCClient(path: directory.socket)
+    let wedged = try await client.send(Request(id: "w", command: .status))
+    #expect(wedged.code == .internalError)
+    let next = try await client.send(Request(id: "n", command: .ping))
+    #expect(next.status == .success)
+    await server.stop()
+  }
+
+  @Test func stopDoesNotWaitForAWedgedHandler() async throws {
+    let directory = SocketDirectory()
+    let server = IPCServer(path: directory.socket) { request in
+      await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+      return .success(id: request.id)
+    }
+    try server.start()
+    let pending = Task {
+      try? await IPCClient(path: directory.socket).send(Request(id: "a", command: .ping))
+    }
+    try await Task.sleep(for: .milliseconds(200))
+    await server.stop()
+    pending.cancel()
+    #expect(!FileManager.default.fileExists(atPath: directory.socket.path))
+  }
+
+  @Test func aHeldLockMakesStartFailWithoutTouchingTheSocket() async throws {
+    let directory = SocketDirectory()
+    try SocketPath.prepareDirectory(of: directory.socket)
+    let lock = try POSIXSocket.acquireLock(at: directory.socket.path + ".lock")
+    let server = IPCServer(path: directory.socket, handler: echo)
+    #expect(throws: IPCError.alreadyRunning) { try server.start() }
+    close(lock)
+    try server.start()
+    #expect(
+      try await IPCClient(path: directory.socket).send(Request(id: "a", command: .ping)).status
+        == .success)
+    await server.stop()
+  }
+
+  @Test func stopReleasesTheLockAndFailedStartsDoNotKeepIt() async throws {
+    let directory = SocketDirectory()
+    let first = IPCServer(path: directory.socket, handler: echo)
+    try first.start()
+    let second = IPCServer(path: directory.socket, handler: echo)
+    #expect(throws: IPCError.alreadyRunning) { try second.start() }
+    await first.stop()
+    try second.start()
+    await second.stop()
+
+    try SocketPath.prepareDirectory(of: directory.socket)
+    try Data("keep".utf8).write(to: directory.socket)
+    #expect(throws: IPCError.self) { try IPCServer(path: directory.socket, handler: echo).start() }
+    try FileManager.default.removeItem(at: directory.socket)
+    let again = IPCServer(path: directory.socket, handler: echo)
+    try again.start()
+    await again.stop()
+  }
+
+  @Test func stopLeavesASocketItDidNotBind() async throws {
+    let directory = SocketDirectory()
+    let server = IPCServer(path: directory.socket, handler: echo)
+    try server.start()
+    unlink(directory.socket.path)
+    let other = try POSIXSocket.makeSocket()
+    defer { close(other) }
+    try POSIXSocket.bind(other, to: directory.socket.path)
+    await server.stop()
+    #expect(FileManager.default.fileExists(atPath: directory.socket.path))
+  }
+
   @Test func aRegularFileAtTheSocketPathIsNeverRemoved() throws {
     let directory = SocketDirectory()
     try SocketPath.prepareDirectory(of: directory.socket)

@@ -10,6 +10,19 @@ private actor Launches {
   func record() { count += 1 }
 }
 
+private actor Answers {
+  private(set) var calls = 0
+  private let notReadyFor: Int
+  init(notReadyFor: Int) { self.notReadyFor = notReadyFor }
+
+  func next(_ request: Request) -> Response {
+    calls += 1
+    return calls <= notReadyFor
+      ? .failure(id: request.id, code: .appUnavailable, message: "starting")
+      : .success(id: request.id)
+  }
+}
+
 @Suite struct AppLinkTests {
   private let socket = URL(
     fileURLWithPath: "/tmp/ntfylink-\(UUID().uuidString.prefix(8))/app.sock")
@@ -51,6 +64,47 @@ private actor Launches {
     let response = try await link.send(ping)
     #expect(response.status == .success)
     #expect(await launches.count == 1)
+    await server.stop()
+  }
+
+  @Test func aSocketThatAnswersNotReadyAfterAColdLaunchIsRetried() async throws {
+    defer { cleanup() }
+    let answers = Answers(notReadyFor: 3)
+    let server = IPCServer(path: socket) { await answers.next($0) }
+    let link = AppLink(socket: socket, app: app) { _ in (try? server.start()) != nil }
+    let response = try await link.send(ping)
+    #expect(response.status == .success)
+    #expect(await answers.calls == 4)
+    await server.stop()
+  }
+
+  @Test func notReadyForeverReturnsTheAppsAnswerAtTheDeadline() async throws {
+    defer { cleanup() }
+    let answers = Answers(notReadyFor: .max)
+    let server = IPCServer(path: socket) { await answers.next($0) }
+    let link = AppLink(
+      socket: socket, app: app, launch: { _ in (try? server.start()) != nil },
+      launchTimeout: .milliseconds(300))
+    let response = try await link.send(ping)
+    #expect(response.code == .appUnavailable)
+    #expect(await answers.calls > 1)
+    await server.stop()
+  }
+
+  @Test func notReadyFromARunningAppIsNotRetried() async throws {
+    defer { cleanup() }
+    let answers = Answers(notReadyFor: .max)
+    let server = IPCServer(path: socket) { await answers.next($0) }
+    try server.start()
+    let launches = Launches()
+    let link = AppLink(socket: socket, app: app) { _ in
+      await launches.record()
+      return true
+    }
+    let response = try await link.send(ping)
+    #expect(response.code == .appUnavailable)
+    #expect(await answers.calls == 1)
+    #expect(await launches.count == 0)
     await server.stop()
   }
 
