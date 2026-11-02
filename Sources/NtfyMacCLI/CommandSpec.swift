@@ -106,7 +106,9 @@ extension CommandSpec {
         "ntfy-mac config topic show builds", "ntfy-mac config topic reset builds",
         "ntfy-mac config quiet-hours show",
         "ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest",
-        "ntfy-mac config quiet-hours off",
+        "ntfy-mac config quiet-hours off", "ntfy-mac config meeting show",
+        "ntfy-mac config meeting set --mode pause --no-urgent-bypass",
+        "ntfy-mac config meeting reset",
       ]),
     CommandSpec(
       "notify", app: .launches, errors: ["app-unavailable", "permission-denied"],
@@ -195,6 +197,9 @@ extension CommandSpec {
         "ntfy-mac pause --for 30m", "ntfy-mac pause --until 2030-01-01T08:00:00Z", "ntfy-mac pause",
       ]),
     CommandSpec("resume", files: true, errors: ["storage"], examples: ["ntfy-mac resume"]),
+    CommandSpec(
+      "present", files: true, errors: ["storage"], domains: ["--for": .duration],
+      examples: ["ntfy-mac present on", "ntfy-mac present on --for 1h", "ntfy-mac present off"]),
     CommandSpec(
       "login-item", app: .launches, errors: ["app-unavailable", "internal"],
       examples: ["ntfy-mac login-item status", "ntfy-mac login-item on"]),

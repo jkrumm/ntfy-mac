@@ -56,6 +56,60 @@ struct HistoryStats: Encodable, Equatable {
   }
 }
 
+/// Meetings in `status`. Detection runs in the app, so without it only the manual override
+/// (read from the config file) and the mode are known; `active` is then the override alone.
+struct MeetingStatus: Encodable, Equatable {
+  /// `off` or `pause`.
+  var mode: String
+  /// Notifications are held back because of a meeting.
+  var active: Bool
+  /// `app`, `huddle`, `browser` or `presenting`; nil when not active.
+  var reason: String?
+  var detail: String?
+  var presenting: Bool
+
+  private enum CodingKeys: String, CodingKey { case mode, active, reason, detail, presenting }
+
+  /// Every key is present; unknown values are `null`.
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(mode, forKey: .mode)
+    try container.encode(active, forKey: .active)
+    try container.encode(reason, forKey: .reason)
+    try container.encode(detail, forKey: .detail)
+    try container.encode(presenting, forKey: .presenting)
+  }
+
+  /// From the app's answer, or from the config file when the app is down or too old to say.
+  init(mode: MeetingMode, app: MeetingSummary?, settings: MeetingSettings, now: Date) {
+    self.mode = mode.rawValue
+    if let app {
+      active = app.active
+      reason = app.reason
+      detail = app.detail
+      presenting = app.presenting
+      return
+    }
+    presenting = settings.isPresenting(at: now)
+    active = presenting
+    reason = presenting ? MeetingReason.presenting.code : nil
+    detail = nil
+  }
+
+  var text: String {
+    guard active else { return mode == MeetingMode.off.rawValue ? "off" : "on, no meeting" }
+    let why = reason.flatMap { code in
+      switch code {
+      case "presenting": "presenting"
+      case "huddle": "Slack huddle"
+      case "browser": "\(detail ?? "browser") call"
+      default: detail
+      }
+    }
+    return "in a meeting\(why.map { " (\($0))" } ?? ""), notifications held back"
+  }
+}
+
 /// What `status --json` prints. Every key is always present; unknown values are `null`.
 struct StatusReport: Encodable {
   var running: Bool
@@ -69,11 +123,12 @@ struct StatusReport: Encodable {
   var paused: Bool
   var pausedUntil: Date?
   var permission: PermissionSummary?
+  var meeting: MeetingStatus
   var history: HistoryStats
 
   private enum CodingKeys: String, CodingKey {
     case running, version, appVersion, connection, configured, server, topics, paused
-    case pausedUntil, permission, history
+    case pausedUntil, permission, meeting, history
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -88,6 +143,7 @@ struct StatusReport: Encodable {
     try container.encode(paused, forKey: .paused)
     try container.encode(pausedUntil, forKey: .pausedUntil)
     try container.encode(permission, forKey: .permission)
+    try container.encode(meeting, forKey: .meeting)
     try container.encode(history, forKey: .history)
   }
 
@@ -100,6 +156,7 @@ struct StatusReport: Encodable {
     }
     lines.append("  Server:      \(server ?? "not configured (run: ntfy-mac setup)")")
     lines.append("  Paused:      \(pauseText)")
+    lines.append("  Meeting:     \(meeting.text)")
     lines.append("  Permissions: \(permissionText)")
     lines.append("  History:     \(historyText)")
     lines.append(

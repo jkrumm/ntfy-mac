@@ -29,7 +29,10 @@ struct StatusCommand: CLICommand {
       running: info != nil, appVersion: info?.appVersion, connection: info?.connection,
       configured: server != nil, server: server,
       topics: local.union(history.topics.map(\.topic)).sorted(), paused: pausedUntil != nil,
-      pausedUntil: pausedUntil, permission: info?.permission, history: history)
+      pausedUntil: pausedUntil, permission: info?.permission,
+      meeting: MeetingStatus(
+        mode: config.meeting.mode, app: info?.meeting, settings: config.meeting, now: now),
+      history: history)
     out.result(report, text: report.text())
     guard requireRunning, info == nil else { return }
     out.note("The ntfy-mac app is not running. Start it with: ntfy-mac start")

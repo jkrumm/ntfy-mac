@@ -52,6 +52,14 @@ Settings in `config.json` apply to the running app through its config watcher; n
 | Re-alert minimum priority | config.json: `reAlertMinPriority` | `ntfy-mac config set` | `ntfy-mac config set reAlertMinPriority 4` |  |
 | Re-alert maximum repeats | config.json: `reAlertMaxRepeats` | `ntfy-mac config set` | `ntfy-mac config set reAlertMaxRepeats 6` |  |
 
+## Meetings
+
+| Setting | Lives in | Command | Example | Notes |
+|-|-|-|-|-|
+| Pause notifications during meetings | config.json: `meeting.mode` | `ntfy-mac config meeting set` | `ntfy-mac config meeting set --mode pause` | `--mode off` turns it off; `config meeting reset` restores the defaults. |
+| Urgent messages bypass meetings | config.json: `meeting.urgentBypass` | `ntfy-mac config meeting set` | `ntfy-mac config meeting set --no-urgent-bypass` |  |
+| I am presenting | config.json: `meeting.presentingUntil` | `ntfy-mac present` | `ntfy-mac present on --for 1h` | Holds notifications whatever the detection says, even with the mode off. `ntfy-mac present off` ends it. |
+
 ## Message actions
 
 | Setting | Lives in | Command | Example | Notes |
