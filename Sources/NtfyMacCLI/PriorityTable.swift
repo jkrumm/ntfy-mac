@@ -110,6 +110,9 @@ struct PriorityTable: Encodable, Sendable {
       "", "  * = custom override", "", "Commands:",
       "  ntfy-mac config sounds              Manage notification sounds",
       "  ntfy-mac config dismiss             Manage auto-dismiss timing",
+      "  ntfy-mac config get|set|reset <key> Change re-alert and security settings",
+      "  ntfy-mac config topic               Mute, filter or decorate one topic",
+      "  ntfy-mac config quiet-hours         Hold notifications back during a daily window",
       "  ntfy-mac notify -m \"test\" -p <1-5>  Test a priority level",
     ]
     return lines.joined(separator: "\n")

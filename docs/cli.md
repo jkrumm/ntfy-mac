@@ -13,6 +13,7 @@ Every command takes --json for machine-readable output on stdout.
 - **Errors:** with `--json` a failure prints `{"error":{"code":"...","exitCode":N,"message":"..."}}` on stdout and `Error: <message>` on stderr. The exit code is the one in the tables below.
 - **Strict flags:** an unknown flag or a bad value exits 2 and does nothing.
 - **Machine-readable form of this page:** `ntfy-mac schema --json`.
+- **Settings:** every setting the app exposes, and the command that sets it, is in [Settings](settings.md).
 
 ## Exit codes
 
@@ -225,12 +226,35 @@ ntfy-mac config
 
 ```sh
 ntfy-mac config
+ntfy-mac config show --json
 ntfy-mac config sounds list
 ntfy-mac config sounds set 5 Sosumi
 ntfy-mac config dismiss set 3 15
 ntfy-mac config dismiss set 5 never
 ntfy-mac config sounds reset
+ntfy-mac config get reAlert
+ntfy-mac config set reAlertIntervalSeconds 600
+ntfy-mac config reset reAlertIntervalSeconds
+ntfy-mac config topic list
+ntfy-mac config topic set builds --mute --min-priority 4 --emoji 🔨
+ntfy-mac config topic show builds
+ntfy-mac config topic reset builds
+ntfy-mac config quiet-hours show
+ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest
+ntfy-mac config quiet-hours off
 ```
+
+### `ntfy-mac config show`
+
+Show every notification setting.
+
+```
+ntfy-mac config show
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
 ### `ntfy-mac config sounds`
 
@@ -342,6 +366,196 @@ Restore the default auto-dismiss times.
 
 ```
 ntfy-mac config dismiss reset
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config get`
+
+Print the value of a setting.
+
+```
+ntfy-mac config get <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority>
+```
+
+Example: ntfy-mac config get reAlertIntervalSeconds
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config set`
+
+Change a setting.
+
+```
+ntfy-mac config set <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority> <value>
+```
+
+Booleans take true, false, on or off. reAlertIntervalSeconds is above 0, reAlertMinPriority 1 to 5, reAlertMaxRepeats 0 or more. The running app picks the change up through its config watcher.
+
+```sh
+ntfy-mac config set reAlert off
+ntfy-mac config set reAlertIntervalSeconds 600
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `value` | positional | string |  | yes | The new value. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config reset`
+
+Restore a setting to its default.
+
+```
+ntfy-mac config reset <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority>
+```
+
+Example: ntfy-mac config reset reAlertIntervalSeconds
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config topic`
+
+Show and change the settings of one topic.
+
+```
+ntfy-mac config topic
+```
+
+The topic follows the verb: ntfy-mac config topic show|set|reset <topic>. `config topic list` shows every topic with settings of its own. A muted topic is stored in the history and never notified; a minimum priority holds back messages below it.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config topic list`
+
+List the topics that have settings of their own.
+
+```
+ntfy-mac config topic list
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config topic show`
+
+Show the settings of a topic.
+
+```
+ntfy-mac config topic show <topic>
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `topic` | positional | string |  | yes | The topic. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config topic set`
+
+Mute a topic, filter it by priority, or give it an emoji.
+
+```
+ntfy-mac config topic set <topic> [--mute] [--unmute] [--min-priority <integer>] [--emoji <string>]
+```
+
+At least one option is required. --min-priority takes 1 to 5, or none to remove the filter; --emoji takes an emoji for the notification title, or none to remove it.
+
+```sh
+ntfy-mac config topic set builds --mute
+ntfy-mac config topic set builds --min-priority 4 --emoji 🔨
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `topic` | positional | string |  | yes | The topic. |
+| `--mute` | flag | boolean | `false` | no | Store messages without notifying. |
+| `--unmute` | flag | boolean | `false` | no | Notify again. |
+| `--min-priority` | option | integer (1 to 5) |  | no | Hold back messages below this priority (1-5), or none. |
+| `--emoji` | option | string |  | no | Prefix for the notification title, or none. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config topic reset`
+
+Remove every setting of a topic.
+
+```
+ntfy-mac config topic reset <topic>
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `topic` | positional | string |  | yes | The topic. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config quiet-hours`
+
+Hold notifications back during a daily window.
+
+```
+ntfy-mac config quiet-hours
+```
+
+Messages that arrive inside the window are stored and not notified. Priority 5 can bypass the window, and a digest can summarise what was held when the window ends.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config quiet-hours show`
+
+Show the quiet-hours schedule.
+
+```
+ntfy-mac config quiet-hours show
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config quiet-hours set`
+
+Change the quiet-hours schedule and turn it on.
+
+```
+ntfy-mac config quiet-hours set [--start <time>] [--end <time>] [--urgent-bypass] [--no-urgent-bypass] [--digest] [--no-digest]
+```
+
+Times are local, HH:mm (24 hours). The window may cross midnight. Options you leave out keep their value; the defaults are 22:00 to 07:00 with urgent bypass and digest on.
+
+```sh
+ntfy-mac config quiet-hours set --start 22:00 --end 07:00
+ntfy-mac config quiet-hours set --no-urgent-bypass --no-digest
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--start` | option | time (HH:mm) |  | no | Start of the window, HH:mm. |
+| `--end` | option | time (HH:mm) |  | no | End of the window, HH:mm (exclusive). |
+| `--urgent-bypass` | flag | boolean | `false` | no | Let priority 5 through. |
+| `--no-urgent-bypass` | flag | boolean | `false` | no | Hold priority 5 back too. |
+| `--digest` | flag | boolean | `false` | no | Summarise what was held when the window ends. |
+| `--no-digest` | flag | boolean | `false` | no | Show what was held one by one when the window ends. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config quiet-hours off`
+
+Turn quiet hours off and keep the times.
+
+```
+ntfy-mac config quiet-hours off
 ```
 
 | Argument | Kind | Type | Default | Required | Description |

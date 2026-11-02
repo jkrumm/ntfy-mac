@@ -7,12 +7,13 @@ ntfy-mac is a background app (`NtfyMac.app`) that holds the ntfy stream and stor
 ## Docs
 
 - [CLI reference](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md): every command, flag, exit code and error code, with examples
+- [Settings](https://github.com/jkrumm/ntfy-mac/blob/master/docs/settings.md): every setting the app exposes, where it is stored and the command that sets it
 - [README](https://github.com/jkrumm/ntfy-mac/blob/master/README.md#use-from-agents-and-scripts): install, setup and the agent quick start
 - [How it works](https://github.com/jkrumm/ntfy-mac/blob/master/docs/how-it-works.md): streaming, reconnect, delivery, history
 
 ## Contract
 
-- **Machine-readable:** `ntfy-mac schema --json` prints the whole command tree on one line (schemaVersion 2), keys sorted.
+- **Machine-readable:** `ntfy-mac schema --json` prints the whole command tree on one line (schemaVersion 3), keys sorted.
 - **stdout vs stderr:** data on stdout, diagnostics on stderr. With `--json`, stdout is JSON only.
 - **Success:** one JSON document per command. `ls`, `search` print an array of message objects; `read` prints one message; `status`, `doctor`, `pause`, `publish` print an object.
 - **Failure:** with `--json`, stdout gets `{"error":{"code":"not-found","exitCode":1,"message":"..."}}` and stderr gets `Error: <message>`. Branch on `error.code` or on the exit code.

@@ -74,34 +74,13 @@ import Testing
       #expect(!spec.examples.isEmpty, "\(spec.name): no example")
       for example in spec.examples {
         let invocation = example.split(separator: "|").last.map(String.init) ?? example
-        let words = shellWords(invocation)
+        let words = ExampleWords.split(invocation)
         #expect(words.first == "ntfy-mac" && words.dropFirst().first == spec.name, "\(example)")
         #expect(throws: Never.self, Comment(rawValue: example)) {
           _ = try NtfyMac.parseAsRoot(Array(words.dropFirst()))
         }
       }
     }
-  }
-
-  /// Splits on spaces outside single and double quotes; enough for the examples.
-  private func shellWords(_ line: String) -> [String] {
-    var words: [String] = []
-    var current = ""
-    var quote: Character?
-    for character in line {
-      if let open = quote {
-        if character == open { quote = nil } else { current.append(character) }
-      } else if character == "\"" || character == "'" {
-        quote = character
-      } else if character == " " {
-        if !current.isEmpty { words.append(current) }
-        current = ""
-      } else {
-        current.append(character)
-      }
-    }
-    if !current.isEmpty { words.append(current) }
-    return words
   }
 
   // MARK: Determinism
@@ -127,7 +106,7 @@ import Testing
 
   @Test func theDocumentListsEveryCommandWithItsArguments() async throws {
     let document = try await schema()
-    #expect(document["schemaVersion"] as? Int == 2)
+    #expect(document["schemaVersion"] as? Int == 3)
     #expect(document["version"] as? String == Version.current)
     let names = try commands(document).compactMap { $0["name"] as? String }
     for name in [

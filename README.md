@@ -146,6 +146,20 @@ Custom sounds can be added to `~/Library/Sounds/` (AIFF/WAV/CAF format).
 
 The running app watches the config file, so changes apply without a restart.
 
+Everything else the Settings window offers has a command too:
+
+```bash
+ntfy-mac config set reAlertIntervalSeconds 600           # re-alert every 10 min
+ntfy-mac config set reAlert off                          # stop repeating urgent alerts
+ntfy-mac config topic set builds --mute                  # store, never notify
+ntfy-mac config topic set builds --min-priority 4        # hold back anything below high
+ntfy-mac config quiet-hours set --start 22:00 --end 07:00  # on, with urgent bypass and a digest
+ntfy-mac config quiet-hours off                          # off, times kept
+ntfy-mac config                                          # show it all
+```
+
+[docs/settings.md](docs/settings.md) lists every setting, where it lives and the command that sets it.
+
 ---
 
 ## Local notifications
@@ -194,7 +208,7 @@ ntfy-mac ack --all --topic alerts             # clear what you have handled
 
 **Check before you act.** `status` reports `configured`, `running`, `paused` and the permission state without changing anything. `doctor` is the full read-only check and exits non-zero when one fails.
 
-**Discover the CLI.** `ntfy-mac schema --json` prints the command tree on one line: arguments with type, default, range and repeatability, what each command needs from the app and the server, and its error codes. The same data, rendered, lives in [docs/cli.md](docs/cli.md) and [llms.txt](llms.txt). Both are generated and checked in CI; do not edit them by hand.
+**Discover the CLI.** `ntfy-mac schema --json` prints the command tree on one line: arguments with type, default, range and repeatability, what each command needs from the app and the server, and its error codes. The same data, rendered, lives in [docs/cli.md](docs/cli.md), [docs/settings.md](docs/settings.md) (every setting and its command) and [llms.txt](llms.txt). Both are generated and checked in CI; do not edit them by hand.
 
 ---
 

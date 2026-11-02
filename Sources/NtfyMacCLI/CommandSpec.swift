@@ -25,6 +25,7 @@ struct CommandSpec: Sendable {
     static let seconds = Domain(type: "number", unit: "seconds")
     static let duration = Domain(type: "duration")
     static let timestamp = Domain(type: "timestamp")
+    static let time = Domain(type: "time", unit: "HH:mm")
     static let durationOrTimestamp = Domain(type: "duration-or-timestamp")
     static let priority = Domain(type: "integer", range: 1...5)
     static let limit = Domain(type: "integer", range: 1...HistoryFilterOptions.maxLimit)
@@ -91,11 +92,21 @@ extension CommandSpec {
       "unsubscribe", files: true, errors: ["topic-not-local"],
       examples: ["ntfy-mac unsubscribe builds"]),
     CommandSpec(
-      "config", files: true, domains: ["priority": .priority],
+      "config", files: true,
+      domains: [
+        "priority": .priority, "--min-priority": .priority, "--start": .time, "--end": .time,
+      ],
       examples: [
-        "ntfy-mac config", "ntfy-mac config sounds list", "ntfy-mac config sounds set 5 Sosumi",
-        "ntfy-mac config dismiss set 3 15", "ntfy-mac config dismiss set 5 never",
-        "ntfy-mac config sounds reset",
+        "ntfy-mac config", "ntfy-mac config show --json", "ntfy-mac config sounds list",
+        "ntfy-mac config sounds set 5 Sosumi", "ntfy-mac config dismiss set 3 15",
+        "ntfy-mac config dismiss set 5 never", "ntfy-mac config sounds reset",
+        "ntfy-mac config get reAlert", "ntfy-mac config set reAlertIntervalSeconds 600",
+        "ntfy-mac config reset reAlertIntervalSeconds", "ntfy-mac config topic list",
+        "ntfy-mac config topic set builds --mute --min-priority 4 --emoji 🔨",
+        "ntfy-mac config topic show builds", "ntfy-mac config topic reset builds",
+        "ntfy-mac config quiet-hours show",
+        "ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest",
+        "ntfy-mac config quiet-hours off",
       ]),
     CommandSpec(
       "notify", app: .launches, errors: ["app-unavailable", "permission-denied"],

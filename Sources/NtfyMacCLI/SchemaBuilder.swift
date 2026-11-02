@@ -46,7 +46,7 @@ struct CommandSchema: Encodable, Sendable {
 }
 
 struct SchemaDocument: Encodable, Sendable {
-  let schemaVersion = 2
+  let schemaVersion = 3
   let name: String
   let version: String
   let abstract: String
@@ -54,6 +54,8 @@ struct SchemaDocument: Encodable, Sendable {
   let exitCodes: [ExitCodeEntry]
   let errorCodes: [ErrorCatalog.Entry]
   let commands: [CommandSchema]
+  /// Every setting the UI exposes and the command that sets it (`SettingsCatalog`).
+  let settings: [SettingSchema]
 
   struct ExitCodeEntry: Encodable, Sendable {
     let code: Int32
@@ -79,7 +81,8 @@ enum SchemaBuilder {
         .init(
           code: $0.rawValue, name: "\($0)", meaning: ErrorCatalog.exitMeanings[$0] ?? "")
       },
-      errorCodes: ErrorCatalog.errors, commands: commands)
+      errorCodes: ErrorCatalog.errors, commands: commands,
+      settings: SettingsCatalog.entries.map(SettingSchema.init))
   }
 
   /// The top-level command names of the tree, for the completeness check.
