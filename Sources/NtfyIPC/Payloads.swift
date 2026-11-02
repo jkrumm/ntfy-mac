@@ -134,6 +134,27 @@ public struct PermissionSummary: Codable, Sendable, Hashable {
   }
 }
 
+/// Whether a meeting holds notifications back, as the app sees it. Added after the first v1
+/// release: an older app leaves it out.
+public struct MeetingSummary: Codable, Sendable, Hashable {
+  /// Notifications are held back because of a meeting, detected or announced.
+  public let active: Bool
+  /// Why: `app`, `huddle`, `browser` or `presenting`; nil when not active.
+  public let reason: String?
+  /// The app behind the reason, when there is one.
+  public let detail: String?
+  /// The manual "I am presenting" override is on.
+  public let presenting: Bool
+
+  public init(active: Bool, reason: String? = nil, detail: String? = nil, presenting: Bool = false)
+  {
+    self.active = active
+    self.reason = reason
+    self.detail = detail
+    self.presenting = presenting
+  }
+}
+
 public struct StatusResult: Codable, Sendable, Hashable {
   /// Stable lowercase name: `stopped`, `connecting`, `connected`, `backing-off`, `offline`,
   /// `paused`, `halted`.
@@ -142,15 +163,18 @@ public struct StatusResult: Codable, Sendable, Hashable {
   public let pausedUntil: Date?
   public let appVersion: String
   public let permission: PermissionSummary?
+  /// Nil from an app that predates meeting awareness.
+  public let meeting: MeetingSummary?
 
   public init(
     connection: String, pausedUntil: Date? = nil, appVersion: String,
-    permission: PermissionSummary? = nil
+    permission: PermissionSummary? = nil, meeting: MeetingSummary? = nil
   ) {
     self.connection = connection
     self.pausedUntil = pausedUntil
     self.appVersion = appVersion
     self.permission = permission
+    self.meeting = meeting
   }
 }
 

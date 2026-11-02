@@ -17,7 +17,7 @@ struct HandlerRig {
 
   init(
     config initial: Config = Config(), permission: NotificationPermission = .allowed,
-    pipelineAvailable: Bool = true
+    pipelineAvailable: Bool = true, meeting: (any MeetingStateProviding)? = nil
   ) {
     history = InMemoryHistoryStore(clock: clock)
     config = InMemoryConfigStore(initial)
@@ -28,7 +28,8 @@ struct HandlerRig {
       store: history, delivery: service, supervisor: nil, attachments: StubAttachmentFetcher())
     handler = IPCRequestHandler(
       pipeline: { pipelineAvailable ? handles : nil }, config: config,
-      permissions: self.permission, clock: clock, loginItem: InMemoryLoginItem())
+      permissions: self.permission, clock: clock, loginItem: InMemoryLoginItem(),
+      meeting: meeting)
   }
 
   func send(_ request: Request) async -> Response { await handler.handle(request) }
