@@ -11,6 +11,7 @@ public enum Log {
     case ipc
     case cli
     case interface
+    case meeting
   }
 
   public static func logger(_ category: Category) -> Logger {
