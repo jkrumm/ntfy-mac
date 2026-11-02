@@ -1,14 +1,24 @@
 import Darwin
 import Foundation
 import NtfyCore
+import Synchronization
 
 /// Runs a system tool to completion off the cooperative pool and returns its stdout.
 enum SystemTool {
+  private struct Outcome: Sendable {
+    let status: Int32
+    let output: Data
+    let timedOut: Bool
+  }
+
+  /// - Parameter timeout: Seconds after which the tool is killed and the call fails; nil waits
+  ///   as long as the tool runs.
   static func run(
-    _ executable: String, _ arguments: [String]
+    _ executable: String, _ arguments: [String], timeout: Double? = nil
   ) async throws(NtfyError) -> (status: Int32, output: Data) {
+    let outcome: Outcome
     do {
-      return try await withCheckedThrowingContinuation { continuation in
+      outcome = try await withCheckedThrowingContinuation { continuation in
         DispatchQueue.global().async {
           let process = Process()
           let pipe = Pipe()
@@ -18,34 +28,55 @@ enum SystemTool {
           process.standardError = FileHandle.nullDevice
           do {
             try process.run()
-            // Drain before waiting: a full pipe would block the tool forever.
-            let output = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            continuation.resume(returning: (process.terminationStatus, output))
           } catch {
             continuation.resume(throwing: error)
+            return
           }
+          let expired = Mutex(false)
+          let watchdog = DispatchWorkItem {
+            expired.withLock { $0 = true }
+            process.terminate()
+            // A tool that ignores SIGTERM would keep the read below open.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+              if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
+          }
+          if let timeout {
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
+          }
+          // Drain before waiting: a full pipe would block the tool forever.
+          let output = pipe.fileHandleForReading.readDataToEndOfFile()
+          process.waitUntilExit()
+          watchdog.cancel()
+          continuation.resume(
+            returning: Outcome(
+              status: process.terminationStatus, output: output, timedOut: expired.withLock { $0 }))
         }
       }
     } catch {
       throw .storage("cannot run \(executable): \(error.localizedDescription)")
     }
+    guard !outcome.timedOut else { throw .storage("\(executable) timed out and was stopped") }
+    return (outcome.status, outcome.output)
   }
 }
 
 /// `launchctl` for the user's GUI domain.
 public struct LaunchctlAgents: LaunchAgentManaging {
   private static let executable = "/bin/launchctl"
+  private static let timeout = 10.0
 
   public init() {}
 
   public func isLoaded(label: String, uid: UInt32) async -> Bool {
-    let result = try? await SystemTool.run(Self.executable, ["print", "gui/\(uid)/\(label)"])
+    let result = try? await SystemTool.run(
+      Self.executable, ["print", "gui/\(uid)/\(label)"], timeout: Self.timeout)
     return result?.status == 0
   }
 
   public func bootout(label: String, uid: UInt32) async throws(NtfyError) {
-    let result = try await SystemTool.run(Self.executable, ["bootout", "gui/\(uid)/\(label)"])
+    let result = try await SystemTool.run(
+      Self.executable, ["bootout", "gui/\(uid)/\(label)"], timeout: Self.timeout)
     guard result.status == 0 else {
       throw .storage("launchctl bootout \(label) exited with \(result.status)")
     }
@@ -56,21 +87,34 @@ public struct LaunchctlAgents: LaunchAgentManaging {
 public struct LSRegister: LaunchServicesRegistering {
   static let executable =
     "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+  /// The full dump takes a few seconds on a busy database.
+  private static let timeout = 30.0
 
   public init() {}
 
   public func registeredHelperPaths() async throws(NtfyError) -> [String] {
-    let result = try await SystemTool.run(Self.executable, ["-dump"])
+    let result = try await SystemTool.run(Self.executable, ["-dump"], timeout: Self.timeout)
     guard result.status == 0 else {
       throw .storage("lsregister -dump exited with \(result.status)")
     }
-    let dump = String(bytes: result.output, encoding: .utf8) ?? ""
-    let helper = #/\/[^ \n]*ntfy-notify\.app/#
-    return Set(dump.matches(of: helper).map { String($0.output) }).sorted()
+    return Self.helperPaths(inDump: String(bytes: result.output, encoding: .utf8) ?? "")
+  }
+
+  /// The `path:` lines of a dump read `path:<spaces><path> (0x<id>)`; the path may hold spaces.
+  static func helperPaths(inDump dump: String) -> [String] {
+    var paths: Set<String> = []
+    for line in dump.split(separator: "\n") where line.hasPrefix("path:") {
+      var path = String(line.dropFirst("path:".count).drop { $0 == " " })
+      if path.hasSuffix(")"), let id = path.range(of: " (0x", options: .backwards) {
+        path = String(path[..<id.lowerBound])
+      }
+      if path.hasSuffix("/ntfy-notify.app") { paths.insert(path) }
+    }
+    return paths.sorted()
   }
 
   public func unregister(path: String) async throws(NtfyError) {
-    let result = try await SystemTool.run(Self.executable, ["-u", path])
+    let result = try await SystemTool.run(Self.executable, ["-u", path], timeout: Self.timeout)
     guard result.status == 0 else { throw .storage("lsregister -u exited with \(result.status)") }
   }
 }
@@ -87,7 +131,7 @@ public struct SystemProcesses: LegacyProcessTerminating {
       validating: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
   }
 
-  public func terminate(_ pid: Int32) async throws(NtfyError) {
+  public func terminate(_ pid: Int32, expectedPath: String) async throws(NtfyError) {
     guard kill(pid, SIGTERM) == 0 else {
       if errno == ESRCH { return }
       throw .storage("cannot signal pid \(pid): errno \(errno)")
@@ -96,7 +140,13 @@ public struct SystemProcesses: LegacyProcessTerminating {
       if kill(pid, 0) != 0 { return }
       try? await Task.sleep(for: .milliseconds(100))
     }
+    // The pid could have been reused while we waited; only the same executable gets SIGKILL.
+    guard executablePath(of: pid) == expectedPath else { return }
     kill(pid, SIGKILL)
+    try? await Task.sleep(for: .milliseconds(200))
+    if kill(pid, 0) == 0, executablePath(of: pid) == expectedPath {
+      throw .storage("pid \(pid) survived SIGKILL")
+    }
   }
 }
 

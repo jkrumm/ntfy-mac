@@ -101,7 +101,7 @@ public struct LegacyInstallCleanup: Sendable {
       }
     }
     let daemon = legacyDaemon()
-    if let daemon { artifacts.append(.daemon(pid: daemon)) }
+    if let daemon { artifacts.append(.daemon(pid: daemon.pid)) }
     artifacts += existing(
       [("curl helper app", layout.curlHelper), ("dev helper app", layout.devHelper)]
         + layout.brewHelpers().map { ("brew helper app", $0) })
@@ -127,7 +127,7 @@ public struct LegacyInstallCleanup: Sendable {
 
   /// The pid file's process, only when its executable proves it is the 1.x binary: named
   /// `ntfy-mac`, outside any `.app` (the 2.0 binary lives in `NtfyMac.app`), and not us.
-  private func legacyDaemon() -> Int32? {
+  private func legacyDaemon() -> (pid: Int32, path: String)? {
     guard
       let text = try? String(contentsOf: layout.pidFile, encoding: .utf8),
       let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -139,7 +139,7 @@ public struct LegacyInstallCleanup: Sendable {
     guard executable.lastPathComponent == "ntfy-mac", !executable.path.contains(".app/") else {
       return nil
     }
-    return pid
+    return (pid, path)
   }
 
   private func isRemovableCurlBinary() -> Bool {
@@ -165,7 +165,9 @@ public struct LegacyInstallCleanup: Sendable {
       try delete(plist)
     case .daemon(let pid):
       // Launchd may have ended it already, and the pid may have been reused since the scan.
-      if legacyDaemon() == pid { try await processes.terminate(pid) }
+      if let daemon = legacyDaemon(), daemon.pid == pid {
+        try await processes.terminate(pid, expectedPath: daemon.path)
+      }
       try delete(layout.pidFile)
     case .file(_, let url):
       try delete(url)

@@ -269,6 +269,28 @@ struct LegacyFixture {
     #expect(fixture.processes.terminated.isEmpty)
   }
 
+  @Test func aDaemonThatSurvivesKillIsReportedAsFailed() async throws {
+    let fixture = try LegacyFixture(.curl)
+    defer { fixture.remove() }
+    let binary = fixture.home.appendingPathComponent(".local/bin/ntfy-mac").path
+    let stubborn = InMemoryLegacyProcesses(running: [4242: binary], surviving: [4242])
+    let cleanup = LegacyInstallCleanup(
+      layout: fixture.layout, agents: fixture.agents, registry: fixture.registry,
+      processes: stubborn, runningExecutable: nil, processID: 1)
+
+    let report = await cleanup.run()
+
+    #expect(stubborn.terminated == [4242])
+    #expect(report.failed.contains { $0.hasPrefix("1.x daemon: pid 4242") })
+  }
+
+  @Test func aReusedPidIsNotTerminated() throws {
+    let processes = InMemoryLegacyProcesses(running: [4242: "/usr/bin/other"])
+    try processes.terminate(4242, expectedPath: "/old/ntfy-mac")
+    #expect(processes.terminated.isEmpty)
+    #expect(processes.executablePath(of: 4242) == "/usr/bin/other")
+  }
+
   @Test func aFailingStepLandsInFailedAndTheRestStillRuns() async throws {
     let helper = "/Volumes/Old/ntfy-notify.app"
     let fixture = try LegacyFixture(

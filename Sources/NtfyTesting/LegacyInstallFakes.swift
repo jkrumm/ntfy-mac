@@ -67,25 +67,31 @@ public final class InMemoryLaunchServices: LaunchServicesRegistering {
 }
 
 /// Processes by pid with a known executable path; remembers who was terminated.
+/// A pid listed in `surviving` outlives `terminate`, which then throws.
 public final class InMemoryLegacyProcesses: LegacyProcessTerminating {
   private struct State {
     var running: [Int32: String]
     var terminated: [Int32] = []
   }
   private let state: Mutex<State>
+  private let surviving: Set<Int32>
 
-  public init(running: [Int32: String] = [:]) {
+  public init(running: [Int32: String] = [:], surviving: Set<Int32> = []) {
     state = Mutex(State(running: running))
+    self.surviving = surviving
   }
 
   public var terminated: [Int32] { state.withLock { $0.terminated } }
 
   public func executablePath(of pid: Int32) -> String? { state.withLock { $0.running[pid] } }
 
-  public func terminate(_ pid: Int32) {
-    state.withLock {
-      $0.terminated.append(pid)
-      $0.running[pid] = nil
+  public func terminate(_ pid: Int32, expectedPath: String) throws(NtfyError) {
+    let signalled = state.withLock { state -> Bool in
+      guard state.running[pid] == expectedPath else { return false }
+      state.terminated.append(pid)
+      if !surviving.contains(pid) { state.running[pid] = nil }
+      return true
     }
+    if signalled, surviving.contains(pid) { throw .storage("pid \(pid) survived SIGKILL") }
   }
 }

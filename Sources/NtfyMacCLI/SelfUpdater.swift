@@ -21,6 +21,10 @@ struct SelfUpdater: Sendable {
   static let maxArchiveBytes: Int64 = 100 * 1024 * 1024
   static let maxChecksumBytes: Int64 = 1024 * 1024
   static let checksumFile = "SHA256SUMS"
+  static let stagingPrefix = ".NtfyMac-update-"
+  /// Written into a staging directory that holds the only copy of the previous app.
+  static let keepMarker = "PREVIOUS-APP-KEPT"
+  static let staleAfter: TimeInterval = 10 * 60
 
   let ports: SelfUpdatePorts
   /// The installed `NtfyMac.app`.
@@ -41,16 +45,25 @@ struct SelfUpdater: Sendable {
       throw Self.failure(.disallowedURL(url.absoluteString))
     }
 
+    let parent = bundle.deletingLastPathComponent()
+    Self.removeStaleStaging(in: parent)
     let staging = try Self.makeDirectory(
-      bundle.deletingLastPathComponent().appendingPathComponent(
-        ".NtfyMac-update-\(UUID().uuidString)", isDirectory: true))
+      parent.appendingPathComponent(
+        "\(Self.stagingPrefix)\(UUID().uuidString)", isDirectory: true))
     var keepStaging = false
     defer { if !keepStaging { try? FileManager.default.removeItem(at: staging) } }
 
     let staged = try await prepare(
       version: version, archiveName: archiveName, urls: (archiveURL, checksumURL),
       staging: staging, out)
-    try ports.swapper.swap(staged, bundle)
+    do {
+      try ports.swapper.swap(staged, bundle)
+    } catch {
+      // A swap that failed halfway can leave the installed app inside the staging directory.
+      keepStaging = !FileManager.default.fileExists(atPath: bundle.path)
+      guard keepStaging else { throw error }
+      throw Self.strandedFailure(staging, error)
+    }
     // The staged path now holds the previous copy; the staging directory's removal deletes it.
     let verifier = StagedBundleVerifier(signature: ports.signature)
     do {
@@ -59,7 +72,7 @@ struct SelfUpdater: Sendable {
       do {
         try ports.swapper.swap(staged, bundle)
       } catch {
-        keepStaging = true
+        keepStaging = Self.markKept(staging)
         throw CLIFailure.runtime(
           "update-failed",
           "The new app failed verification and could not be rolled back. "
@@ -108,6 +121,39 @@ struct SelfUpdater: Sendable {
     } catch {
       out.note("Updated, but the app could not be restarted. Quit and reopen it.")
       return false
+    }
+  }
+
+  private static func strandedFailure(_ staging: URL, _ error: NtfyError) -> CLIFailure {
+    _ = markKept(staging)
+    var detail = "\(error)"
+    if case .storage(let reason) = error { detail = reason }
+    return .runtime(
+      "update-failed",
+      "The update failed and the installed app is missing. The previous copy is in "
+        + "\(staging.path) (\(detail))")
+  }
+
+  /// Marks `staging` so the next run's sweep leaves it alone; true so callers can assign it.
+  private static func markKept(_ staging: URL) -> Bool {
+    try? Data().write(to: staging.appendingPathComponent(keepMarker))
+    return true
+  }
+
+  /// Removes staging directories an earlier run left behind (it crashed or was killed): real
+  /// directories with the staging prefix, older than `staleAfter`, without the keep marker.
+  static func removeStaleStaging(in parent: URL, now: Date = Date()) {
+    let manager = FileManager.default
+    let names = (try? manager.contentsOfDirectory(atPath: parent.path)) ?? []
+    for name in names where name.hasPrefix(stagingPrefix) {
+      let url = parent.appendingPathComponent(name, isDirectory: true)
+      guard let attributes = try? manager.attributesOfItem(atPath: url.path),
+        attributes[.type] as? FileAttributeType == .typeDirectory,
+        let modified = attributes[.modificationDate] as? Date,
+        now.timeIntervalSince(modified) > staleAfter,
+        !manager.fileExists(atPath: url.appendingPathComponent(keepMarker).path)
+      else { continue }
+      try? manager.removeItem(at: url)
     }
   }
 

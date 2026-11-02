@@ -8,7 +8,7 @@ import Testing
 @testable import NtfyMacCLI
 
 /// Builds a fake `NtfyMac.app` and the release tarball around it with the system `tar`.
-private enum ReleaseFixture {
+enum ReleaseFixture {
   static func writeBundle(
     at app: URL, version: String, identifier: String = "com.jkrumm.ntfy-mac", marker: String,
     executable: Bool = true
@@ -65,7 +65,7 @@ private enum ReleaseFixture {
 }
 
 /// Wraps the real swapper and records each swap in the shared log.
-private struct LoggingSwapper: BundleSwapping {
+struct LoggingSwapper: BundleSwapping {
   let log: UpdateEventLog
 
   func swap(_ first: URL, _ second: URL) throws(NtfyError) {
@@ -87,7 +87,7 @@ private struct LoggingSwapper: BundleSwapping {
   }
 
   /// A rig whose installed app is a fake old bundle, serving `tarball` as the latest release.
-  private struct Rig {
+  struct Rig {
     var cli = CLIRig()
     let log = UpdateEventLog()
     let signature: ScriptedCodeSignature

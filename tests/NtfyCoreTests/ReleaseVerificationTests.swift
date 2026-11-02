@@ -92,10 +92,13 @@ import Testing
   @Test(arguments: [
     ["NtfyMac.app/", "NtfyMac.app/Contents/Info.plist", "LICENSE"],
     ["./NtfyMac.app/", "./NtfyMac.app/Contents/MacOS/ntfy-mac", "./LICENSE", "./"],
-    [],
   ])
   func expectedEntriesPass(entries: [String]) throws {
     try ReleasePolicy.validate(entries: entries)
+  }
+
+  @Test func anEmptyListingIsRejected() {
+    #expect(throws: ReleaseUpdateError.self) { try ReleasePolicy.validate(entries: []) }
   }
 
   @Test(arguments: [

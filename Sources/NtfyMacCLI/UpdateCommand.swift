@@ -36,10 +36,10 @@ struct UpdateCommand: CLICommand {
   }
 
   private func checkForUpdate(_ environment: CLIEnvironment, _ out: Output) async throws {
-    let tag = try await environment.releases.latestTag()
+    let release = try await environment.releases.latest()
     let current = Version.current
-    let newer = SemanticVersion.isNewer(tag, than: current)
-    let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+    let latest = release.version
+    let newer = SemanticVersion.isNewer(latest, than: current)
     out.result(
       CheckReport(current: current, latest: latest, updateAvailable: newer),
       text: newer

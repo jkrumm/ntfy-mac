@@ -63,6 +63,42 @@ import Testing
       try FileManager.default.contentsOfDirectory(atPath: temp.url.path).sorted() == ["a", "b"])
   }
 
+  @Test func aFailedRollbackNamesWhereTheCopiesAre() throws {
+    let temp = TempDirectory()
+    let first = try folder(temp, "a", marker: "one")
+    let second = try folder(temp, "b", marker: "two")
+    let calls = Counter()
+    // The aside and the second-into-first renames pass; the last one and both undo steps fail.
+    let swapper = AtomicBundleSwapper(
+      exchange: { _, _ in ENOTSUP },
+      rename: { source, destination in
+        if calls.next() > 2 { return EACCES }
+        return Darwin.rename(source, destination) == 0 ? 0 : errno
+      })
+    do {
+      try swapper.swap(first, second)
+      Issue.record("the swap should have failed")
+    } catch {
+      guard case .storage(let reason) = error else {
+        Issue.record("unexpected error \(error)")
+        return
+      }
+      #expect(reason.contains(first.path))
+      #expect(reason.contains(".swap-"))
+    }
+    // The previous installed copy ("two") sits at the first path, not lost.
+    #expect(marker(first) == "two")
+  }
+
+  @Test func tarListingsFailClosed() throws {
+    #expect(try TarArchive.parse(listing: Data("NtfyMac.app/\nLICENSE\n".utf8)).count == 2)
+    #expect(throws: NtfyError.self) { try TarArchive.parse(listing: Data()) }
+    #expect(throws: NtfyError.self) { try TarArchive.parse(listing: Data("\n\n".utf8)) }
+    #expect(throws: NtfyError.self) {
+      try TarArchive.parse(listing: Data([0x4E, 0xFF, 0xFE, 0x0A]))
+    }
+  }
+
   @Test func aHardExchangeFailureIsReportedWithoutFallback() throws {
     let temp = TempDirectory()
     let first = try folder(temp, "a", marker: "one")

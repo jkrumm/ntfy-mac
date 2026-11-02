@@ -19,5 +19,7 @@ public protocol LaunchServicesRegistering: Sendable {
 public protocol LegacyProcessTerminating: Sendable {
   /// The real path of the process's executable; nil when no such process runs.
   func executablePath(of pid: Int32) -> String?
-  func terminate(_ pid: Int32) async throws(NtfyError)
+  /// Stops the process: SIGTERM, then SIGKILL if it lingers, but only while `pid` still runs
+  /// `expectedPath` (the pid may have been reused). Throws when it survived.
+  func terminate(_ pid: Int32, expectedPath: String) async throws(NtfyError)
 }

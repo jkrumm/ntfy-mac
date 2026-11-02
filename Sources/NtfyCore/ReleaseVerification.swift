@@ -94,9 +94,10 @@ public enum ReleasePolicy {
     return true
   }
 
-  /// Rejects absolute paths, `..` components, control characters and any root entry other than
+  /// Rejects an empty listing, absolute paths, `..` components, control characters and any root entry other than
   /// `NtfyMac.app` (and below) or the `LICENSE` file. A leading `./` is tolerated.
   public static func validate(entries: [String]) throws(ReleaseUpdateError) {
+    guard !entries.isEmpty else { throw .unsafeArchiveEntry("(the archive is empty)") }
     for entry in entries {
       let components = entry.split(separator: "/", omittingEmptySubsequences: true)
         .filter { $0 != "." }

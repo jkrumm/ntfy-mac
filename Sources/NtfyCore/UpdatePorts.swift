@@ -20,7 +20,9 @@ public protocol CodeSignatureChecking: Sendable {
 }
 
 /// Exchanges two directories on one volume. Afterwards each path holds what the other held,
-/// so calling it again undoes it. Either both moved or neither did.
+/// so calling it again undoes it. An atomic exchange moves both or neither; an adapter that has
+/// to fall back to several renames restores what it can on failure and, when even that fails,
+/// names in the error where the previous copy is.
 public protocol BundleSwapping: Sendable {
   func swap(_ first: URL, _ second: URL) throws(NtfyError)
 }
@@ -51,8 +53,11 @@ public struct StagedBundleVerifier: Sendable {
     guard info["CFBundleIdentifier"] as? String == Self.bundleIdentifier else {
       throw .bundleInvalid("unexpected bundle identifier")
     }
-    guard info["CFBundleShortVersionString"] as? String == version else {
-      throw .bundleInvalid("the bundle version is not \(version)")
+    // The release build stamps only the numeric core (`2.1.0`) into the plist, also for a
+    // prerelease (`2.1.0-rc.1`).
+    let core = version.split(separator: "-", maxSplits: 1).first.map(String.init) ?? version
+    guard info["CFBundleShortVersionString"] as? String == core else {
+      throw .bundleInvalid("the bundle version is not \(core)")
     }
     let executable = bundle.appendingPathComponent(Self.executablePath)
     guard FileManager.default.isExecutableFile(atPath: executable.path) else {

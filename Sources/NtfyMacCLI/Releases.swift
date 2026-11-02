@@ -15,11 +15,6 @@ protocol ReleaseLookup: Sendable {
   func latest() async throws(NtfyError) -> LatestRelease
 }
 
-extension ReleaseLookup {
-  /// The latest release tag, as published (`v2.1.0`).
-  func latestTag() async throws(NtfyError) -> String { try await latest().tag }
-}
-
 private struct ReleaseAsset: Decodable {
   let name: String
   let url: URL

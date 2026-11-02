@@ -85,6 +85,8 @@ Nothing to reconfigure. Install 2.0 over the old version (any of the methods abo
 
 **Updates** — `brew upgrade ntfy-mac` for Homebrew installs. Curl and manual installs run `ntfy-mac update`, which verifies the release checksum before it swaps the app in. `ntfy-mac update --check` only looks.
 
+"Verified" has a narrow meaning. The SHA-256 comes from the same GitHub release as the download, and the updater also checks the bundle identifier, the version and the ad-hoc code signature. That catches corrupted, truncated and tampered downloads. It does not protect against a compromised release: whoever can publish one can publish a matching checksum. A pinned signing key arrives with Developer ID in Wave 7.
+
 **Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
 
 **Agent-ready** — Every command takes `--json`. Exit codes are stable, errors have codes, and `ntfy-mac schema --json` describes the whole CLI. See [Use from agents and scripts](#use-from-agents-and-scripts).
