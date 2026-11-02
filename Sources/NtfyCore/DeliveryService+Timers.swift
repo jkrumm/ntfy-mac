@@ -55,6 +55,7 @@ extension DeliveryService {
   func pollReminders() async {
     while !Task.isCancelled {
       do { try await clock.sleep(for: Self.reminderPollInterval) } catch { return }
+      await resumeIfPauseOver()
       await fireDueReminders()
     }
   }

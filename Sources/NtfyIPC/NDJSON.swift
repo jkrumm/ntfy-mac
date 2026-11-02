@@ -10,6 +10,7 @@ public enum NDJSON {
   public static func encode<Frame: Versioned>(_ frame: Frame) throws(IPCError) -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .iso8601
     guard var data = try? encoder.encode(frame) else { throw .malformedFrame }
     data.append(0x0A)
     return data
@@ -21,6 +22,7 @@ public enum NDJSON {
     _ type: Frame.Type, from line: Data
   ) throws(IPCError) -> Frame {
     let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
     guard let probe = try? decoder.decode(VersionProbe.self, from: line) else {
       throw .malformedFrame
     }

@@ -18,6 +18,9 @@ enum InFlightFate {
 ///   on the next boot. The queue itself is not persisted.
 /// - After a post, an auto-dismiss timer and, for urgent messages, a re-alert timer run until
 ///   the user acknowledges, opens, or the server withdraws the message.
+/// - While `Config.pausedUntil` is in the future nothing is posted: messages stay unnotified in the
+///   history, and the first moment the pause is over (its end, or the next reminder poll after
+///   the config cleared it) `reconcile` shows them under `MissedMessagePolicy`.
 /// - Reminders that came due in the history are shown again, polled every
 ///   `reminderPollInterval` (the CLI writes snoozes into the history from another process, so no
 ///   in-process timer knows the next deadline).
@@ -53,6 +56,12 @@ public actor DeliveryService: Delivering {
   var drainTask: Task<Void, Never>?
   var reminderTask: Task<Void, Never>?
   var isFiringReminders = false
+  /// Set when a post was held back by `Config.pausedUntil`; the resume reconciles once.
+  var heldBack = false
+  /// Auto-dismiss seconds for locally posted messages (`deliverLocal`), by notification
+  /// identifier, consumed by the post.
+  var dismissOverrides: [String: TimeInterval] = [:]
+  var resumeTask: Task<Void, Never>?
   /// Reminders handed to the queue and not yet shown or given up on.
   var queuedReminders: Set<MessageRef> = []
   /// Reminders that were shown but could not be cleared in the history; never shown again.
@@ -87,9 +96,10 @@ public actor DeliveryService: Delivering {
     guard !stopped else { return }
     stopped = true
     queue.removeAll { _ in true }
-    let tasks = [drainTask, reminderTask].compactMap { $0 } + timers.cancelAll()
+    let tasks = [drainTask, reminderTask, resumeTask].compactMap { $0 } + timers.cancelAll()
     drainTask = nil
     reminderTask = nil
+    resumeTask = nil
     for task in tasks { task.cancel() }
     for task in tasks { await task.value }
   }
@@ -101,6 +111,14 @@ public actor DeliveryService: Delivering {
     dropSuperseded(by: message)
     queue.enqueue(.message(message, repeatsLeft: nil))
     startDraining()
+  }
+
+  /// Queues a message that did not come from the server (the CLI's `notify`). `dismissAfter`
+  /// replaces the configured auto-dismiss of its priority for this one notification; 0 means
+  /// never.
+  public func deliverLocal(_ message: NtfyMessage, dismissAfter: TimeInterval?) {
+    if let dismissAfter { dismissOverrides[message.notificationIdentifier] = dismissAfter }
+    deliver(message)
   }
 
   public func announceMissed(_ messages: [NtfyMessage]) async {

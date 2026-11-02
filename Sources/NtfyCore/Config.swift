@@ -32,6 +32,8 @@ public struct Config: Sendable, Hashable {
   /// Messages with at least this priority (1...5) require acknowledgement.
   public var reAlertMinPriority: Int
   public var reAlertMaxRepeats: Int
+  /// Notifications are held back until this moment (ISO 8601 in the file); absent means not paused.
+  public var pausedUntil: Date?
   /// Every other top-level key, preserved verbatim.
   public var extras: [String: ConfigValue]
 
@@ -47,6 +49,7 @@ public struct Config: Sendable, Hashable {
     reAlertIntervalSeconds: Int = Defaults.reAlertIntervalSeconds,
     reAlertMinPriority: Int = Defaults.reAlertMinPriority,
     reAlertMaxRepeats: Int = Defaults.reAlertMaxRepeats,
+    pausedUntil: Date? = nil,
     extras: [String: ConfigValue] = [:]
   ) {
     self.url = url
@@ -60,6 +63,7 @@ public struct Config: Sendable, Hashable {
     self.reAlertIntervalSeconds = reAlertIntervalSeconds
     self.reAlertMinPriority = Priority(clamping: reAlertMinPriority).rawValue
     self.reAlertMaxRepeats = reAlertMaxRepeats
+    self.pausedUntil = pausedUntil
     self.extras = extras
   }
 
@@ -83,9 +87,10 @@ public struct Config: Sendable, Hashable {
     static let reAlertIntervalSeconds = "reAlertIntervalSeconds"
     static let reAlertMinPriority = "reAlertMinPriority"
     static let reAlertMaxRepeats = "reAlertMaxRepeats"
+    static let pausedUntil = "pausedUntil"
     static let known: Set<String> = [
       url, token, sounds, dismiss, extraTopics, allowInsecure, allowPrivateNetworkActions,
-      reAlert, reAlertIntervalSeconds, reAlertMinPriority, reAlertMaxRepeats,
+      reAlert, reAlertIntervalSeconds, reAlertMinPriority, reAlertMaxRepeats, pausedUntil,
     ]
   }
 
@@ -126,6 +131,7 @@ public struct Config: Sendable, Hashable {
     reAlertMaxRepeats =
       object[Key.reAlertMaxRepeats]?.intValue.flatMap { $0 >= 0 ? $0 : nil }
       ?? Defaults.reAlertMaxRepeats
+    pausedUntil = object[Key.pausedUntil]?.stringValue.flatMap(Self.parseDate)
     extras = object.filter { !Self.Key.known.contains($0.key) }
   }
 
@@ -161,7 +167,17 @@ public struct Config: Sendable, Hashable {
     if reAlertMaxRepeats != Defaults.reAlertMaxRepeats {
       result[Key.reAlertMaxRepeats] = .int(reAlertMaxRepeats)
     }
+    if let pausedUntil { result[Key.pausedUntil] = .string(Self.formatDate(pausedUntil)) }
     return result
+  }
+
+  private static func parseDate(_ text: String) -> Date? {
+    (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text))
+      ?? (try? Date.ISO8601FormatStyle().parse(text))
+  }
+
+  private static func formatDate(_ date: Date) -> String {
+    date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
   }
 
   /// Parses file contents; nil when they are empty, malformed or not a JSON object.

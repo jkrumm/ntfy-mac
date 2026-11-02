@@ -142,4 +142,30 @@ import Testing
     #expect(config.reAlertMinPriority == 5)
     #expect(config.reAlertMaxRepeats == 12)
   }
+
+  @Test func pausedUntilIsAbsentByDefaultAndNotWritten() throws {
+    let config = try #require(parse("{}"))
+    #expect(config.pausedUntil == nil)
+    #expect(config.object["pausedUntil"] == nil)
+  }
+
+  @Test func pausedUntilRoundTripsAsISO8601AndIsNotAnExtra() throws {
+    let config = try #require(parse(#"{"pausedUntil":"2026-11-02T10:00:00Z","other":1}"#))
+    #expect(config.pausedUntil == Date(timeIntervalSince1970: 1_793_613_600))
+    #expect(config.extras == ["other": .int(1)])
+    let again = try #require(Config.parse(try config.serialized()))
+    #expect(again == config)
+    #expect(config.object["pausedUntil"]?.stringValue?.hasPrefix("2026-11-02T10:00:00") == true)
+  }
+
+  @Test func pausedUntilKeepsFractionalSeconds() throws {
+    let config = Config(pausedUntil: Date(timeIntervalSince1970: 1_793_613_600.25))
+    let again = try #require(Config.parse(try config.serialized()))
+    #expect(again.pausedUntil == config.pausedUntil)
+  }
+
+  @Test func wrongTypedOrUnparsablePausedUntilReadsAsAbsent() throws {
+    #expect(try #require(parse(#"{"pausedUntil":5}"#)).pausedUntil == nil)
+    #expect(try #require(parse(#"{"pausedUntil":"soon"}"#)).pausedUntil == nil)
+  }
 }

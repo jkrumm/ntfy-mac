@@ -20,9 +20,9 @@ final class AppPipeline: Sendable {
   static let retentionInterval: Duration = .seconds(60 * 60)
 
   private let services: AppServices
-  private let store: SQLiteHistoryStore
-  private let delivery: DeliveryService
-  private let supervisor: StreamSupervisor
+  let store: SQLiteHistoryStore
+  let delivery: DeliveryService
+  let supervisor: StreamSupervisor
   private let retention: Task<Void, Never>
 
   /// Opens the store and starts everything. Throws only when the history cannot be opened.
@@ -149,7 +149,7 @@ final class AppPipeline: Sendable {
     }
   }
 
-  private static func applicationSupport() -> URL {
+  static func applicationSupport() -> URL {
     FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
       ?? FileManager.default.homeDirectoryForCurrentUser.appending(
         path: "Library/Application Support", directoryHint: .isDirectory)

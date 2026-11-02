@@ -1,5 +1,6 @@
 import Foundation
 import NtfyCore
+import NtfyIPC
 import NtfyPlatform
 
 /// Owns the running pipeline: resolves the configuration, builds and tears down the pipeline when
@@ -16,6 +17,7 @@ actor AppController {
   private var pipeline: AppPipeline?
   private var watcher: Task<Void, Never>?
   private var permissionTask: Task<Void, Never>?
+  private var ipc: IPCServer?
 
   init(router: ResponseRouter) {
     services = AppServices(
@@ -34,6 +36,7 @@ actor AppController {
   func start() async {
     guard lifecycle == .new else { return }
     lifecycle = .starting
+    startIPC()
     // Created first, so an edit while the first pipeline is being built is not missed.
     let changes = ConfigWatcher().changes()
     await migrateToken()
@@ -51,12 +54,37 @@ actor AppController {
   func stop() async {
     guard lifecycle != .stopped else { return }
     lifecycle = .stopped
+    await ipc?.stop()
+    ipc = nil
     permissionTask?.cancel()
     permissionTask = nil
     watcher?.cancel()
     await watcher?.value
     watcher = nil
     await teardown()
+  }
+
+  /// The running pipeline, nil while none is built (unconfigured, or being rebuilt).
+  func runningPipeline() -> AppPipeline? { pipeline }
+
+  // MARK: Socket
+
+  /// The socket outlives pipeline rebuilds: its handler asks this controller for the pipeline
+  /// each time. A socket that cannot be bound is logged; the stream still runs.
+  private func startIPC() {
+    let handler = AppIPCHandler(
+      controller: self, config: services.config,
+      permissions: UserNotificationPermissionProvider(center: services.center),
+      clock: services.clock)
+    let server = IPCServer(
+      path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport())
+    ) { await handler.handle($0) }
+    do throws(IPCError) {
+      try server.start()
+      ipc = server
+    } catch {
+      log.error("socket not started: \(String(describing: error), privacy: .public)")
+    }
   }
 
   // MARK: Reload

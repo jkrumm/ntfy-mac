@@ -58,11 +58,16 @@ extension DeliveryService {
   private func postMessage(_ message: NtfyMessage, repeatsLeft: Int?) async -> Outcome {
     let ref = MessageRef(topic: message.topic, id: message.id)
     inFlight = InFlight(ref: ref, identifier: message.notificationIdentifier)
-    let config = await currentConfig()
+    let loaded = await currentConfig()
     guard inFlight?.fate == .keep else {
       inFlight = nil
       return .skipped
     }
+    if holdBack(loaded) {
+      inFlight = nil
+      return .skipped
+    }
+    let config = applyingDismissOverride(to: loaded, for: message)
     let content = DeliveryPolicy.content(for: message, config: config)
     do throws(NtfyError) {
       try await poster.post(content)
@@ -88,6 +93,7 @@ extension DeliveryService {
   }
 
   private func postSummary(count: Int, oldestTopic: String, covers: [MessageRef]) async -> Outcome {
+    if holdBack(await currentConfig()) { return .skipped }
     do throws(NtfyError) {
       try await poster.postMissedSummary(count: count, oldestTopic: oldestTopic)
     } catch {
