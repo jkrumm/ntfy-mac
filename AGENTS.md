@@ -35,6 +35,15 @@ Commits: Conventional Commits (commitlint via lefthook). Releases: semantic-rele
 - Formula name `jkrumm/tap/ntfy-mac`; the priority mapping table in the README.
 - Old artifacts removed on migration: `com.jkrumm.ntfy-mac` LaunchAgent, `homebrew.mxcl.ntfy-mac` service, `ntfy-notify.app` and its Launch Services entries.
 
+## Dev server
+
+A dev ntfy server (2.36.0) runs on the HomeLab, tailnet-only, for integration tests and dogfooding.
+
+- URL: `https://<your-domain>` (the `url` field of `~/.config/ntfy-mac/config.json` on the MacBook, or the 1Password item `common/ntfy`).
+- Token: `op://common/ntfy/TOKEN`. On the mini read it with `secrets-run read op://common/ntfy/TOKEN`, never bare `op`.
+- Integration tests use topics prefixed `ntfy-mac-test-`.
+- Never commit the real hostname or token.
+
 ## Rules
 
 - Verify library, API and runner-image facts with `/research` or the primary docs; never from memory.
