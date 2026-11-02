@@ -42,9 +42,23 @@ struct MenuBarContent: View {
     .padding(.vertical, 4)
   }
 
-  /// Extra state rows (for example meeting awareness) go here; they sit above the actions.
+  /// Meeting awareness: stop a presenting override, show a detected meeting, or offer to start one.
   @ViewBuilder private var statusRows: some View {
-    EmptyView()
+    if model.isPresentingOverride {
+      MenuRow("Presenting: notifications held. Stop", systemImage: "rectangle.on.rectangle.slash") {
+        Task { await model.setPresenting(false) }
+      }
+    } else if model.meetingActive {
+      Label("In a meeting: notifications held", systemImage: "video.fill")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    } else {
+      MenuRow("I'm presenting (1 hour)", systemImage: "rectangle.on.rectangle") {
+        Task { await model.setPresenting(true, for: 60 * 60) }
+      }
+    }
   }
 
   @ViewBuilder private var messages: some View {
