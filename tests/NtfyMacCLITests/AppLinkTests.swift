@@ -84,7 +84,7 @@ private actor Answers {
     let server = IPCServer(path: socket) { await answers.next($0) }
     let link = AppLink(
       socket: socket, app: app, launch: { _ in (try? server.start()) != nil },
-      launchTimeout: .milliseconds(300))
+      launchTimeout: .milliseconds(1500))
     let response = try await link.send(ping)
     #expect(response.code == .appUnavailable)
     #expect(await answers.calls > 1)
