@@ -11,7 +11,24 @@ struct MenuBarContent: View {
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 6) {
+      header
+      Divider().padding(.horizontal, 6)
+      messages
+      Divider().padding(.horizontal, 6)
+      actions
+    }
+    .padding(6)
+    .frame(width: 340)
+    .task { coordinator.install(openWindow) }
+    .onChange(of: windows.request) { coordinator.fulfil(windows) }
+    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+      Task { await model.refreshPermission() }
+    }
+  }
+
+  private var header: some View {
+    VStack(alignment: .leading, spacing: 8) {
       StatusLine(model: model, open: coordinator.show)
       if let problem = model.permission?.problems.first {
         Label(problem.hint, systemImage: "exclamationmark.triangle.fill")
@@ -20,18 +37,14 @@ struct MenuBarContent: View {
           .lineLimit(3)
           .fixedSize(horizontal: false, vertical: true)
       }
-      Divider()
-      messages
-      Divider()
-      actions
     }
-    .padding(12)
-    .frame(width: 340)
-    .task { coordinator.install(openWindow) }
-    .onChange(of: windows.request) { coordinator.fulfil(windows) }
-    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-      Task { await model.refreshPermission() }
-    }
+    .padding(.horizontal, 6)
+    .padding(.vertical, 4)
+  }
+
+  /// Extra state rows (for example meeting awareness) go here; they sit above the actions.
+  @ViewBuilder private var statusRows: some View {
+    EmptyView()
   }
 
   @ViewBuilder private var messages: some View {
@@ -55,16 +68,18 @@ struct MenuBarContent: View {
   }
 
   private var actions: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 2) {
+      statusRows
       if model.unacknowledgedCount > 0 {
-        Button("Acknowledge all") { Task { await model.acknowledgeAll() } }
+        MenuRow("Acknowledge all", systemImage: "checkmark.circle") {
+          Task { await model.acknowledgeAll() }
+        }
       }
-      PauseControl(model: model)
-      Button("Open History") { coordinator.show(.history) }
-      Button("Settings…") { coordinator.show(.settings) }
-      Button("Quit ntfy-mac") { NSApp.terminate(nil) }
+      MenuPauseRow(model: model)
+      MenuRow("Open History", systemImage: "clock") { coordinator.show(.history) }
+      MenuRow("Settings…", systemImage: "gearshape") { coordinator.show(.settings) }
+      MenuRow("Quit ntfy-mac", systemImage: "power") { NSApp.terminate(nil) }
     }
-    .buttonStyle(.plain)
   }
 }
 
@@ -83,8 +98,12 @@ private struct StatusLine: View {
       Spacer(minLength: 8)
       if model.connection.needsSettings {
         Button("Open Settings") { open(.settings) }
+          .buttonStyle(.menuRowCompact)
+          .fixedSize()
       } else if model.connection.isDisconnected {
         Button("Reconnect") { Task { await model.reconnect() } }
+          .buttonStyle(.menuRowCompact)
+          .fixedSize()
       }
     }
   }
@@ -132,43 +151,14 @@ private struct MessageRowView: View {
           .help("Acknowledge")
       }
     }
-    .padding(.vertical, 3)
-    .contentShape(Rectangle())
+    .padding(.horizontal, 6)
+    .padding(.vertical, 4)
+    .menuHover()
     .onTapGesture(perform: open)
   }
 
   private var marker: Color {
     if row.isUrgent { return row.priority >= .max ? .red : .orange }
     return row.isRead ? .clear : .accentColor
-  }
-}
-
-private struct PauseControl: View {
-  let model: AppModel
-
-  var body: some View {
-    if let until = model.pausedUntil {
-      HStack {
-        Text(model.isPausedIndefinitely ? "Paused until I resume" : "Paused until \(time(until))")
-        Spacer()
-        Button("Resume") { Task { await model.resume() } }
-      }
-    } else {
-      Menu("Pause notifications") {
-        Button("30 minutes") { pause(.duration(30 * 60)) }
-        Button("1 hour") { pause(.duration(60 * 60)) }
-        Button("2 hours") { pause(.duration(2 * 60 * 60)) }
-        Button("Until 08:00") { pause(.untilMorning) }
-        Button("Until I resume") { pause(.indefinitely) }
-      }
-      .menuStyle(.borderlessButton)
-      .fixedSize()
-    }
-  }
-
-  private func pause(_ choice: PauseChoice) { Task { await model.pause(choice) } }
-
-  private func time(_ date: Date) -> String {
-    date.formatted(.dateTime.hour().minute())
   }
 }
