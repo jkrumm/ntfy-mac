@@ -8,7 +8,7 @@ struct DeliveryQueue {
     /// re-alerts still to come, this one included, for a re-alert.
     case message(NtfyMessage, repeatsLeft: Int?)
     /// One notification for messages that were missed; `covers` are marked notified once shown.
-    case summary(count: Int, oldestTopic: String, covers: [MessageRef])
+    case summary(count: Int, oldestTopic: String, covers: [MessageRef], cause: MissedSummaryCause)
 
     var ref: MessageRef? {
       guard case .message(let message, _) = self else { return nil }

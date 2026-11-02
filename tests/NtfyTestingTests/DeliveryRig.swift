@@ -13,14 +13,15 @@ struct DeliveryRig {
 
   init(
     config initial: Config = .withoutTimers,
-    poster: RecordingNotificationPoster = RecordingNotificationPoster()
+    poster: RecordingNotificationPoster = RecordingNotificationPoster(),
+    meeting: (any MeetingStateProviding)? = nil
   ) {
     self.poster = poster
     history = InMemoryHistoryStore(clock: clock)
     config = InMemoryConfigStore(initial)
     service = DeliveryService(
       poster: poster, history: history, inbox: history, config: config, clock: clock,
-      calendar: Self.utc)
+      calendar: Self.utc, meeting: meeting)
   }
 
   /// The fake clock starts at 22:13 UTC on 2023-11-14.

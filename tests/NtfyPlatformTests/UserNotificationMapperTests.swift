@@ -108,6 +108,17 @@ import UserNotifications
     #expect(spec.userInfo.isEmpty)
   }
 
+  @Test func meetingSummaryNamesTheMeetingAndCountsCorrectly() {
+    let many = UserNotificationMapper.summarySpec(
+      count: 3, oldestTopic: "alerts", cause: .meeting, identifier: "s")
+    #expect(many.body == "3 messages while you were in a meeting")
+    let one = UserNotificationMapper.summarySpec(
+      count: 1, oldestTopic: "alerts", cause: .meeting, identifier: "s")
+    #expect(one.body == "1 message while you were in a meeting")
+    #expect(one.sound == "Pop")
+    #expect(one.userInfo.isEmpty)
+  }
+
   @Test func errorsMapToNtfyErrors() {
     #expect(
       UserNotificationMapper.error(from: UNError(.notificationsNotAllowed)) == .permissionDenied)
