@@ -37,6 +37,8 @@ public struct Config: Sendable, Hashable {
   /// Per-topic mute, minimum priority and emoji, keyed by topic name.
   public var topicSettings: [String: TopicSettings]
   public var quietHours: QuietHours
+  /// Automatic suppression while a video meeting is detected, and the manual override.
+  public var meeting: MeetingSettings
   /// Every other top-level key, preserved verbatim.
   public var extras: [String: ConfigValue]
 
@@ -55,6 +57,7 @@ public struct Config: Sendable, Hashable {
     pausedUntil: Date? = nil,
     topicSettings: [String: TopicSettings] = [:],
     quietHours: QuietHours = QuietHours(),
+    meeting: MeetingSettings = MeetingSettings(),
     extras: [String: ConfigValue] = [:]
   ) {
     self.url = url
@@ -71,6 +74,7 @@ public struct Config: Sendable, Hashable {
     self.pausedUntil = pausedUntil
     self.topicSettings = topicSettings
     self.quietHours = quietHours
+    self.meeting = meeting
     self.extras = extras
   }
 
@@ -97,10 +101,11 @@ public struct Config: Sendable, Hashable {
     static let pausedUntil = "pausedUntil"
     static let topicSettings = "topicSettings"
     static let quietHours = "quietHours"
+    static let meeting = "meeting"
     static let known: Set<String> = [
       url, token, sounds, dismiss, extraTopics, allowInsecure, allowPrivateNetworkActions,
       reAlert, reAlertIntervalSeconds, reAlertMinPriority, reAlertMaxRepeats, pausedUntil,
-      topicSettings, quietHours,
+      topicSettings, quietHours, meeting,
     ]
   }
 
@@ -149,6 +154,7 @@ public struct Config: Sendable, Hashable {
       TopicSettings(value: $0)
     }
     quietHours = QuietHours(value: object[Key.quietHours])
+    meeting = MeetingSettings(value: object[Key.meeting])
     extras = object.filter { !Self.Key.known.contains($0.key) }
   }
 
@@ -188,15 +194,16 @@ public struct Config: Sendable, Hashable {
     let topics = topicSettings.compactMapValues(\.configValue)
     if !topics.isEmpty { result[Key.topicSettings] = .object(topics) }
     if let quiet = quietHours.configValue { result[Key.quietHours] = quiet }
+    if let meeting = meeting.configValue { result[Key.meeting] = meeting }
     return result
   }
 
-  private static func parseDate(_ text: String) -> Date? {
+  static func parseDate(_ text: String) -> Date? {
     (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text))
       ?? (try? Date.ISO8601FormatStyle().parse(text))
   }
 
-  private static func formatDate(_ date: Date) -> String {
+  static func formatDate(_ date: Date) -> String {
     date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
   }
 
