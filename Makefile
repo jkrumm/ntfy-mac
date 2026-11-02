@@ -9,11 +9,15 @@ LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/Launc
 
 check: toolchain lint-format lint build test app legacy
 
+# Runs once, as the first step of `check`. Fails closed: an unparseable version is an error.
+# The other targets skip it: Package.swift's tools version already rejects a Swift older than 6.2.
 toolchain:
 	@xcodebuild -version | head -1
 	@swift --version 2>&1 | head -1
-	@swift --version 2>&1 | sed -nE 's/.*Swift version ([0-9]+)\.([0-9]+).*/\1 \2/p' | \
-		awk '{ if ($$1 < 6 || ($$1 == 6 && $$2 < 2)) { print "Swift >= 6.2 required"; exit 1 } }'
+	@swift --version 2>&1 | sed -nE 's/.*Swift version ([0-9]+)\.([0-9]+).*/\1 \2/p' | head -1 | \
+		awk '{ seen = 1; if ($$1 < 6 || ($$1 == 6 && $$2 < 2)) bad = 1 } \
+			END { if (!seen) { print "cannot parse the Swift version"; exit 1 } \
+			if (bad) { print "Swift >= 6.2 required"; exit 1 } }'
 
 format:
 	swift format --in-place -r $(SWIFT_FILES)
@@ -22,20 +26,21 @@ lint-format:
 	swift format lint --strict -r $(SWIFT_FILES)
 
 lint:
+	$(TOOLS) --self-test
 	"$$($(TOOLS) swiftlint)" lint --strict --no-cache
 
 # Not part of `check` yet: joins once the tree is clean.
 analyze:
 	"$$($(TOOLS) periphery)" scan
 
-build: toolchain
+build:
 	swift build
 
-test: toolchain
+test:
 	swift test
 
-app: toolchain
-	cd App && xcodegen generate
+app:
+	cd App && "$$(../$(TOOLS) xcodegen)" generate
 	xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
 		-derivedDataPath .build/xcode build
 	scripts/sign.sh $(APP)
