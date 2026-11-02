@@ -4,8 +4,8 @@ import Security
 
 /// Stores the access token as a generic password item in the login Keychain.
 public struct KeychainSecretStore: SecretStore {
-  private let service: String
-  private let account: String
+  let service: String
+  let account: String
 
   public init(service: String = Log.subsystem, account: String = "token") {
     self.service = service
@@ -24,18 +24,29 @@ public struct KeychainSecretStore: SecretStore {
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     if status == errSecItemNotFound { return nil }
     guard status == errSecSuccess, let data = item as? Data else { throw Self.error(status) }
-    return String(data: data, encoding: .utf8)
+    guard let token = String(data: data, encoding: .utf8) else {
+      throw .storage("keychain item is not valid UTF-8")
+    }
+    return token
   }
 
   public func setToken(_ token: String) async throws(NtfyError) {
     let data = Data(token.utf8)
-    let update = SecItemUpdate(identity as CFDictionary, [kSecValueData: data] as CFDictionary)
-    if update == errSecSuccess { return }
-    guard update == errSecItemNotFound else { throw Self.error(update) }
+    if try update(data) { return }
     var attributes = identity
     attributes[kSecValueData] = data
     let add = SecItemAdd(attributes as CFDictionary, nil)
-    guard add == errSecSuccess else { throw Self.error(add) }
+    if add == errSecSuccess { return }
+    // Lost a race with another writer between the update and the add: update once more.
+    guard add == errSecDuplicateItem, try update(data) else { throw Self.error(add) }
+  }
+
+  /// Returns false when no item exists yet.
+  private func update(_ data: Data) throws(NtfyError) -> Bool {
+    let status = SecItemUpdate(identity as CFDictionary, [kSecValueData: data] as CFDictionary)
+    if status == errSecSuccess { return true }
+    if status == errSecItemNotFound { return false }
+    throw Self.error(status)
   }
 
   public func deleteToken() async throws(NtfyError) {

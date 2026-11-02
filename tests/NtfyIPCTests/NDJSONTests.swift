@@ -39,4 +39,24 @@ import Testing
     let bad = Data(#"{"command":"explode","id":"1","protocolVersion":1}"#.utf8)
     #expect(throws: IPCError.malformedFrame) { try NDJSON.decode(Request.self, from: bad) }
   }
+
+  @Test func rejectsEmptyLine() {
+    #expect(throws: IPCError.malformedFrame) { try NDJSON.decode(Request.self, from: Data()) }
+  }
+
+  @Test func rejectsMissingProtocolVersion() {
+    let frame = Data(#"{"command":"ping","id":"1"}"#.utf8)
+    #expect(throws: IPCError.malformedFrame) { try NDJSON.decode(Request.self, from: frame) }
+  }
+
+  @Test(arguments: [#""1""#, "1.5", "null", "true"])
+  func rejectsNonIntegerVersion(version: String) {
+    let frame = Data(#"{"command":"ping","id":"1","protocolVersion":\#(version)}"#.utf8)
+    #expect(throws: IPCError.malformedFrame) { try NDJSON.decode(Request.self, from: frame) }
+  }
+
+  @Test func toleratesTrailingNewlineOnDecode() throws {
+    let line = try NDJSON.encode(Request(id: "1", command: .ping))
+    #expect(try NDJSON.decode(Request.self, from: line).id == "1")
+  }
 }

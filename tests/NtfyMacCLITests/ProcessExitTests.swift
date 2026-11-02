@@ -13,6 +13,9 @@ import Testing
     (.permissionDenied, .appUnavailable),
     (.invalidResponse("x"), .runtime),
     (.storage("x"), .runtime),
+    (.rateLimited(retryAfter: 5), .runtime),
+    (.redirected, .runtime),
+    (.invalidTopic("x y"), .usage),
   ])
   func mapsCoreErrors(error: NtfyError, expected: ProcessExit) {
     #expect(ProcessExit(error: error) == expected)

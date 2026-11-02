@@ -48,6 +48,9 @@ let package = Package(
       name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore"],
       path: "tests/NtfyClientTests", swiftSettings: strict),
     .testTarget(
+      name: "NtfyPlatformTests", dependencies: ["NtfyPlatform", "NtfyCore"],
+      path: "tests/NtfyPlatformTests", swiftSettings: strict),
+    .testTarget(
       name: "NtfyTestingTests", dependencies: ["NtfyTesting", "NtfyCore"],
       path: "tests/NtfyTestingTests", swiftSettings: strict),
     .testTarget(
