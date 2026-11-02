@@ -82,12 +82,20 @@ struct ServerConnection {
       try await secrets.setToken(typed)
     } catch {
       // The URL is already stored; put the old address back so it keeps matching the old token.
-      let (oldURL, oldToken) = (previous?.url, previous?.token)
-      try? await config.update { stored in
-        stored.url = oldURL
-        stored.token = oldToken
+      // Without a readable previous config there is nothing safe to put back.
+      var reason = "The connection works, but saving failed: \(error)."
+      if let previous {
+        let (oldURL, oldToken) = (previous.url, previous.token)
+        do throws(NtfyError) {
+          try await config.update { stored in
+            stored.url = oldURL
+            stored.token = oldToken
+          }
+        } catch {
+          reason += " The previous settings could not be restored."
+        }
       }
-      return .invalid(reason: "The connection works, but saving failed: \(error).")
+      return .invalid(reason: reason)
     }
     return result
   }

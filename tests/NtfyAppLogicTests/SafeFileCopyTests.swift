@@ -62,4 +62,31 @@ import Testing
     }
     #expect(try read(target) == "precious")
   }
+
+  @Test func anUnreadableSourceLeavesNoTemporaryFile() throws {
+    let dir = try scratch()
+    defer {
+      try? FileManager.default.setAttributes(
+        [.posixPermissions: 0o644], ofItemAtPath: dir.appendingPathComponent("a.txt").path)
+      try? FileManager.default.removeItem(at: dir)
+    }
+    let source = dir.appendingPathComponent("a.txt")
+    try write("secret", to: source)
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: source.path)
+    #expect(throws: (any Error).self) {
+      try SafeFileCopy.copy(source, to: dir.appendingPathComponent("b.txt"))
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["a.txt"])
+  }
+
+  @Test func aDestinationInAMissingFolderFailsWithoutLeavingFiles() throws {
+    let dir = try scratch()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let source = dir.appendingPathComponent("a.txt")
+    try write("new", to: source)
+    // The staged copy cannot be made next to a destination whose folder does not exist.
+    let target = dir.appendingPathComponent("missing/b.txt")
+    #expect(throws: (any Error).self) { try SafeFileCopy.copy(source, to: target) }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["a.txt"])
+  }
 }

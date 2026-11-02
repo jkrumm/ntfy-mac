@@ -26,6 +26,15 @@ private actor FlakyConfigStore: ConfigStore {
   }
 }
 
+/// A config store that cannot be read, and counts the writes it accepts.
+private actor UnreadableConfigStore: ConfigStore {
+  private(set) var updates = 0
+
+  func load() async throws(NtfyError) -> Config { throw .storage("unreadable") }
+  func save(_ config: Config) async {}
+  func update(_ change: @Sendable (inout Config) -> Void) async throws(NtfyError) { updates += 1 }
+}
+
 private struct FailingSecretStore: SecretStore {
   func token() async -> String? { "tk_old" }
   func setToken(_ token: String) async throws(NtfyError) { throw .permissionDenied }
@@ -65,6 +74,28 @@ private struct FailingSecretStore: SecretStore {
       return
     }
     #expect(await config.load().url == "https://old.example.com")
+  }
+
+  @Test func anUnreadablePreviousConfigIsNotOverwrittenByTheRollback() async {
+    let config = UnreadableConfigStore()
+    let result = await connection(config: config, secrets: FailingSecretStore())
+      .testAndSave(urlText: "https://new.example.com", tokenText: "tk_new")
+    guard case .invalid = result else {
+      Issue.record("expected invalid, got \(result)")
+      return
+    }
+    #expect(await config.updates == 1, "only the save, no rollback over a config we could not read")
+  }
+
+  @Test func aFailingRollbackIsReported() async {
+    let config = FlakyConfigStore(old, updatesBeforeFailure: 1)
+    let result = await connection(config: config, secrets: FailingSecretStore())
+      .testAndSave(urlText: "https://new.example.com", tokenText: "tk_new")
+    guard case .invalid(let reason) = result else {
+      Issue.record("expected invalid, got \(result)")
+      return
+    }
+    #expect(reason.contains("previous settings could not be restored"))
   }
 
   @Test func aFailedServerTestSavesNothing() async {

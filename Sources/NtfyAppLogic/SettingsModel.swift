@@ -51,7 +51,8 @@ public final class SettingsModel {
   @ObservationIgnored private var tasks: [Task<Void, Never>] = []
   /// The tail of the config work (writes and reloads), which runs one after the other.
   @ObservationIgnored private var lastConfigWork: Task<Void, Never>?
-  /// Counts optimistic edits; a load that started before one must not overwrite it.
+  /// Counts optimistic edits. Each config job notes it when it is enqueued; a load whose job was
+  /// enqueued before a later edit must not overwrite that edit.
   @ObservationIgnored private var editGeneration = 0
 
   public struct Dependencies {
@@ -167,7 +168,8 @@ public final class SettingsModel {
   /// Calls run one after the other, like `AppModel.refresh`, so a late load never overwrites a
   /// newer one.
   func reloadConfig() async {
-    await serialized { await self.loadConfig() }
+    let generation = editGeneration
+    await serialized { await self.loadConfig(generation) }
   }
 
   private func serialized(_ work: @escaping @MainActor () async -> Void) async {
@@ -180,13 +182,14 @@ public final class SettingsModel {
     await run.value
   }
 
-  private func loadConfig() async {
+  /// - Parameter generation: `editGeneration` when the job was enqueued.
+  private func loadConfig(_ generation: Int) async {
     let previousURL = config.url ?? ""
     defer { if urlText == previousURL { urlText = config.url ?? "" } }
-    let generation = editGeneration
     do throws(NtfyError) {
       let loaded = try await store.load()
-      // An edit made while this load ran is newer than the file; its own write reloads next.
+      // An edit made after this job was enqueued is newer than the file; its own write reloads
+      // next.
       if generation == editGeneration { config = loaded }
     } catch {
       log("config not read: \(error)")
@@ -214,6 +217,7 @@ public final class SettingsModel {
   func write(_ change: @escaping @Sendable (inout Config) -> Void) async {
     change(&config)
     editGeneration += 1
+    let generation = editGeneration
     await serialized {
       do throws(NtfyError) {
         try await self.store.update(change)
@@ -222,7 +226,7 @@ public final class SettingsModel {
         self.notice = "The setting could not be saved: \(error)"
         self.log("config not written: \(error)")
       }
-      await self.loadConfig()
+      await self.loadConfig(generation)
     }
   }
 

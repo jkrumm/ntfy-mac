@@ -10,8 +10,8 @@ public enum SafeFileCopy {
     guard !isSameFile(source, destination) else { return }
     let directory = destination.deletingLastPathComponent()
     let staged = directory.appendingPathComponent(".\(UUID().uuidString).tmp")
-    try files.copyItem(at: source, to: staged)
     do {
+      try files.copyItem(at: source, to: staged)
       if files.fileExists(atPath: destination.path) {
         _ = try files.replaceItemAt(destination, withItemAt: staged)
       } else {

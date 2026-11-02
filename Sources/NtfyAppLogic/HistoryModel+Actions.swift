@@ -84,6 +84,8 @@ extension HistoryModel {
     var messages: [StoredMessage] = []
     var seen: Set<MessageKey> = []
     var read = 0
+    // Known: rows inserted mid-export with an earlier server timestamp can shift offsets
+    // (bounded by `until`, de-duplicated by key).
     while messages.count < total {
       let page = try await inbox.entries(
         currentQuery(limit: Self.exportPageSize, offset: read, until: started))
