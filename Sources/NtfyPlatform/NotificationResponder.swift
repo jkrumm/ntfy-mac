@@ -7,13 +7,25 @@ import UserNotifications
 /// the app runs.
 ///
 /// The async delegate methods return after the handler did, which is what calls the system's
-/// completion handler. Notifications without our `userInfo` (the missed-message summary) are
-/// ignored.
+/// completion handler. Notifications without our `userInfo` are ignored, except that a click on
+/// the missed-message summary calls `onSummary`.
 public final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate, Sendable {
   private let handler: @Sendable (NotificationResponse) async -> Void
+  private let onSummary: @Sendable () async -> Void
 
-  public init(handler: @escaping @Sendable (NotificationResponse) async -> Void) {
+  public init(
+    handler: @escaping @Sendable (NotificationResponse) async -> Void,
+    onSummary: @escaping @Sendable () async -> Void = {}
+  ) {
     self.handler = handler
+    self.onSummary = onSummary
+  }
+
+  /// Pure part of `didReceive` for the summary, for tests: a body click on a notification whose
+  /// request identifier is a summary's.
+  public static func isSummaryClick(actionIdentifier: String, requestIdentifier: String) -> Bool {
+    actionIdentifier == UNNotificationDefaultActionIdentifier
+      && requestIdentifier.hasPrefix(UserNotificationMapper.summaryPrefix)
   }
 
   /// Pure part of `didReceive`, for tests.
@@ -42,7 +54,15 @@ public final class NotificationResponder: NSObject, UNUserNotificationCenterDele
     let mapped = Self.response(
       actionIdentifier: response.actionIdentifier,
       userInfo: response.notification.request.content.userInfo)
-    guard let mapped else { return }
-    await handler(mapped)
+    if let mapped {
+      await handler(mapped)
+      return
+    }
+    if Self.isSummaryClick(
+      actionIdentifier: response.actionIdentifier,
+      requestIdentifier: response.notification.request.identifier)
+    {
+      await onSummary()
+    }
   }
 }

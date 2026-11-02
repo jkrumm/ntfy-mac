@@ -30,4 +30,17 @@ import UserNotifications
       #expect(NotificationResponder.response(actionIdentifier: "x", userInfo: bad) == nil)
     }
   }
+
+  @Test func onlyABodyClickOnASummaryOpensTheHistory() {
+    let summary = UserNotificationMapper.summaryPrefix + "1234"
+    #expect(
+      NotificationResponder.isSummaryClick(
+        actionIdentifier: UNNotificationDefaultActionIdentifier, requestIdentifier: summary))
+    #expect(
+      !NotificationResponder.isSummaryClick(
+        actionIdentifier: UNNotificationDismissActionIdentifier, requestIdentifier: summary))
+    #expect(
+      !NotificationResponder.isSummaryClick(
+        actionIdentifier: UNNotificationDefaultActionIdentifier, requestIdentifier: "alerts/one"))
+  }
 }

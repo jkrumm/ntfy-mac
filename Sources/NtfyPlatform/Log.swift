@@ -10,6 +10,7 @@ public enum Log {
     case store
     case ipc
     case cli
+    case interface
   }
 
   public static func logger(_ category: Category) -> Logger {

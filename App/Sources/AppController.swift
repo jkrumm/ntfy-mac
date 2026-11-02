@@ -6,26 +6,28 @@ import NtfyPlatform
 
 /// Owns the running pipeline: resolves the configuration, builds and tears down the pipeline when
 /// the connection settings change, and follows the config file. It decides nothing itself;
-/// `PipelineReload` does.
-actor AppController {
+/// `PipelineReload` does. It is also where the UI gets the running pipeline from
+/// (`PipelineSource`), and tells it each time one is built or torn down.
+actor AppController: PipelineSource {
   private enum Lifecycle { case new, starting, running, stopped }
 
-  private let services: AppServices
+  nonisolated let services: AppServices
+  private let rebuildSignal = ChangeSignal()
   private let secrets = KeychainSecretStore()
   private let log = Log.logger(.delivery)
   private var lifecycle = Lifecycle.new
-  private var current: Settings?
+  private var currentSettings: Settings?
   private var pipeline: AppPipeline?
   private var watcher: Task<Void, Never>?
   private var permissionTask: Task<Void, Never>?
   private var ipc: IPCServer?
 
-  init(router: ResponseRouter) {
+  init(router: ResponseRouter, windows: WindowRouter) {
     services = AppServices(
       config: FileConfigStore(),
       center: LiveNotificationCenter(log: { Log.logger(.delivery).info("\($0, privacy: .private)") }
       ),
-      router: router, clock: SystemClock())
+      router: router, clock: SystemClock(), windows: windows)
   }
 
   private var isActive: Bool { lifecycle == .starting || lifecycle == .running }
@@ -69,6 +71,10 @@ actor AppController {
   /// opened). Without a configured server it is the local pipeline.
   func runningPipeline() -> AppPipeline? { pipeline }
 
+  func current() async -> PipelineHandles? { pipeline?.handles }
+
+  nonisolated func rebuilds() -> AsyncStream<Void> { rebuildSignal.stream() }
+
   // MARK: Socket
 
   /// The socket outlives pipeline rebuilds: its handler asks this controller for the pipeline
@@ -101,9 +107,9 @@ actor AppController {
     if case .failed(let reason) = outcome {
       log.error("configuration not read, keeping what runs: \(reason, privacy: .public)")
     }
-    switch PipelineReload.decide(current: current, outcome: outcome) {
+    switch PipelineReload.decide(current: currentSettings, outcome: outcome) {
     case .keep:
-      if case .resolved(let settings) = outcome { current = settings }
+      if case .resolved(let settings) = outcome { currentSettings = settings }
     case .idle:
       await teardown()
       log.info("not configured; local pipeline only")
@@ -126,7 +132,8 @@ actor AppController {
         return
       }
       pipeline = started
-      current = settings
+      currentSettings = settings
+      rebuildSignal.fire()
       log.info("pipeline started for \(settings?.origin ?? "local", privacy: .private)")
     } catch {
       log.error("pipeline not started: \(String(describing: error), privacy: .public)")
@@ -136,7 +143,8 @@ actor AppController {
   private func teardown() async {
     let running = pipeline
     pipeline = nil
-    current = nil
+    currentSettings = nil
+    rebuildSignal.fire()
     await running?.shutdown()
   }
 

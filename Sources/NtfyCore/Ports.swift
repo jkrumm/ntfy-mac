@@ -114,6 +114,16 @@ public protocol HistoryInbox: Sendable {
   func dueReminders(now: Date) async throws(NtfyError) -> [StoredMessage]
 }
 
+/// Tells an in-process observer that the history changed.
+public protocol HistoryObserving: Sendable {
+  /// One element after a committed write (append, read, acknowledge, snooze, withdraw, clear,
+  /// prune), starting from the subscription: no replay. Bursts coalesce: a consumer that has not
+  /// caught up sees one element for any number of writes. Only writes made through this object
+  /// are signalled; another process's writes (there are none today: the CLI goes through the
+  /// app) are not.
+  func changes() -> AsyncStream<Void>
+}
+
 /// User-editable settings.
 public protocol ConfigStore: Sendable {
   func load() async throws(NtfyError) -> Config

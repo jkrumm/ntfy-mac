@@ -7,6 +7,8 @@ public enum UserNotificationMapper {
   /// The only keys in `userInfo`: the response handler looks everything else up in the history.
   public static let topicKey = "topic"
   public static let idKey = "id"
+  /// The identifier prefix of the missed-message summary, which has no `userInfo`.
+  public static let summaryPrefix = "summary/"
   static let categoryPrefix = "ntfy:"
   static let attachmentIdentifier = "image"
 

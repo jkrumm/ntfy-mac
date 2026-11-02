@@ -61,7 +61,8 @@ public actor UserNotificationPoster: NotificationPoster {
 
   public func postMissedSummary(count: Int, oldestTopic: String) async throws(NtfyError) {
     let spec = UserNotificationMapper.summarySpec(
-      count: count, oldestTopic: oldestTopic, identifier: "summary/\(UUID().uuidString)")
+      count: count, oldestTopic: oldestTopic,
+      identifier: UserNotificationMapper.summaryPrefix + UUID().uuidString)
     try await center.add(spec)
   }
 

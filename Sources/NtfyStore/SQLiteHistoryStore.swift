@@ -4,8 +4,9 @@ import NtfyCore
 
 /// History in a SQLite file (WAL). The app opens it as the single writer; the CLI opens the same
 /// file read-only. Every row carries the `server` origin it was received from.
-public final class SQLiteHistoryStore: HistoryStore, Sendable {
+public final class SQLiteHistoryStore: HistoryStore, HistoryObserving, Sendable {
   let pool: DatabasePool
+  private let signal = ChangeSignal()
   let server: String
   let clock: any NtfyCore.Clock
 
@@ -43,12 +44,17 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
   public func append(_ message: NtfyMessage) async throws(NtfyError) -> Bool {
     let server = server
     let now = clock.now()
-    return try await write { database in
+    let inserted = try await write { database in
       try MessageRecord(message, server: server, createdAt: now).insert(
         database, onConflict: .ignore)
       return database.changesCount == 1
     }
+    if inserted { signal.fire() }
+    return inserted
   }
+
+  /// Fires after every committed write made through this object.
+  public func changes() -> AsyncStream<Void> { signal.stream() }
 
   public func recent(limit: Int) async throws(NtfyError) -> [NtfyMessage] {
     var select = HistorySelect(server: server)
@@ -95,7 +101,7 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
   public func prune(policy: RetentionPolicy, now: Date) async throws(NtfyError) -> Int {
     let server = server
     let cutoff = now.addingTimeInterval(-policy.maxAge)
-    return try await write { database in
+    let dropped = try await write { database in
       try database.execute(
         sql: """
           DELETE FROM message WHERE server = ? AND (time < ? OR pk IN (
@@ -108,6 +114,8 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
         arguments: [server, cutoff, server, max(policy.maxPerTopic, 0)])
       return database.changesCount
     }
+    if dropped > 0 { signal.fire() }
+    return dropped
   }
 }
 
@@ -145,5 +153,6 @@ extension SQLiteHistoryStore {
     try await write { database in
       try database.execute(sql: sql, arguments: StatementArguments(arguments))
     }
+    signal.fire()
   }
 }

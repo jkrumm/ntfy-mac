@@ -2,7 +2,7 @@ import Foundation
 import NtfyCore
 
 /// Keeps history in memory with the same observable contract as the SQLite store.
-public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
+public actor InMemoryHistoryStore: HistoryStore, HistoryInbox, HistoryObserving {
   struct Row {
     var stored: StoredMessage
     var sequenceID: String
@@ -11,6 +11,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
 
   var rows: [Row] = []
   let clock: any NtfyCore.Clock
+  private let signal = ChangeSignal()
   private var appendFailure: NtfyError?
   private var appendsBeforeFailure = 0
   private var clearReminderFailure: NtfyError?
@@ -18,6 +19,9 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
   public init(clock: any NtfyCore.Clock = FakeClock()) {
     self.clock = clock
   }
+
+  /// Fires after every mutation, like the SQLite store.
+  public nonisolated func changes() -> AsyncStream<Void> { signal.stream() }
 
   /// Makes `append` throw `failure` once `successes` more appends went through, or work again
   /// with `nil`.
@@ -44,6 +48,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     }
     rows.append(
       Row(stored: StoredMessage(message: message), sequenceID: message.sequenceID ?? message.id))
+    signal.fire()
     return true
   }
 
@@ -66,6 +71,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     for index in rows.indices where rows[index].matches(topic: topic, sequenceID: sequenceID) {
       rows[index].withdrawn = true
     }
+    signal.fire()
   }
 
   public func markCleared(topic: String, sequenceID: String) {
@@ -73,6 +79,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     for index in rows.indices where rows[index].matches(topic: topic, sequenceID: sequenceID) {
       rows[index].stored.settle(at: now)
     }
+    signal.fire()
   }
 
   @discardableResult
@@ -89,6 +96,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     }
     let removed = rows.count - kept.count
     rows = kept.reversed()
+    if removed > 0 { signal.fire() }
     return removed
   }
 
@@ -111,6 +119,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     where rows[index].stored.message.topic == topic && rows[index].stored.message.id == id {
       edit(&rows[index].stored)
     }
+    signal.fire()
   }
 }
 
@@ -154,6 +163,7 @@ extension InMemoryHistoryStore {
     for index in rows.indices where rows[index].topic == topic {
       rows[index].stored.readAt = rows[index].stored.readAt ?? now
     }
+    signal.fire()
   }
 
   public func acknowledge(topic: String, id: String) {

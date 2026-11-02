@@ -11,6 +11,7 @@ struct AppServices: Sendable {
   let center: LiveNotificationCenter
   let router: ResponseRouter
   let clock: SystemClock
+  let windows: WindowRouter
 }
 
 /// Everything that runs for one resolved configuration: store, delivery, response handling and
@@ -108,7 +109,7 @@ final class AppPipeline: Sendable {
     let log = Log.logger(.delivery)
     return ResponseHandler(
       delivery: delivery, inbox: store, config: services.config, opener: WorkspaceLinkOpener(),
-      presenter: ActivatingHistoryPresenter(), confirmer: AlertConfirmer(),
+      presenter: RoutedHistoryPresenter(windows: services.windows), confirmer: AlertConfirmer(),
       runner: URLSessionHTTPActionRunner(allowPrivateNetwork: {
         await services.config.load().allowPrivateNetworkActions
       }), log: { log.info("\($0, privacy: .private)") })
@@ -174,7 +175,6 @@ final class AppPipeline: Sendable {
 extension AppPipeline {
   /// What the socket handler may use of this pipeline.
   var handles: PipelineHandles {
-    PipelineHandles(
-      messages: LocalMessaging(history: store, delivery: delivery), supervisor: supervisor)
+    PipelineHandles(store: store, delivery: delivery, supervisor: supervisor)
   }
 }

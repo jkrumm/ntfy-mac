@@ -1,4 +1,5 @@
 import AppKit
+import NtfyAppLogic
 import NtfyCore
 import NtfyPlatform
 import OSLog
@@ -25,13 +26,16 @@ struct AlertConfirmer: ActionConfirming {
   }
 }
 
-/// Stands in for the history window until Wave 5: brings the app forward and logs the request.
-struct ActivatingHistoryPresenter: HistoryPresenting {
-  private let log = Log.logger(.delivery)
+/// Opens the History window with the message selected.
+struct RoutedHistoryPresenter: HistoryPresenting {
+  let windows: WindowRouter
+  private let log = Log.logger(.interface)
+
+  init(windows: WindowRouter) { self.windows = windows }
 
   func show(topic: String, id: String) async {
     log.info("history requested for \(topic, privacy: .private)/\(id, privacy: .private)")
-    await MainActor.run { NSApp.activate() }
+    await windows.showHistory(selecting: MessageKey(topic: topic, id: id))
   }
 }
 

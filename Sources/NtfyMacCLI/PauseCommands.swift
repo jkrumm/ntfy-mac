@@ -1,13 +1,6 @@
 import ArgumentParser
 import Foundation
-
-/// The notification pause as the config file stores it (`pausedUntil`).
-enum PauseWindow {
-  /// "Until further notice" is stored as this far-future date.
-  static let indefinite = Date(timeIntervalSince1970: 4_102_444_800)  // 2100-01-01T00:00:00Z
-
-  static func isIndefinite(_ date: Date) -> Bool { date >= indefinite }
-}
+import NtfyCore
 
 struct PauseReport: Encodable {
   let paused: Bool

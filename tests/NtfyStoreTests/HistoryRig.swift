@@ -25,7 +25,7 @@ final class TempDirectory: Sendable {
   }
 }
 
-typealias AnyHistory = HistoryStore & HistoryInbox
+typealias AnyHistory = HistoryStore & HistoryInbox & HistoryObserving
 
 /// The two implementations of the shared history contract.
 enum Backend: String, CaseIterable, Sendable, CustomTestStringConvertible {

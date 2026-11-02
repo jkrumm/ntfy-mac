@@ -44,14 +44,33 @@ public struct LocalMessaging: Sendable {
   }
 }
 
-/// What a running pipeline offers the socket handler.
+/// What a running pipeline offers the socket handler and the UI.
 public struct PipelineHandles: Sendable {
   public let messages: LocalMessaging
+  public let inbox: any HistoryInbox
+  /// Signals after every history write made through the pipeline's store.
+  public let changes: any HistoryObserving
+  public let delivery: DeliveryService
   /// Nil in the local pipeline, which has no stream.
   public let supervisor: StreamSupervisor?
 
-  public init(messages: LocalMessaging, supervisor: StreamSupervisor?) {
-    self.messages = messages
+  public init(
+    store: any HistoryStore & HistoryInbox & HistoryObserving, delivery: DeliveryService,
+    supervisor: StreamSupervisor?
+  ) {
+    messages = LocalMessaging(history: store, delivery: delivery)
+    inbox = store
+    changes = store
+    self.delivery = delivery
     self.supervisor = supervisor
   }
+}
+
+/// Where the UI gets the running pipeline from. The app root implements it; the pipeline is
+/// rebuilt when the connection settings change, and the UI follows through `rebuilds()`.
+public protocol PipelineSource: Sendable {
+  /// The running pipeline, nil while none runs (during a rebuild, or before the first start).
+  func current() async -> PipelineHandles?
+  /// One element after each time a pipeline was built or torn down; no replay, bursts coalesce.
+  func rebuilds() -> AsyncStream<Void>
 }
