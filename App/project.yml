@@ -1,0 +1,55 @@
+name: NtfyMac
+options:
+  bundleIdPrefix: com.jkrumm
+  deploymentTarget:
+    macOS: "15.0"
+packages:
+  NtfyCore:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  NtfyMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Resources
+    dependencies:
+      - package: NtfyCore
+        product: NtfyCore
+    settings:
+      base:
+        PRODUCT_NAME: NtfyMac
+        PRODUCT_BUNDLE_IDENTIFIER: com.jkrumm.ntfy-mac
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    info:
+      path: Info.plist
+      properties:
+        CFBundleName: ntfy-mac
+        CFBundleDisplayName: ntfy-mac
+        CFBundleIconFile: AppIcon
+        LSUIElement: true
+        LSMinimumSystemVersion: "15.0"
+        CFBundleShortVersionString: "2.0.0"
+        CFBundleVersion: "1"
+    postCompileScripts:
+      - name: Bundle ntfy-mac CLI
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          cfg=$(echo "${CONFIGURATION}" | tr '[:upper:]' '[:lower:]')
+          cd "${SRCROOT}/.."
+          env -u SDKROOT -u MACOSX_DEPLOYMENT_TARGET -u CC -u CXX -u LD -u LIBRARY_PATH \
+            xcrun swift build -c "${cfg}" --arch arm64 --product ntfy-mac --scratch-path .build/cli
+          mkdir -p "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/MacOS"
+          bin=$(env -u SDKROOT -u MACOSX_DEPLOYMENT_TARGET xcrun swift build -c "${cfg}" --arch arm64 --scratch-path .build/cli --show-bin-path)
+          cp "${bin}/ntfy-mac" \
+            "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/ntfy-mac"

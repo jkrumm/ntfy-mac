@@ -10,3 +10,13 @@ assets/ntfy-notify.app/Contents/_CodeSignature/
 
 # Icon build intermediates (iconutil source — .icns is committed)
 assets/AppIcon.iconset/
+
+# Swift 2.0
+.build/
+App/NtfyMac.xcodeproj
+App/Info.plist
+*.xcuserstate
+DerivedData
+
+# Claude Code runtime
+.claude/scheduled_tasks.lock
