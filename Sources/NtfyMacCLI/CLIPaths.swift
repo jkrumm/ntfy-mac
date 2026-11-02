@@ -12,6 +12,8 @@ struct CLIPaths: Sendable, Hashable {
   /// 1.x state all live below it.
   static let dataDirectoryVariable = "NTFY_MAC_DATA_DIR"
 
+  /// The user's home directory; 1.x leftovers are found relative to it.
+  var home: URL
   var configFile: URL
   /// Holds the `ntfy-mac` directory with the history database and the socket.
   var applicationSupport: URL
@@ -20,6 +22,7 @@ struct CLIPaths: Sendable, Hashable {
   var soundDirectories: [URL]
 
   init(environment: [String: String], home: URL, systemApplicationSupport: URL) {
+    self.home = home
     let configDirectory =
       environment[Self.configDirectoryVariable].flatMap(Self.directory)
       ?? home.appending(path: ".config/ntfy-mac", directoryHint: .isDirectory)

@@ -186,6 +186,9 @@ struct CLIRig {
   let topics: ScriptedTopicSource
   let app: FakeApp
   let processes: FakeProcesses
+  let launchAgents = InMemoryLaunchAgents()
+  let launchServices = InMemoryLaunchServices()
+  let legacyProcesses = InMemoryLegacyProcesses()
   let clock = FakeClock()
   let store: InMemoryHistoryStore
   var historyAbsent = false
@@ -234,6 +237,12 @@ struct CLIRig {
       topicSource: { _, _, _ in source }, publisher: { _, _, _ in publisher },
       history: FakeHistory(store: store, absent: historyAbsent), clock: clock,
       runUntilInterrupted: { try await $0() }, processes: processes, releases: releases,
+      legacy: LegacyInstallCleanup(
+        layout: LegacyInstallLayout(
+          home: scratch.url, uid: 501, stateDirectory: paths.stateDirectory,
+          brewPrefixes: [scratch.file("brew")]),
+        agents: launchAgents, registry: launchServices, processes: legacyProcesses,
+        runningExecutable: nil, processID: 1234),
       prompter: prompter, readStandardInput: { input })
   }
 

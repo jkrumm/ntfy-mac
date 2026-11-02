@@ -42,6 +42,7 @@ struct CLIEnvironment: Sendable {
   var runUntilInterrupted: InterruptibleRunner
   var processes: any ProcessRunning
   var releases: any ReleaseLookup
+  var legacy: LegacyInstallCleanup
   var prompter: any Prompting
   /// Reads all of stdin.
   var readStandardInput: @Sendable () -> Data

@@ -128,6 +128,9 @@ extension CommandSpec {
     CommandSpec(
       "uninstall", app: .optional, files: true, errors: ["cancelled"],
       examples: ["ntfy-mac uninstall --yes"]),
+    CommandSpec(
+      "migrate", files: true,
+      examples: ["ntfy-mac migrate --dry-run", "ntfy-mac migrate", "ntfy-mac migrate --json"]),
     CommandSpec("version", examples: ["ntfy-mac version", "ntfy-mac version --json"]),
     CommandSpec(
       "start", app: .launches, errors: ["app-unavailable"], examples: ["ntfy-mac start"]),

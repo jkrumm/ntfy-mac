@@ -28,6 +28,9 @@ extension CLIEnvironment {
       runUntilInterrupted: Interrupt.runUntilInterrupted,
       processes: SystemProcessRunner(),
       releases: GitHubReleases(),
+      legacy: .live(
+        home: paths.home, stateDirectory: paths.stateDirectory,
+        runningExecutable: AppBundle.executable()),
       prompter: TerminalPrompter(),
       readStandardInput: { FileHandle.standardInput.readDataToEndOfFile() })
   }

@@ -44,6 +44,8 @@ actor AppController: PipelineSource {
     let changes = ConfigWatcher().changes()
     await migrateToken()
     guard isActive else { return }
+    await cleanLegacyInstall()
+    guard isActive else { return }
     permissionTask = Task { await self.requestPermissionOnce() }
     await reload()
     guard lifecycle == .starting else { return }
@@ -182,6 +184,23 @@ actor AppController: PipelineSource {
       log.info("token migration: \(String(describing: outcome), privacy: .public)")
     } catch {
       log.error("token migration failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// Removes what a 1.x install left behind (service, daemon, helper app, old binary and logs)
+  /// before anything starts. The cheap check runs first; only when it finds something does the
+  /// full cleanup run, which also scans Launch Services. Never throws.
+  private func cleanLegacyInstall() async {
+    let cleanup = LegacyInstallCleanup.live(
+      home: FileManager.default.homeDirectoryForCurrentUser,
+      runningExecutable: Bundle.main.executableURL)
+    guard !(await cleanup.detect(scope: .quick)).found.isEmpty else { return }
+    let report = await cleanup.run()
+    log.info(
+      "1.x cleanup: removed \(report.removed, privacy: .private), failed \(report.failed, privacy: .private)"
+    )
+    if !report.failed.isEmpty {
+      log.error("1.x cleanup: \(report.failed.count) step(s) failed; run: ntfy-mac migrate")
     }
   }
 

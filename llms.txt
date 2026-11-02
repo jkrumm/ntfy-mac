@@ -84,4 +84,5 @@ ntfy-mac wait --topic approvals --match '/^(yes|no)/i' --timeout 600 --json
 - [`ntfy-mac pause [--for <duration>] [--until <timestamp>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-pause): Hold notifications back for a while.
 - [`ntfy-mac resume`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-resume): End a pause and show what was held back.
 - [`ntfy-mac login-item <off|on|status>`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-login-item): Start ntfy-mac at login: on, off or status.
+- [`ntfy-mac migrate [--dry-run]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-migrate): Remove the leftovers of a 1.x install.
 - [`ntfy-mac schema`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-schema): Describe every command, flag, exit code and error code.

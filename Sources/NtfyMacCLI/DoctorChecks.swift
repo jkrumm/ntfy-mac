@@ -18,6 +18,7 @@ struct DoctorChecks {
     let app = await appChecks()
     checks += app
     checks.append(await historyCheck())
+    checks.append(await legacyCheck())
     if case .success(let config) = loaded { checks.append(overridesCheck(config)) }
     if sendTest { checks.append(await testNotification(appIsUp: app.first?.status != .fail)) }
     return checks
@@ -241,6 +242,17 @@ struct DoctorChecks {
     } catch {
       return .failure("history", error, "History database unreadable")
     }
+  }
+
+  /// Read-only and quick: no Launch Services scan. `ntfy-mac migrate --dry-run` does the full one.
+  private func legacyCheck() async -> DoctorCheck {
+    let report = await environment.legacy.detect(scope: .quick)
+    guard !report.found.isEmpty else {
+      return DoctorCheck("legacy-install", .passed, "No 1.x leftovers")
+    }
+    return DoctorCheck(
+      "legacy-install", .warn, "\(report.found.count) leftover(s) of a 1.x install",
+      detail: "Remove them with: ntfy-mac migrate")
   }
 
   private func overridesCheck(_ config: Config) -> DoctorCheck {

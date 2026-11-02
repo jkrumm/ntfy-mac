@@ -99,6 +99,7 @@ Everything the History window does to a message has a command. A test fails when
 | [`ntfy-mac pause`](#ntfy-mac-pause) | Hold notifications back for a while. |
 | [`ntfy-mac resume`](#ntfy-mac-resume) | End a pause and show what was held back. |
 | [`ntfy-mac login-item`](#ntfy-mac-login-item) | Start ntfy-mac at login: on, off or status. |
+| [`ntfy-mac migrate`](#ntfy-mac-migrate) | Remove the leftovers of a 1.x install. |
 | [`ntfy-mac schema`](#ntfy-mac-schema) | Describe every command, flag, exit code and error code. |
 
 ## `ntfy-mac setup`
@@ -1191,6 +1192,36 @@ The app owns its login item, so this asks the app (started if needed). States: e
 ```sh
 ntfy-mac login-item status
 ntfy-mac login-item on
+```
+
+## `ntfy-mac migrate`
+
+Remove the leftovers of a 1.x install.
+
+```
+ntfy-mac migrate [--dry-run]
+```
+
+Stops and removes the 1.x LaunchAgent or brew service, the daemon, the ntfy-notify helper app and its Launch Services entries, the old binary and logs. config.json and state.json stay. The app does this itself on launch; run it by hand when doctor reports leftovers.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--dry-run` | flag | boolean | `false` | no | List what would be removed and change nothing. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+**Needs**
+
+- Does not use the app.
+- Reads or writes the local config or history files.
+
+**Error codes:** `usage`. See [Error codes](#error-codes).
+
+**Examples**
+
+```sh
+ntfy-mac migrate --dry-run
+ntfy-mac migrate
+ntfy-mac migrate --json
 ```
 
 ## `ntfy-mac schema`
