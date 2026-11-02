@@ -2,7 +2,7 @@
 
 Native macOS notifications for your [ntfy](https://ntfy.sh) server.
 
-Runs as a background daemon that streams messages in real time, handles reconnects and offline periods, and delivers notifications through macOS Notification Center — with full support for all ntfy message features including priorities, tags, action buttons, images, and click URLs.
+Runs as a background app that streams messages in real time, handles reconnects and offline periods, and delivers notifications through macOS Notification Center — with full support for all ntfy message features including priorities, tags, action buttons, images, and click URLs. The same binary is a CLI built for scripts and AI agents: JSON output, stable exit codes, and a command that blocks until a human replies.
 
 [![Release](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml/badge.svg)](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -21,7 +21,7 @@ ntfy doesn't ship a native desktop client. The [recommended approach](https://do
 - No way to recover messages missed while offline or asleep
 - Duplicate notifications when reconnecting
 
-ntfy-mac is a native daemon that connects via SSE, persists across reboots via launchd, recovers missed messages on reconnect, and deduplicates everything. It delivers through macOS Notification Center with proper priority mapping — urgent messages break through Focus mode, low-priority ones auto-dismiss.
+ntfy-mac is a native app that holds the stream open, starts at login (`ntfy-mac login-item on`), recovers missed messages on reconnect, and deduplicates everything. It delivers through macOS Notification Center with proper priority mapping — urgent messages break through Focus mode, low-priority ones auto-dismiss.
 
 It's been running stable for months with zero missed notifications across sleep/wake cycles, network changes, and server restarts.
 
@@ -47,6 +47,8 @@ ntfy-mac setup
 
 The daemon starts on login automatically after installation.
 
+> Install paths change with 2.0, which ships `NtfyMac.app` instead of a daemon; the steps above describe 1.x.
+
 ---
 
 ## Features
@@ -63,7 +65,9 @@ The daemon starts on login automatically after installation.
 
 **Self-updating** — Checks for updates daily and notifies you or updates automatically.
 
-**Diagnostics** — `ntfy-mac doctor` validates config, server connectivity, auth, daemon status, and logs in one command.
+**Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
+
+**Agent-ready** — Every command takes `--json`. Exit codes are stable, errors have codes, and `ntfy-mac schema --json` describes the whole CLI. See [Use from agents and scripts](#use-from-agents-and-scripts).
 
 ---
 
@@ -73,7 +77,7 @@ The daemon starts on login automatically after installation.
 ntfy-mac setup
 ```
 
-Prompts for your ntfy server URL and access token, tests the connection, and saves the config.
+Prompts for your ntfy server URL and access token, tests the connection, and saves the config. The token goes to the Keychain.
 
 Get your access token at `https://<your-ntfy-server>/account` → **Access Tokens**.
 
@@ -87,24 +91,8 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 
 ## Commands
 
-| Command                        | Description                                       |
-| ------------------------------ | ------------------------------------------------- |
-| `ntfy-mac setup`               | Configure server and credentials                  |
-| `ntfy-mac doctor`              | Health check (config, server, auth, daemon, logs) |
-| `ntfy-mac subscribe`           | Show subscribed topics                            |
-| `ntfy-mac subscribe <topic>`   | Add a topic (merged with auto-discovered)         |
-| `ntfy-mac unsubscribe <topic>` | Remove a locally added topic                      |
-| `ntfy-mac config`              | Show notification settings                        |
-| `ntfy-mac config sounds`       | Manage sounds per priority                        |
-| `ntfy-mac config dismiss`      | Manage auto-dismiss timing per priority           |
-| `ntfy-mac notify -m "text"`    | Send a local notification (no server needed)      |
-| `ntfy-mac sounds`              | Preview all macOS notification sounds             |
-| `ntfy-mac logs`                | Tail the daemon log                               |
-| `ntfy-mac logs --error`        | Tail the error log                                |
-| `ntfy-mac update`              | Update to the latest version                      |
-| `ntfy-mac uninstall`           | Remove ntfy-mac and all its data                  |
-
----
+| Command | Description |
+| ----------
 
 ## Notification sounds
 
@@ -130,13 +118,13 @@ ntfy-mac sounds                        # Preview all available sounds
 
 Custom sounds can be added to `~/Library/Sounds/` (AIFF/WAV/CAF format).
 
-Changes take effect after `brew services restart ntfy-mac`.
+The running app watches the config file, so changes apply without a restart.
 
 ---
 
 ## Local notifications
 
-Send notifications directly from the command line — no server required. Useful as a notification interface for shell scripts, cron jobs, CI pipelines, or AI coding agents like Claude Code hooks.
+Post a notification from the command line — no ntfy server involved. The app shows it, and `notify` starts the app if it is down. Without notification permission it exits 4. Useful for shell scripts, cron jobs, CI pipelines, or AI coding agent hooks.
 
 ```bash
 ntfy-mac notify -m "Deploy complete"
@@ -146,6 +134,41 @@ ntfy-mac notify -m "Click me" --url https://example.com
 ntfy-mac notify -m "Temporary" -d 10                        # dismiss after 10s
 echo '{"title":"T","body":"B"}' | ntfy-mac notify --json    # full payload via stdin
 ```
+
+---
+
+## Use from agents and scripts
+
+`ntfy-mac` is built to be driven by a program: every command takes `--json`, exit codes are stable, and prompts appear only on a terminal.
+
+```bash
+ntfy-mac status --json                        # configured? app running? paused? counts
+ntfy-mac publish builds -m "Deploy v2?" -p 4  # send to your ntfy server
+ntfy-mac wait --topic builds --match '/^(yes|no)/i' --timeout 600 --json
+ntfy-mac tail --topic alerts --follow         # NDJSON, one message per line
+ntfy-mac ack --all --topic alerts             # clear what you have handled
+```
+
+**JSON mode.** With `--json`, stdout carries JSON and nothing else: one document per command, one per line for `tail`. Diagnostics, progress and prompts go to stderr in both modes. A failure prints `{"error":{"code":"not-found","exitCode":1,"message":"..."}}` on stdout and `Error: ...` on stderr, so branch on `error.code`.
+
+**Exit codes.**
+
+| Code | Meaning                                            |
+| ---- | -------------------------------------------------- |
+| 0    | Done                                               |
+| 1    | Runtime failure; the error code says which         |
+| 2    | Invalid flags or values; nothing was done          |
+| 3    | The server rejected the token                      |
+| 4    | The app is not running, or a permission is missing |
+| 7    | The ntfy server is unreachable                     |
+
+**Wait for a human.** `wait` blocks until a message on the topic matches a substring or a `/regex/`, then prints it and exits 0. No match within `--timeout` seconds exits 1 with the error code `timeout`. Only messages that arrive after `wait` started count, so pick a pattern your own published message does not match. `--ack` acknowledges the match through the app.
+
+**Read the history.** `ls`, `search`, `read` and `tail` read the history database directly, so they work while the app is down; they just see nothing new. `tail` always prints NDJSON, oldest first. `read` marks a message read unless you pass `--no-mark`.
+
+**Check before you act.** `status` reports `configured`, `running`, `paused` and the permission state without changing anything. `doctor` is the full read-only check and exits non-zero when one fails.
+
+**Discover the CLI.** `ntfy-mac schema --json` prints the command tree on one line: arguments with type, default, range and repeatability, what each command needs from the app and the server, and its error codes. The same data, rendered, lives in [docs/cli.md](docs/cli.md) and [llms.txt](llms.txt). Both are generated and checked in CI; do not edit them by hand.
 
 ---
 
@@ -166,15 +189,15 @@ echo '{"title":"T","body":"B"}' | ntfy-mac notify --json    # full payload via s
 
 **No topics found** — Subscribe to at least one topic in the ntfy web UI or app first.
 
-**Full health check** — Run `ntfy-mac doctor` to validate everything at once. It checks notification permissions, server connectivity, daemon status, and more.
+**Full health check** — Run `ntfy-mac doctor` to validate everything at once. It checks notification permissions, server connectivity, whether the app runs, and more.
 
 ---
 
 ## Update & uninstall
 
 ```bash
-ntfy-mac update       # Works for both Homebrew and curl installs
-ntfy-mac uninstall    # Removes binary, config, state, and daemon
+ntfy-mac update       # Upgrades a Homebrew install; --check only looks for a new release
+ntfy-mac uninstall    # Removes config, history, state and the token
 ```
 
 ---
@@ -182,6 +205,8 @@ ntfy-mac uninstall    # Removes binary, config, state, and daemon
 ## Documentation
 
 - [How it works](docs/how-it-works.md) — streaming, reconnect, dedup, missed messages, priority mapping
+- [CLI reference](docs/cli.md) — every command, flag, exit code and error code (generated)
+- [llms.txt](llms.txt) — the same for agents, with the JSON and NDJSON contracts
 - [Contributing](docs/contributing.md) — development setup, building, release process
 
 ## License

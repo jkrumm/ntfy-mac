@@ -45,10 +45,13 @@ struct CommandSpec: Sendable {
   /// Error codes this command can end with, beyond `usage`.
   let errors: [String]
   let domains: [String: Domain]
+  /// Complete command lines, as an agent would type them. At least one per command.
+  let examples: [String]
 
   init(
     _ name: String, app: AppUse = .none, server: Bool = false, files: Bool = false,
-    note: String? = nil, errors: [String] = [], domains: [String: Domain] = [:]
+    note: String? = nil, errors: [String] = [], domains: [String: Domain] = [:],
+    examples: [String]
   ) {
     self.name = name
     self.app = app
@@ -57,6 +60,7 @@ struct CommandSpec: Sendable {
     self.note = note
     self.errors = errors
     self.domains = domains
+    self.examples = examples
   }
 }
 
@@ -75,41 +79,98 @@ extension CommandSpec {
   static let all: [CommandSpec] = [
     CommandSpec(
       "setup", server: true, files: true, errors: serverErrors + ["setup-cancelled"],
-      domains: ["--url": .url]),
-    CommandSpec("doctor", app: .optional, server: true, files: true, errors: serverErrors),
-    CommandSpec("subscribe", server: true, files: true, errors: serverErrors),
-    CommandSpec("unsubscribe", files: true, errors: ["topic-not-local"]),
-    CommandSpec("config", files: true, domains: ["priority": .priority]),
+      domains: ["--url": .url],
+      examples: ["ntfy-mac setup", "ntfy-mac setup --url https://ntfy.example.com --token tk_..."]),
+    CommandSpec(
+      "doctor", app: .optional, server: true, files: true, errors: serverErrors,
+      examples: ["ntfy-mac doctor", "ntfy-mac doctor --json", "ntfy-mac doctor --send-test"]),
+    CommandSpec(
+      "subscribe", server: true, files: true, errors: serverErrors,
+      examples: ["ntfy-mac subscribe", "ntfy-mac subscribe builds", "ntfy-mac subscribe reset"]),
+    CommandSpec(
+      "unsubscribe", files: true, errors: ["topic-not-local"],
+      examples: ["ntfy-mac unsubscribe builds"]),
+    CommandSpec(
+      "config", files: true, domains: ["priority": .priority],
+      examples: [
+        "ntfy-mac config", "ntfy-mac config sounds list", "ntfy-mac config sounds set 5 Sosumi",
+        "ntfy-mac config dismiss set 3 15", "ntfy-mac config dismiss set 5 never",
+        "ntfy-mac config sounds reset",
+      ]),
     CommandSpec(
       "notify", app: .launches, errors: ["app-unavailable", "permission-denied"],
-      domains: ["--priority": .priority, "--dismiss-after": .seconds, "--url": .url]),
-    CommandSpec("sounds", files: true, errors: ["no-match"]),
-    CommandSpec("logs", errors: ["logs-failed"], domains: ["--last": .duration]),
+      domains: ["--priority": .priority, "--dismiss-after": .seconds, "--url": .url],
+      examples: [
+        "ntfy-mac notify -m \"Deploy complete\"",
+        "ntfy-mac notify -t Alert -m \"Disk usage above 90%\" -p 5",
+        "echo '{\"title\":\"T\",\"body\":\"B\"}' | ntfy-mac notify --json",
+      ]),
     CommandSpec(
-      "update", errors: ["update-unsupported", "update-failed", "server-unreachable"]),
-    CommandSpec("uninstall", app: .optional, files: true, errors: ["cancelled"]),
-    CommandSpec("version"),
-    CommandSpec("start", app: .launches, errors: ["app-unavailable"]),
-    CommandSpec("status", app: .optional, files: true, errors: history),
-    CommandSpec("ls", files: true, errors: history, domains: filters),
-    CommandSpec("search", files: true, errors: history, domains: filters),
-    CommandSpec("read", files: true, errors: ["not-found"] + history),
-    CommandSpec("ack", app: .launches, errors: appErrors),
-    CommandSpec("tail", files: true, errors: history, domains: filters),
+      "sounds", files: true, errors: ["no-match"],
+      examples: ["ntfy-mac sounds", "ntfy-mac sounds glass"]),
+    CommandSpec(
+      "logs", errors: ["logs-failed"], domains: ["--last": .duration],
+      examples: ["ntfy-mac logs --last 1h", "ntfy-mac logs --error --follow"]),
+    CommandSpec(
+      "update", errors: ["update-unsupported", "update-failed", "server-unreachable"],
+      examples: ["ntfy-mac update --check", "ntfy-mac update"]),
+    CommandSpec(
+      "uninstall", app: .optional, files: true, errors: ["cancelled"],
+      examples: ["ntfy-mac uninstall --yes"]),
+    CommandSpec("version", examples: ["ntfy-mac version", "ntfy-mac version --json"]),
+    CommandSpec(
+      "start", app: .launches, errors: ["app-unavailable"], examples: ["ntfy-mac start"]),
+    CommandSpec(
+      "status", app: .optional, files: true, errors: history,
+      examples: ["ntfy-mac status --json", "ntfy-mac status --require-running"]),
+    CommandSpec(
+      "ls", files: true, errors: history, domains: filters,
+      examples: [
+        "ntfy-mac ls --json --topic alerts --unread --limit 5",
+        "ntfy-mac ls --unacked --min-priority 4 --since 2h",
+      ]),
+    CommandSpec(
+      "search", files: true, errors: history, domains: filters,
+      examples: ["ntfy-mac search disk --json", "ntfy-mac search deploy --topic builds --since 1d"]),
+    CommandSpec(
+      "read", files: true, errors: ["not-found"] + history,
+      examples: ["ntfy-mac read alerts m1 --json", "ntfy-mac read alerts m1 --no-mark"]),
+    CommandSpec(
+      "ack", app: .launches, errors: appErrors,
+      examples: ["ntfy-mac ack alerts m1", "ntfy-mac ack --all --topic alerts"]),
+    CommandSpec(
+      "tail", files: true, errors: history, domains: filters,
+      examples: [
+        "ntfy-mac tail --topic alerts --since 1h --limit 10",
+        "ntfy-mac tail --topic alerts --follow",
+      ]),
     CommandSpec(
       "wait", app: .launches, files: true, note: "Starts the app only with --ack.",
       errors: ["timeout"] + appErrors + history,
-      domains: ["--timeout": .seconds, "--min-priority": .priority]),
+      domains: ["--timeout": .seconds, "--min-priority": .priority],
+      examples: [
+        "ntfy-mac wait --topic alerts --match approve --timeout 600 --json",
+        "ntfy-mac wait --topic alerts --match '/^approve/i' --ack",
+      ]),
     CommandSpec(
       "publish", server: true, files: true,
       errors: serverErrors + ["invalid-topic"],
-      domains: ["--priority": .priority, "--click": .url]),
+      domains: ["--priority": .priority, "--click": .url],
+      examples: [
+        "ntfy-mac publish builds -m \"Deploy complete\" -t CI -p 4",
+        "echo \"build done\" | ntfy-mac publish builds -m - --tag white_check_mark",
+      ]),
     CommandSpec(
       "pause", files: true, errors: ["storage"],
-      domains: ["--for": .duration, "--until": .timestamp]),
-    CommandSpec("resume", files: true, errors: ["storage"]),
-    CommandSpec("login-item", app: .launches, errors: ["app-unavailable", "internal"]),
-    CommandSpec("schema"),
+      domains: ["--for": .duration, "--until": .timestamp],
+      examples: [
+        "ntfy-mac pause --for 30m", "ntfy-mac pause --until 2030-01-01T08:00:00Z", "ntfy-mac pause",
+      ]),
+    CommandSpec("resume", files: true, errors: ["storage"], examples: ["ntfy-mac resume"]),
+    CommandSpec(
+      "login-item", app: .launches, errors: ["app-unavailable", "internal"],
+      examples: ["ntfy-mac login-item status", "ntfy-mac login-item on"]),
+    CommandSpec("schema", examples: ["ntfy-mac schema --json"]),
   ]
 
   static func named(_ name: String) -> CommandSpec? { all.first { $0.name == name } }

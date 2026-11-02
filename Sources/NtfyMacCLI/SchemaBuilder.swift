@@ -37,6 +37,8 @@ struct CommandSchema: Encodable, Sendable {
   let usage: String
   let abstract: String
   let discussion: String?
+  /// Complete command lines; empty for subcommands (their parent lists them).
+  let examples: [String]
   let needs: SchemaNeeds
   let errorCodes: [String]
   let arguments: [SchemaArgument]
@@ -44,7 +46,7 @@ struct CommandSchema: Encodable, Sendable {
 }
 
 struct SchemaDocument: Encodable, Sendable {
-  let schemaVersion = 1
+  let schemaVersion = 2
   let name: String
   let version: String
   let abstract: String
@@ -99,6 +101,7 @@ enum SchemaBuilder {
       name: command.commandName, path: full.joined(separator: " "),
       usage: usage(path: full, arguments),
       abstract: command.abstract ?? "", discussion: command.discussion,
+      examples: path.count == 1 ? spec?.examples ?? [] : [],
       needs: SchemaNeeds(
         app: (spec?.app ?? .none).rawValue, server: spec?.server ?? false,
         files: spec?.files ?? false, note: spec?.note),

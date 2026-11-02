@@ -5,9 +5,9 @@ MACBOOK := iumac
 MACBOOK_APP := Applications/NtfyMac.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check toolchain format lint-format lint analyze build test app legacy install-macbook
+.PHONY: check toolchain format lint-format lint analyze build test app docs docs-check legacy install-macbook
 
-check: toolchain lint-format lint build test app legacy
+check: toolchain lint-format lint build docs-check test app legacy
 
 # Runs once, as the first step of `check`. Fails closed: an unparseable version is an error.
 # The other targets skip it: Package.swift's tools version already rejects a Swift older than 6.2.
@@ -38,6 +38,22 @@ build:
 
 test:
 	swift test
+
+# Regenerates docs/cli.md and llms.txt from the debug CLI's `schema --json`. Offline: temp config and
+# data dirs, no app, no Keychain. `docs-check` writes to a temp dir and fails when the checked-in files differ.
+DOCS_GEN := scripts/generate-cli-docs.swift
+DOCS_SCHEMA = NTFY_MAC_CONFIG_DIR="$$tmp/config" NTFY_MAC_DATA_DIR="$$tmp/data" \
+	"$$(swift build --show-bin-path)/ntfy-mac" schema --json > "$$tmp/schema.json"
+
+docs: build
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && $(DOCS_SCHEMA) && \
+		swift $(DOCS_GEN) "$$tmp/schema.json"
+
+docs-check: build
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && $(DOCS_SCHEMA) && \
+		swift $(DOCS_GEN) "$$tmp/schema.json" --out "$$tmp/out" > /dev/null && \
+		diff -u docs/cli.md "$$tmp/out/docs/cli.md" && diff -u llms.txt "$$tmp/out/llms.txt" || \
+		{ echo "docs are stale: run 'make docs' and commit the result"; exit 1; }
 
 app:
 	cd App && "$$(../$(TOOLS) xcodegen)" generate

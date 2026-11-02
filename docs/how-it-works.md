@@ -1,6 +1,16 @@
 # How it works
 
-Technical details on the ntfy-mac daemon internals.
+Technical details on the ntfy-mac daemon internals. The sections below describe the 1.x daemon; the 2.0 rewrite replaces them in the cutover wave. How the 2.0 CLI and app work together is the next section.
+
+## CLI and app (2.0)
+
+The app holds the stream and writes the history; the `ntfy-mac` CLI never holds a connection.
+
+- **Reads** (`ls`, `search`, `read`, `tail`, `wait`, `status`) go straight to the config and the history database, which is SQLite in WAL mode, so they work while the app is down. `tail --follow` and `wait` poll the database every 500 ms.
+- **Writes to state** (`config`, `subscribe`, `pause`, `resume`) edit the config file. The app watches it and applies the change, so it need not be reachable. `pause` stores `pausedUntil`; with no flags that is 2100-01-01 until `resume`. Held-back messages are stored and shown when the pause ends.
+- **Read marks:** `read` marks a message read by writing to the history database itself (`--no-mark` skips it). Acknowledging goes through the app, because it has to withdraw the notification and stop the re-alerts.
+- **App-only actions** (`ack`, `notify`, `login-item`, and the live state in `status` and `doctor`) go over a Unix domain socket in the app support directory, NDJSON. The CLI starts the app through LaunchServices when the command needs it and it is down.
+- **Contract:** every command, flag, exit code and error code is in the generated [CLI reference](cli.md).
 
 ## Streaming
 
@@ -76,7 +86,7 @@ Once per 24 h, ntfy-mac queries the GitHub Releases API. If a newer version is a
 
 ## Credential storage
 
-Credentials are stored in `~/.config/ntfy-mac/config.json` (written by `ntfy-mac setup`). Environment variables `NTFY_URL` and `NTFY_TOKEN` serve as fallbacks when no config file exists.
+In 2.0 the token lives in the Keychain and `ntfy-mac setup` writes the URL to `~/.config/ntfy-mac/config.json`; a 1.x plaintext token there is migrated on first run. In 1.x both were stored in the config file (written by `ntfy-mac setup`). Environment variables `NTFY_URL` and `NTFY_TOKEN` serve as fallbacks when no config file exists.
 
 ## PID lock
 

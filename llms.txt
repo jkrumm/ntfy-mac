@@ -1,0 +1,84 @@
+# ntfy-mac
+
+> A macOS app and CLI for ntfy servers. Notifications arrive through Notification Center; the `ntfy-mac` CLI reads and acts on the same history, so scripts and agents can publish, list, wait for a reply and acknowledge. Every command takes `--json`.
+
+ntfy-mac is a background app (`NtfyMac.app`) that holds the ntfy stream and stores every message in a local history database. The CLI is `ntfy-mac`, inside the app bundle. This file is generated from `ntfy-mac schema --json`.
+
+## Docs
+
+- [CLI reference](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md): every command, flag, exit code and error code, with examples
+- [README](https://github.com/jkrumm/ntfy-mac/blob/master/README.md#use-from-agents-and-scripts): install, setup and the agent quick start
+- [How it works](https://github.com/jkrumm/ntfy-mac/blob/master/docs/how-it-works.md): streaming, reconnect, delivery, history
+
+## Contract
+
+- **Machine-readable:** `ntfy-mac schema --json` prints the whole command tree on one line (schemaVersion 2), keys sorted.
+- **stdout vs stderr:** data on stdout, diagnostics on stderr. With `--json`, stdout is JSON only.
+- **Success:** one JSON document per command. `ls`, `search` print an array of message objects; `read` prints one message; `status`, `doctor`, `pause`, `publish` print an object.
+- **Failure:** with `--json`, stdout gets `{"error":{"code":"not-found","exitCode":1,"message":"..."}}` and stderr gets `Error: <message>`. Branch on `error.code` or on the exit code.
+- **Exit codes:**
+  - `0` success: The command did what it was asked.
+  - `1` runtime: A runtime failure; the error code says which (see errorCodes).
+  - `2` usage: Invalid flags, arguments or values; nothing was done.
+  - `3` auth: The server rejected the token.
+  - `4` appUnavailable: The app is not running, or a system permission it needs is missing.
+  - `7` serverUnreachable: The ntfy server could not be reached.
+
+## Messages and tail
+
+A message object has these fields; absent values are `null`, never missing:
+
+```json
+{"topic":"alerts","id":"m1","time":"2030-01-01T08:00:00Z","title":null,"message":"Disk at 91%","priority":4,"tags":["warning"],"read":false,"acknowledged":false,"click":null,"attachments":[]}
+```
+
+- **`tail` is NDJSON, always:** one message object per line, oldest first, with or without `--json`. `--follow` keeps polling the history every 500 ms and ends cleanly on SIGINT. A catch-up after an outage (messages older than a minute when stored) is not followed.
+- **`read` marks the message read** unless you pass `--no-mark`.
+- **`pause` with no flags** pauses until `ntfy-mac resume` (stored as 2100-01-01).
+
+## Wait for a human
+
+`wait` blocks until a message matches, so an agent can ask a question and sleep on the answer:
+
+```sh
+ntfy-mac publish approvals -m "Deploy v2 to prod?" -p 4
+ntfy-mac wait --topic approvals --match '/^(yes|no)/i' --timeout 600 --json
+```
+
+- Only messages that arrive after `wait` started count. Pick a `--match` that your own published message does not satisfy.
+- `--match` is a case-insensitive substring of title or message, or `/regex/` (`/regex/i` ignores case).
+- Exit 0 prints the matching message. Exit 1 with error code `timeout` means nobody answered; the default timeout is 300 seconds.
+- `--ack` acknowledges the match through the app; that is the only way `wait` starts the app.
+
+## Prerequisites
+
+- **Server and token:** run `ntfy-mac setup --url https://ntfy.example.com --token tk_...` once. The token lives in the Keychain. `publish` needs it; `not-configured` (exit 1) means setup is missing, `unauthorized` (exit 3) means the token was rejected, `server-unreachable` (exit 7) means no answer.
+- **The app:** it fills the history that `ls`, `search`, `read`, `tail` and `wait` read. Those read files directly and work while the app is down, but see nothing new. `ack`, `notify`, `start` and `login-item` start the app; exit 4 means it could not run or notifications are not allowed.
+- **Check first:** `ntfy-mac status --json` reports `configured`, `running`, `paused`, `permission` and history counts without changing anything. `ntfy-mac doctor --json` runs the full read-only health check.
+
+## Commands
+
+- [`ntfy-mac setup [--url <url>] [--token <string>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-setup): Connect ntfy-mac to your ntfy server.
+- [`ntfy-mac doctor [--send-test]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-doctor): Check configuration, server, app and permissions.
+- [`ntfy-mac subscribe [<topic>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-subscribe): Show the subscribed topics, add a local one, or reset.
+- [`ntfy-mac unsubscribe <topic>`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-unsubscribe): Remove a locally added topic.
+- [`ntfy-mac config`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-config): Show and change notification settings.
+- [`ntfy-mac notify [--message <string>] [--title <string>] [--priority <integer>] [--tag <string>...] [--url <url>] [--dismiss-after <number>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-notify): Send a local notification through the app (no server needed).
+- [`ntfy-mac sounds [<filter>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-sounds): Preview the notification sounds.
+- [`ntfy-mac logs [--error] [--follow] [--last <duration>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-logs): Show the app's log from the unified log.
+- [`ntfy-mac update [--check]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-update): Update ntfy-mac (Homebrew installs) or check for a newer release.
+- [`ntfy-mac uninstall [--yes]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-uninstall): Remove ntfy-mac's config, history, state and token.
+- [`ntfy-mac version`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-version): Print the version.
+- [`ntfy-mac start`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-start): Start the ntfy-mac app if it is not running.
+- [`ntfy-mac status [--require-running]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-status): Show the connection, pause, permissions and history counts.
+- [`ntfy-mac ls [--topic <string>] [--unread] [--unacked] [--min-priority <integer>] [--since <duration-or-timestamp>] [--limit <integer>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-ls): List messages from the history, newest first.
+- [`ntfy-mac search <query> [--topic <string>] [--unread] [--unacked] [--min-priority <integer>] [--since <duration-or-timestamp>] [--limit <integer>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-search): Search the history by text, newest first.
+- [`ntfy-mac read <topic> <id> [--no-mark]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-read): Show one message in full and mark it read.
+- [`ntfy-mac ack [<topic>] [<id>] [--all] [--topic <string>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-ack): Acknowledge a message, or every unacknowledged one.
+- [`ntfy-mac tail [--topic <string>] [--unread] [--unacked] [--min-priority <integer>] [--since <duration-or-timestamp>] [--limit <integer>] [--follow]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-tail): Print messages as NDJSON, optionally following new ones.
+- [`ntfy-mac wait --topic <string> --match <string> [--timeout <number>] [--min-priority <integer>] [--ack]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-wait): Block until a matching message arrives.
+- [`ntfy-mac publish <topic> --message <string> [--title <string>] [--priority <integer>] [--tag <string>...] [--click <url>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-publish): Publish a message to a topic on the ntfy server.
+- [`ntfy-mac pause [--for <duration>] [--until <timestamp>]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-pause): Hold notifications back for a while.
+- [`ntfy-mac resume`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-resume): End a pause and show what was held back.
+- [`ntfy-mac login-item <off|on|status>`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-login-item): Start ntfy-mac at login: on, off or status.
+- [`ntfy-mac schema`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-schema): Describe every command, flag, exit code and error code.

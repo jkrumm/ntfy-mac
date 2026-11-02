@@ -4,3 +4,4 @@ cqueue.md
 .build
 App/NtfyMac.xcodeproj
 App/Info.plist
+docs/cli.md
