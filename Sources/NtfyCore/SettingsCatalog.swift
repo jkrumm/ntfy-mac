@@ -23,6 +23,9 @@ public enum SettingID: String, Sendable, CaseIterable, Hashable {
   case reAlertIntervalSeconds
   case reAlertMinPriority
   case reAlertMaxRepeats
+  case meetingMode
+  case meetingUrgentBypass
+  case presenting
   case allowPrivateNetworkActions
   case loginItem
   case pause
@@ -35,6 +38,7 @@ public enum SettingGroup: String, Sendable, CaseIterable, Hashable {
   case sounds
   case quietHours
   case reAlert
+  case meetings
   case actions
   case system
 
@@ -45,6 +49,7 @@ public enum SettingGroup: String, Sendable, CaseIterable, Hashable {
     case .sounds: "Sounds and dismiss timing"
     case .quietHours: "Quiet hours"
     case .reAlert: "Re-alert"
+    case .meetings: "Meetings"
     case .actions: "Message actions"
     case .system: "System"
     }
@@ -198,6 +203,19 @@ public enum SettingsCatalog {
     SettingEntry(
       .reAlertMaxRepeats, .reAlert, "Re-alert maximum repeats", key: "reAlertMaxRepeats",
       command: "config set", example: "ntfy-mac config set reAlertMaxRepeats 6"),
+    SettingEntry(
+      .meetingMode, .meetings, "Pause notifications during meetings", key: "meeting.mode",
+      command: "config meeting set", example: "ntfy-mac config meeting set --mode pause",
+      note: "`--mode off` turns it off; `config meeting reset` restores the defaults."),
+    SettingEntry(
+      .meetingUrgentBypass, .meetings, "Urgent messages bypass meetings",
+      key: "meeting.urgentBypass", command: "config meeting set",
+      example: "ntfy-mac config meeting set --no-urgent-bypass"),
+    SettingEntry(
+      .presenting, .meetings, "I am presenting", key: "meeting.presentingUntil",
+      command: "present", example: "ntfy-mac present on --for 1h",
+      note: "Holds notifications whatever the detection says, even with the mode off. "
+        + "`ntfy-mac present off` ends it."),
     SettingEntry(
       .allowPrivateNetworkActions, .actions, "Allow actions to reach the private network",
       key: "allowPrivateNetworkActions", command: "config set",

@@ -102,6 +102,7 @@ Everything the History window does to a message has a command. A test fails when
 | [`ntfy-mac publish`](#ntfy-mac-publish) | Publish a message to a topic on the ntfy server. |
 | [`ntfy-mac pause`](#ntfy-mac-pause) | Hold notifications back for a while. |
 | [`ntfy-mac resume`](#ntfy-mac-resume) | End a pause and show what was held back. |
+| [`ntfy-mac present`](#ntfy-mac-present) | Say you are presenting: hold notifications back. |
 | [`ntfy-mac login-item`](#ntfy-mac-login-item) | Start ntfy-mac at login: on, off or status. |
 | [`ntfy-mac migrate`](#ntfy-mac-migrate) | Remove the leftovers of a 1.x install. |
 | [`ntfy-mac schema`](#ntfy-mac-schema) | Describe every command, flag, exit code and error code. |
@@ -264,6 +265,9 @@ ntfy-mac config topic reset builds
 ntfy-mac config quiet-hours show
 ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest
 ntfy-mac config quiet-hours off
+ntfy-mac config meeting show
+ntfy-mac config meeting set --mode pause --no-urgent-bypass
+ntfy-mac config meeting reset
 ```
 
 ### `ntfy-mac config show`
@@ -579,6 +583,68 @@ Turn quiet hours off and keep the times.
 ```
 ntfy-mac config quiet-hours off
 ```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config meeting`
+
+Pause notifications automatically during video meetings.
+
+```
+ntfy-mac config meeting
+```
+
+With the mode on, the app watches which apps use the microphone and whether a camera is running (Zoom, Teams, Webex, FaceTime, a Slack huddle, a browser call with the camera on) and holds banners and sounds back while a meeting is going on. Messages are stored and shown as one summary when it ends. Nothing is recorded and no macOS permission is needed: the app only learns that audio or a camera is in use, never what is said or shown. It cannot see a screen share by itself; `ntfy-mac present on` says so by hand.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config meeting show`
+
+Show the meeting settings.
+
+```
+ntfy-mac config meeting show
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config meeting set`
+
+Change the meeting settings.
+
+```
+ntfy-mac config meeting set [--mode <off|pause>] [--urgent-bypass] [--no-urgent-bypass]
+```
+
+Options you leave out keep their value. The defaults are mode off and urgent bypass on.
+
+```sh
+ntfy-mac config meeting set --mode pause
+ntfy-mac config meeting set --no-urgent-bypass
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--mode` | option | `off`, `pause` |  | no | off, or pause to hold notifications during meetings. |
+| `--urgent-bypass` | flag | boolean | `false` | no | Let priority 5 through. |
+| `--no-urgent-bypass` | flag | boolean | `false` | no | Hold priority 5 back too. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config meeting reset`
+
+Turn meeting detection off and restore the defaults.
+
+```
+ntfy-mac config meeting reset
+```
+
+A running `present on` stays until `ntfy-mac present off`.
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
@@ -1168,6 +1234,39 @@ Clears pausedUntil in the config file; the running app picks it up.
 
 ```sh
 ntfy-mac resume
+```
+
+## `ntfy-mac present`
+
+Say you are presenting: hold notifications back.
+
+```
+ntfy-mac present <off|on> [--for <duration>]
+```
+
+The app cannot tell that you share your screen, so this is the manual switch. `present on` holds banners and sounds back like a detected meeting (priority 5 still gets through unless the urgent bypass is off, see `config meeting`), whatever the meeting mode is. Without --for it lasts until `ntfy-mac present off`. Held messages are stored and shown as one summary afterwards. Writes meeting.presentingUntil to the config file; the running app picks it up through its config watcher, so it need not be reachable. Durations use s, m, h and d, alone or combined: 30m, 2h, 1h30m.
+
+macOS also hides banners by itself while the display is shared or mirrored, if System Settings > Notifications > "Allow notifications when mirroring or sharing the display" is off.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `state` | positional | `off`, `on` |  | yes | on or off. |
+| `--for` | option | duration |  | no | With on: present for this long, like 30m, 2h or 1h30m. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+**Needs**
+
+- Does not use the app.
+- Reads or writes the local config or history files.
+
+**Error codes:** `usage`, `storage`. See [Error codes](#error-codes).
+
+**Examples**
+
+```sh
+ntfy-mac present on
+ntfy-mac present on --for 1h
+ntfy-mac present off
 ```
 
 ## `ntfy-mac login-item`

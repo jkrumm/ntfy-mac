@@ -4,7 +4,7 @@ import NtfyCore
 /// built from this list, and `SettingsModel.exposedSettings` is derived from it, so a setting the
 /// UI shows is always one the catalog (and so the CLI) has.
 public enum SettingsSection: String, Sendable, CaseIterable, Identifiable {
-  case server, topics, sounds, reAlert, quietHours, actions, general
+  case server, topics, sounds, reAlert, quietHours, meetings, actions, general
 
   public var id: String { rawValue }
 
@@ -15,6 +15,7 @@ public enum SettingsSection: String, Sendable, CaseIterable, Identifiable {
     case .sounds: "Sounds & dismiss"
     case .reAlert: "Re-alert"
     case .quietHours: "Quiet hours"
+    case .meetings: "Meetings"
     case .actions: "Actions safety"
     case .general: "General"
     }
@@ -27,6 +28,7 @@ public enum SettingsSection: String, Sendable, CaseIterable, Identifiable {
     case .sounds: "speaker.wave.2"
     case .reAlert: "bell.badge"
     case .quietHours: "moon"
+    case .meetings: "video"
     case .actions: "lock.shield"
     case .general: "gearshape"
     }
@@ -46,6 +48,7 @@ public enum SettingsSection: String, Sendable, CaseIterable, Identifiable {
         .quietHoursEnabled, .quietHoursStart, .quietHoursEnd, .quietHoursUrgentBypass,
         .quietHoursDigest,
       ]
+    case .meetings: [.meetingMode, .meetingUrgentBypass, .presenting]
     case .actions: [.allowPrivateNetworkActions]
     case .general: [.loginItem, .pause]
     }
