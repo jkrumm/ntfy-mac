@@ -218,6 +218,7 @@ extension MessageKey {
   private let file = MessageAttachment(
     url: URL(string: "https://e.com/report.pdf")!, name: "report.pdf", mimeType: "application/pdf",
     size: 10)
+  private let key = MessageKey(topic: "alerts", id: "a")
   private let local = URL(fileURLWithPath: "/tmp/cache/report.pdf")
 
   private func rig(attachment: MessageAttachment?) async -> HistoryModelRig {
@@ -233,11 +234,11 @@ extension MessageKey {
     await rig.pipeline.attachments.set(file: local)
     await rig.pipeline.attachments.hold()
     await rig.model.select(MessageKey(topic: "alerts", id: "a"))
-    #expect(rig.model.attachment == .idle)
-    rig.model.loadAttachment()
-    #expect(rig.model.attachment == .loading)
+    #expect(rig.model.attachmentState(for: key) == .idle)
+    rig.model.loadAttachment(for: key)
+    #expect(rig.model.attachmentState(for: key) == .loading)
     await rig.pipeline.attachments.release()
-    #expect(await rig.eventually { rig.model.attachment == .ready(local) })
+    #expect(await rig.eventually { rig.model.attachmentState(for: key) == .ready(local) })
     #expect(await rig.pipeline.attachments.requested == [file])
     rig.model.stop()
   }
@@ -246,9 +247,11 @@ extension MessageKey {
     let rig = await rig(attachment: file)
     await rig.pipeline.attachments.set(failure: .serverUnreachable)
     await rig.model.select(MessageKey(topic: "alerts", id: "a"))
-    rig.model.loadAttachment()
+    rig.model.loadAttachment(for: key)
     #expect(
-      await rig.eventually { rig.model.attachment == .failed("The server could not be reached.") })
+      await rig.eventually {
+        rig.model.attachmentState(for: key) == .failed("The server could not be reached.")
+      })
     rig.model.stop()
   }
 
@@ -256,10 +259,10 @@ extension MessageKey {
     let rig = await rig(attachment: file)
     await rig.pipeline.attachments.hold()
     await rig.model.select(MessageKey(topic: "alerts", id: "a"))
-    rig.model.loadAttachment()
-    rig.model.loadAttachment()
+    rig.model.loadAttachment(for: key)
+    rig.model.loadAttachment(for: key)
     await rig.pipeline.attachments.release()
-    #expect(await rig.eventually { rig.model.attachment != .loading })
+    #expect(await rig.eventually { rig.model.attachmentState(for: key) != .loading })
     #expect(await rig.pipeline.attachments.requested.count == 1)
     rig.model.stop()
   }
@@ -268,34 +271,46 @@ extension MessageKey {
     let rig = await rig(attachment: file)
     await rig.pipeline.attachments.hold()
     await rig.model.select(MessageKey(topic: "alerts", id: "a"))
-    rig.model.loadAttachment()
-    rig.model.cancelAttachment()
-    #expect(rig.model.attachment == .idle)
+    rig.model.loadAttachment(for: key)
+    rig.model.cancelAttachment(for: key)
+    #expect(rig.model.attachmentState(for: key) == .idle)
     await rig.pipeline.attachments.release()
     for _ in 0..<2000 { await Task.yield() }
-    #expect(rig.model.attachment == .idle)
+    #expect(rig.model.attachmentState(for: key) == .idle)
     rig.model.stop()
   }
 
-  @Test func selectingAnotherMessageDropsTheStateAndTheRunningDownload() async {
+  @Test func aRunningDownloadSurvivesSelectingAnotherMessage() async {
     let rig = await rig(attachment: file)
     await rig.pipeline.attachments.set(file: local)
     await rig.pipeline.attachments.hold()
-    await rig.model.select(MessageKey(topic: "alerts", id: "a"))
-    rig.model.loadAttachment()
+    rig.model.loadAttachment(for: key)
     await rig.model.select(MessageKey(topic: "alerts", id: "plain"))
-    #expect(rig.model.attachment == .idle)
+    #expect(rig.model.attachmentState(for: key) == .loading)
     await rig.pipeline.attachments.release()
-    for _ in 0..<2000 { await Task.yield() }
-    #expect(rig.model.attachment == .idle)
+    #expect(await rig.eventually { rig.model.attachmentState(for: key) == .ready(local) })
+    rig.model.stop()
+  }
+
+  @Test func twoMessagesLoadTheirAttachmentsIndependently() async {
+    let rig = HistoryModelRig()
+    await rig.add("a", attachment: file)
+    await rig.add("b", age: 1, attachment: file)
+    await rig.start()
+    await rig.pipeline.attachments.set(file: local)
+    let other = MessageKey(topic: "alerts", id: "b")
+    rig.model.loadAttachment(for: key)
+    #expect(rig.model.attachmentState(for: other) == .idle)
+    #expect(await rig.eventually { rig.model.attachmentState(for: key) == .ready(local) })
+    #expect(rig.model.attachmentState(for: other) == .idle)
     rig.model.stop()
   }
 
   @Test func aMessageWithoutAnAttachmentDoesNothing() async {
     let rig = await rig(attachment: nil)
     await rig.model.select(MessageKey(topic: "alerts", id: "plain"))
-    rig.model.loadAttachment()
-    #expect(rig.model.attachment == .idle)
+    rig.model.loadAttachment(for: key)
+    #expect(rig.model.attachmentState(for: key) == .idle)
     #expect(await rig.pipeline.attachments.requested.isEmpty)
     rig.model.stop()
   }
@@ -308,8 +323,9 @@ extension MessageKey {
     let rig = await rig(attachment: expired)
     await rig.model.select(MessageKey(topic: "alerts", id: "a"))
     #expect(rig.model.detail?.attachment?.isExpired == true)
-    rig.model.loadAttachment()
-    #expect(rig.model.attachment == .failed("The server no longer has this attachment."))
+    rig.model.loadAttachment(for: key)
+    #expect(
+      rig.model.attachmentState(for: key) == .failed("The server no longer has this attachment."))
     #expect(await rig.pipeline.attachments.requested.isEmpty)
     rig.model.stop()
   }

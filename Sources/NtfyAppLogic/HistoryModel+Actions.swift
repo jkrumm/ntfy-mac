@@ -71,6 +71,13 @@ extension HistoryModel {
     return await opener.open(url)
   }
 
+  /// Opens a link from a message (its click URL or a `view` action) in the default app. Only
+  /// http, https and mailto open; false for anything else or when nothing could open it.
+  public func open(_ url: URL) async -> Bool {
+    guard let allowed = URLPolicy.openable(url) else { return false }
+    return await opener.open(allowed)
+  }
+
   /// Everything the filters match, not just the loaded page, as a file for the save panel.
   /// nil when there is nothing to export or no history to read; throws when reading or encoding
   /// fails.
@@ -117,37 +124,44 @@ extension HistoryModel {
   }
 }
 
-/// The attachment preview: fetched on demand, one at a time, for the selected message.
+/// The attachment previews: fetched on demand, per message, so several can load at once and a
+/// thread scrolling away does not cancel one.
 extension HistoryModel {
-  /// Starts downloading the selected message's attachment; `attachment` follows. Does nothing
-  /// without one, or while a download runs. An expired attachment fails without a request.
-  public func loadAttachment() {
-    guard let file = detail?.attachment, let fetcher = handles?.attachments else { return }
-    if case .loading = attachment { return }
+  public func attachmentState(for key: MessageKey) -> AttachmentState {
+    attachments[key] ?? .idle
+  }
+
+  /// Starts downloading the message's attachment; `attachments[key]` follows. Does nothing
+  /// without one, or while its download runs. An expired attachment fails without a request.
+  public func loadAttachment(for key: MessageKey) {
+    guard let file = thread.first(where: { $0.key == key })?.detail.attachment,
+      let fetcher = handles?.attachments
+    else { return }
+    if case .loading = attachmentState(for: key) { return }
     if file.isExpired {
-      attachment = .failed("The server no longer has this attachment.")
+      attachments[key] = .failed("The server no longer has this attachment.")
       return
     }
-    let key = selection
-    attachment = .loading
-    attachmentTask = Task {
+    attachments[key] = .loading
+    attachmentTasks[key] = Task {
       let outcome: AttachmentState
       do throws(NtfyError) {
         outcome = .ready(try await fetcher.fetch(file.source))
       } catch {
         outcome = .failed(Self.describe(error))
       }
-      guard !Task.isCancelled, selection == key else { return }
-      attachment = outcome
-      attachmentTask = nil
+      guard !Task.isCancelled else { return }
+      attachments[key] = outcome
+      attachmentTasks[key] = nil
     }
   }
 
   /// Stops a running download and returns to idle; a finished one stays as it is.
-  public func cancelAttachment() {
-    attachmentTask?.cancel()
-    attachmentTask = nil
-    attachment = .idle
+  public func cancelAttachment(for key: MessageKey) {
+    attachmentTasks[key]?.cancel()
+    attachmentTasks[key] = nil
+    if case .ready = attachmentState(for: key) { return }
+    attachments[key] = nil
   }
 
   private static func describe(_ error: NtfyError) -> String {
