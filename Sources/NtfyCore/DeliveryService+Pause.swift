@@ -63,6 +63,12 @@ extension DeliveryService {
     }
   }
 
+  /// Looks again whether the hold is over, after the config changed under the service (the
+  /// meeting mode, the override). Cheap when nothing was held.
+  public func recheckHold() async {
+    await resumeIfPauseOver()
+  }
+
   /// Reconciles once when something was held back and the hold is over. A pause that was
   /// extended, or quiet hours that were edited, in the meantime arm the next wake-up instead; a
   /// meeting that is still going on waits for the meeting source's next change. The wake-up runs

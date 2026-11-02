@@ -34,6 +34,13 @@ public struct NotificationSettingsLink: Sendable {
   public static let pane = URL(
     string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
 
+  /// The Notifications pane, where "Allow notifications when mirroring or sharing the display"
+  /// is a toggle. The setting is global, so this is the pane itself, not this app's page; no
+  /// anchor for the toggle is documented or found in System Settings, so the user scrolls to it.
+  /// The pane id `com.apple.Notifications-Settings.extension` is the one System Settings lists
+  /// in its own sidebar on macOS 26 and is the documented form on macOS 13 and later.
+  public static let displaySharingPane = pane
+
   private let opener: any SystemSettingsOpening
 
   public init(opener: any SystemSettingsOpening) { self.opener = opener }

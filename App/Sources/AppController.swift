@@ -8,7 +8,7 @@ import NtfyPlatform
 /// the connection settings change, and follows the config file. It decides nothing itself;
 /// `PipelineReload` does. It is also where the UI gets the running pipeline from
 /// (`PipelineSource`), and tells it each time one is built or torn down.
-actor AppController: PipelineSource {
+actor AppController: PipelineSource, MeetingSource {
   private enum Lifecycle { case new, starting, running, stopped }
 
   nonisolated let services: AppServices
@@ -27,7 +27,10 @@ actor AppController: PipelineSource {
       config: FileConfigStore(),
       center: LiveNotificationCenter(log: { Log.logger(.delivery).info("\($0, privacy: .private)") }
       ),
-      router: router, clock: SystemClock(), windows: windows)
+      router: router, clock: SystemClock(), windows: windows,
+      meeting: MeetingMonitor(
+        source: SystemMeetingSignalSource(), clock: SystemClock(),
+        log: { Log.logger(.meeting).info("\($0, privacy: .private)") }))
   }
 
   private var isActive: Bool { lifecycle == .starting || lifecycle == .running }
@@ -61,6 +64,7 @@ actor AppController: PipelineSource {
     lifecycle = .stopped
     await ipc?.stop()
     ipc = nil
+    await services.meeting.stop()
     permissionTask?.cancel()
     permissionTask = nil
     watcher?.cancel()
@@ -77,6 +81,8 @@ actor AppController: PipelineSource {
 
   nonisolated func rebuilds() -> AsyncStream<Void> { rebuildSignal.stream() }
 
+  nonisolated var meetingState: any MeetingStateProviding { services.meeting }
+
   // MARK: Socket
 
   /// The socket outlives pipeline rebuilds: its handler asks this controller for the pipeline
@@ -86,7 +92,7 @@ actor AppController: PipelineSource {
     let handler = IPCRequestHandler(
       pipeline: { await self.runningPipeline()?.handles }, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
-      clock: services.clock, loginItem: SMAppServiceLoginItem(),
+      clock: services.clock, loginItem: SMAppServiceLoginItem(), meeting: services.meeting,
       log: { log.error("\($0, privacy: .public)") })
     let server = IPCServer(
       path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport()),
@@ -104,6 +110,7 @@ actor AppController: PipelineSource {
 
   private func reload() async {
     guard isActive else { return }
+    await syncMeetingDetection()
     let outcome = await resolve()
     guard isActive else { return }
     if case .failed(let reason) = outcome {
@@ -122,6 +129,18 @@ actor AppController: PipelineSource {
     // Nothing runs yet (first start, idle, or a build that failed): the local pipeline keeps
     // `notify` working and is retried on every reload.
     if pipeline == nil { await build(nil) }
+  }
+
+  /// Runs the meeting detection only while the mode asks for it, so a user who never turned it
+  /// on has no listeners and no reads. Delivery is told, because turning the mode off (or the
+  /// override) can end a hold with nothing else to wake it.
+  private func syncMeetingDetection() async {
+    if await services.config.load().meeting.mode == .pause {
+      await services.meeting.start()
+    } else {
+      await services.meeting.stop()
+    }
+    await pipeline?.delivery.recheckHold()
   }
 
   /// Builds the pipeline for `settings`, or the local one for nil.
