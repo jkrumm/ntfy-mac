@@ -42,7 +42,8 @@ struct ConfigMeetingCommand: CLICommand {
       and holds banners and sounds back while a meeting is going on. Messages are stored and
       shown as one summary when it ends. Nothing is recorded and no macOS permission is needed:
       the app only learns that audio or a camera is in use, never what is said or shown. It
-      cannot see a screen share by itself; `ntfy-mac present on` says so by hand.
+      cannot see a screen share by itself; `ntfy-mac present on` says so by hand. A call muted
+      for more than 45 seconds is no longer detected; `present on` covers that.
       """,
     subcommands: [ConfigMeetingShow.self, ConfigMeetingSet.self, ConfigMeetingReset.self])
 

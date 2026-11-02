@@ -44,7 +44,7 @@ struct SettingsMeetingsSection: View {
         .help(settingCommandHint(.presenting))
         Text(
           "ntfy-mac cannot tell that you share your screen. Switch this on to hold notifications "
-            + "by hand, whatever the mode above says."
+            + "by hand for one hour, whatever the mode above says."
         )
         .font(.callout).foregroundStyle(.secondary)
         Button("Open Notification Settings") {
@@ -62,7 +62,9 @@ struct SettingsMeetingsSection: View {
           "A meeting is detected when Zoom, Teams, Webex or FaceTime use the microphone, when "
             + "Slack runs a huddle, or when a browser uses the microphone while a camera is on. "
             + "ntfy-mac only learns that audio or a camera is in use. It records nothing, never "
-            + "sees what is said or shown, and needs no macOS permission for this."
+            + "sees what is said or shown, and needs no macOS permission for this. A call muted "
+            + "for more than 45 seconds is no longer detected; \u{201C}I am presenting\u{201D} "
+            + "covers that."
         )
         .font(.callout).foregroundStyle(.secondary)
       } header: {

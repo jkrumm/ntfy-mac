@@ -54,19 +54,28 @@ import Testing
 
   // MARK: present
 
-  @Test func presentOnWithoutALimitIsIndefiniteAndOffClearsIt() async throws {
+  @Test func presentOnWithoutALimitLastsAnHourAndOffClearsIt() async throws {
     let rig = CLIRig()
     let started = await rig.run("present", "on", "--json")
     #expect(started.exit == .success)
-    #expect(await rig.config.load().meeting.presentingUntil == PauseWindow.indefinite)
+    let expected = rig.clock.now().addingTimeInterval(3600)
+    #expect(await rig.config.load().meeting.presentingUntil == expected)
     let report = try started.json()
     #expect(report["presenting"] as? Bool == true)
-    #expect(report["presentingIndefinitely"] as? Bool == true)
+    #expect(report["presentingIndefinitely"] as? Bool == false)
     #expect(started.stdout.contains("\"mode\""))
     let off = await rig.run("present", "off")
     #expect(off.exit == .success)
     #expect(await rig.config.load().meeting.presentingUntil == nil)
     #expect(off.stdout.contains("Not presenting"))
+  }
+
+  @Test func presentOnIndefinitelyStaysUntilOff() async throws {
+    let rig = CLIRig()
+    let result = await rig.run("present", "on", "--indefinitely", "--json")
+    #expect(result.exit == .success)
+    #expect(await rig.config.load().meeting.presentingUntil == PauseWindow.indefinite)
+    #expect(try result.json()["presentingIndefinitely"] as? Bool == true)
   }
 
   @Test func presentOnForAWhileEndsThen() async throws {
@@ -83,6 +92,8 @@ import Testing
     #expect(await rig.run("present", "maybe").exit == .usage)
     #expect(await rig.run("present", "on", "--for", "soon").exit == .usage)
     #expect(await rig.run("present", "off", "--for", "1h").exit == .usage)
+    #expect(await rig.run("present", "off", "--indefinitely").exit == .usage)
+    #expect(await rig.run("present", "on", "--for", "1h", "--indefinitely").exit == .usage)
     #expect(await rig.config.load().meeting.presentingUntil == nil)
   }
 

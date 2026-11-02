@@ -88,7 +88,7 @@ private enum Exposure {
       apply: { await $0.setMeetingUrgentBypass(false) }, verify: { !$0.meeting.urgentBypass }),
     .presenting: Change(
       apply: { await $0.setPresenting(true) },
-      verify: { $0.meeting.presentingUntil == PauseWindow.indefinite }),
+      verify: { $0.meeting.presentingUntil.map { !PauseWindow.isIndefinite($0) } == true }),
     .loginItem: Change(apply: { await $0.setLaunchAtLogin(true) }, verify: { _ in true }),
     .pause: Change(
       apply: { await $0.resume() }, verify: { $0.pausedUntil == nil }, clearsKey: true),

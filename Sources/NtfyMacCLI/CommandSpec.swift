@@ -199,7 +199,10 @@ extension CommandSpec {
     CommandSpec("resume", files: true, errors: ["storage"], examples: ["ntfy-mac resume"]),
     CommandSpec(
       "present", files: true, errors: ["storage"], domains: ["--for": .duration],
-      examples: ["ntfy-mac present on", "ntfy-mac present on --for 1h", "ntfy-mac present off"]),
+      examples: [
+        "ntfy-mac present on", "ntfy-mac present on --for 2h", "ntfy-mac present on --indefinitely",
+        "ntfy-mac present off",
+      ]),
     CommandSpec(
       "login-item", app: .launches, errors: ["app-unavailable", "internal"],
       examples: ["ntfy-mac login-item status", "ntfy-mac login-item on"]),

@@ -122,6 +122,15 @@ public protocol MeetingSignalSource: Sendable {
 /// The detected meeting state, without the manual override (`MeetingSettings.effectiveState`).
 public protocol MeetingStateProviding: Sendable {
   func current() async -> MeetingState
-  /// The state at subscription time, then every change.
+  /// Whether a first reading exists. Before that `current()` is "nothing yet", which is not
+  /// the same as "no meeting": with the mode on, delivery holds back until it is known.
+  func hasReading() async -> Bool
+  /// The state at subscription time, then every change, and the state again when the first
+  /// reading lands (see `hasReading`), changed or not.
   func changes() -> AsyncStream<MeetingState>
+}
+
+extension MeetingStateProviding {
+  /// Providers that always know their state.
+  public func hasReading() async -> Bool { true }
 }

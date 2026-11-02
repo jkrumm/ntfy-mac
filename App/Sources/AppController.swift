@@ -8,7 +8,7 @@ import NtfyPlatform
 /// the connection settings change, and follows the config file. It decides nothing itself;
 /// `PipelineReload` does. It is also where the UI gets the running pipeline from
 /// (`PipelineSource`), and tells it each time one is built or torn down.
-actor AppController: PipelineSource, MeetingSource {
+actor AppController: PipelineSource {
   private enum Lifecycle { case new, starting, running, stopped }
 
   nonisolated let services: AppServices
@@ -17,6 +17,8 @@ actor AppController: PipelineSource, MeetingSource {
   private let log = Log.logger(.delivery)
   private var lifecycle = Lifecycle.new
   private var currentSettings: Settings?
+  /// The meeting mode as last read from a readable config file.
+  private var meetingMode = MeetingMode.off
   private var pipeline: AppPipeline?
   private var watcher: Task<Void, Never>?
   private var permissionTask: Task<Void, Never>?
@@ -81,8 +83,6 @@ actor AppController: PipelineSource, MeetingSource {
 
   nonisolated func rebuilds() -> AsyncStream<Void> { rebuildSignal.stream() }
 
-  nonisolated var meetingState: any MeetingStateProviding { services.meeting }
-
   // MARK: Socket
 
   /// The socket outlives pipeline rebuilds: its handler asks this controller for the pipeline
@@ -135,8 +135,20 @@ actor AppController: PipelineSource, MeetingSource {
   /// on has no listeners and no reads. Delivery is told, because turning the mode off (or the
   /// override) can end a hold with nothing else to wake it.
   private func syncMeetingDetection() async {
-    if await services.config.load().meeting.mode == .pause {
+    do throws(NtfyError) {
+      meetingMode = try await services.config.loadChecked().meeting.mode
+    } catch {
+      // A half-written file is not "mode off": keep the last known mode.
+      let kept = meetingMode.rawValue
+      log.error(
+        "meeting mode not read, keeping \(kept, privacy: .public): \(String(describing: error), privacy: .public)"
+      )
+    }
+    // A stop() that ran during the read wins; nothing starts after it.
+    guard isActive else { return }
+    if meetingMode == .pause {
       await services.meeting.start()
+      if !isActive { await services.meeting.stop() }
     } else {
       await services.meeting.stop()
     }

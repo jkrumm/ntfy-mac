@@ -14,7 +14,8 @@ struct PresentCommand: CLICommand {
       The app cannot tell that you share your screen, so this is the manual switch. `present on`
       holds banners and sounds back like a detected meeting (priority 5 still gets through
       unless the urgent bypass is off, see `config meeting`), whatever the meeting mode is.
-      Without --for it lasts until `ntfy-mac present off`. Held messages are stored and shown
+      Without --for it lasts one hour, so it cannot be forgotten; --indefinitely keeps it until
+      `ntfy-mac present off`. Held messages are stored and shown
       as one summary afterwards. Writes meeting.presentingUntil to the config file; the running
       app picks it up through its config watcher, so it need not be reachable. Durations use
       s, m, h and d, alone or combined: 30m, 2h, 1h30m.
@@ -27,9 +28,19 @@ struct PresentCommand: CLICommand {
   @Argument(help: "on or off.") var state: PresentChoice
   @Option(name: .long, help: "With on: present for this long, like 30m, 2h or 1h30m.")
   var `for`: String?
+  @Flag(name: .long, help: "With on: present until `present off`, not for an hour.")
+  var indefinitely = false
   @OptionGroup var output: OutputOptions
 
   func validate() throws {
+    if indefinitely {
+      guard state == .enable else {
+        throw ValidationError("--indefinitely only goes with `present on`.")
+      }
+      guard `for` == nil else {
+        throw ValidationError("--indefinitely and --for exclude each other.")
+      }
+    }
     guard let `for` else { return }
     guard state == .enable else { throw ValidationError("--for only goes with `present on`.") }
     guard DurationParser.seconds(`for`) != nil else {
@@ -47,12 +58,12 @@ struct PresentCommand: CLICommand {
 
   private func end(now: Date) throws -> Date? {
     guard state == .enable else { return nil }
-    guard let `for`, let seconds = DurationParser.seconds(`for`) else {
-      return PauseWindow.indefinite
-    }
+    if indefinitely { return PauseWindow.indefinite }
+    let seconds = `for`.flatMap(DurationParser.seconds) ?? MeetingSettings.defaultPresentingDuration
     let date = now.addingTimeInterval(seconds)
     guard date < PauseWindow.indefinite else {
-      throw CLIFailure.usage("--for is too long; omit it to present until `present off`.")
+      throw CLIFailure.usage(
+        "--for is too long; use --indefinitely to present until `present off`.")
     }
     return date
   }

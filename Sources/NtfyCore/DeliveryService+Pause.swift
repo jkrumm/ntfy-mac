@@ -8,11 +8,11 @@ extension DeliveryService {
   /// meeting has no end time, so the meeting source's change signal wakes the service instead.
   /// `exempt` is for a local message, which neither quiet hours nor a meeting hold.
   func holdBack(_ config: Config, for message: NtfyMessage?, exempt: Bool = false) async -> Bool {
-    let detected = await meeting?.current() ?? .inactive
+    let reading = await meetingReading()
     let now = clock.now()
     let quietEnd = quietHoldEnd(config, for: message, exempt: exempt, now: now)
     let meetingHeld = meetingHolds(
-      config, detected: detected, for: message, exempt: exempt, now: now)
+      config, reading: reading, for: message, exempt: exempt, now: now)
     let until = holdEnd(config, quietEnd: quietEnd, now: now)
     guard until != nil || meetingHeld else { return false }
     heldBack = true
@@ -37,12 +37,31 @@ extension DeliveryService {
     return quiet.nextEnd(after: now, calendar: calendar)
   }
 
-  private func meetingHolds(
-    _ config: Config, detected: MeetingState, for message: NtfyMessage?, exempt: Bool, now: Date
-  ) -> Bool {
-    guard !exempt, config.meeting.effectiveState(detected: detected, at: now).isActive else {
-      return false
+  /// What the meeting source says, and whether it has said anything yet.
+  struct MeetingReading {
+    var state = MeetingState.inactive
+    var known = true
+
+    /// A meeting holds notifications back now: the override, a detected meeting with the mode
+    /// on, or, with the mode on, no reading yet (a relaunch must not announce a backlog into a
+    /// meeting it has not looked at).
+    func holds(_ settings: MeetingSettings, at now: Date) -> Bool {
+      settings.effectiveState(detected: state, at: now).isActive
+        || (settings.mode == .pause && !known)
     }
+  }
+
+  func meetingReading() async -> MeetingReading {
+    guard let meeting else { return MeetingReading() }
+    // `known` first: a reading that lands in between then errs on the side of holding.
+    let known = await meeting.hasReading()
+    return MeetingReading(state: await meeting.current(), known: known)
+  }
+
+  private func meetingHolds(
+    _ config: Config, reading: MeetingReading, for message: NtfyMessage?, exempt: Bool, now: Date
+  ) -> Bool {
+    guard !exempt, reading.holds(config.meeting, at: now) else { return false }
     return !(config.meeting.urgentBypass && message?.priority == .max)
   }
 
@@ -77,7 +96,7 @@ extension DeliveryService {
   func resumeIfPauseOver() async {
     guard heldBack, !stopped else { return }
     let config = await currentConfig()
-    let detected = await meeting?.current() ?? .inactive
+    let reading = await meetingReading()
     guard heldBack, !stopped else { return }
     let now = clock.now()
     let quietEnd = quietHoldEnd(config, for: nil, exempt: false, now: now)
@@ -85,7 +104,7 @@ extension DeliveryService {
       armResume(at: until)
       return
     }
-    if config.meeting.effectiveState(detected: detected, at: now).isActive {
+    if reading.holds(config.meeting, at: now) {
       if let end = presentingEnd(config, now: now) { armResume(at: end) }
       return
     }

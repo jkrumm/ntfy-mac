@@ -20,6 +20,9 @@ public struct MeetingSettings: Sendable, Hashable {
   /// `PauseWindow.indefinite` means until it is switched off.
   public var presentingUntil: Date?
 
+  /// How long "I am presenting" lasts unless the user asks for longer, in seconds.
+  public static let defaultPresentingDuration: TimeInterval = 3600
+
   public init(
     mode: MeetingMode = .off, urgentBypass: Bool = true, presentingUntil: Date? = nil
   ) {

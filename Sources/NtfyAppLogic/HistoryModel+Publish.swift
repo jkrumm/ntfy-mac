@@ -24,8 +24,8 @@ extension HistoryModel {
     return !Self.trimmed(draft).isEmpty
   }
 
-  /// Publishes the draft to the selected topic. On success the draft is cleared; on failure it
-  /// stays and `composerState` says why.
+  /// Publishes the draft to the selected topic. On success the draft is cleared unless it was
+  /// edited meanwhile; on failure it stays and `composerState` says why.
   public func send() async {
     guard canSend, case .ready(let topic) = composerAvailability else { return }
     let text = Self.trimmed(draft)
@@ -53,7 +53,7 @@ extension HistoryModel {
       composerState = .failed(ComposerErrorText.describe(error))
       return
     }
-    drafts[topic] = nil
+    if drafts[topic].map(Self.trimmed) == text { drafts[topic] = nil }
     composerState = .idle
     await refresh()
   }

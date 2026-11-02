@@ -3,13 +3,19 @@ import Foundation
 import NtfyCore
 
 /// A property read the system refused or could not answer.
-struct PropertyReadFailure: Error {}
+struct PropertyReadFailure: Error {
+  /// The CoreAudio status behind the failure, 0 when there is none to name.
+  var status: OSStatus = 0
+
+  /// The object went away since it was listed: that is a fact, not a failed reading.
+  var objectIsGone: Bool { status == kAudioHardwareBadObjectError }
+}
 
 /// The property reads the process list needs, so the mapping is testable without an audio
 /// system. Every read fails (or returns nil) when the system could not answer.
 protocol AudioObjectAccess: Sendable {
   func processObjects() -> [UInt32]?
-  func pid(of object: UInt32) -> Int32?
+  func pid(of object: UInt32) throws(PropertyReadFailure) -> Int32
   func bundleID(of object: UInt32) -> String?
   func isRunningInput(_ object: UInt32) throws(PropertyReadFailure) -> Bool
   func isRunningOutput(_ object: UInt32) throws(PropertyReadFailure) -> Bool
@@ -19,19 +25,30 @@ protocol AudioObjectAccess: Sendable {
 /// or output right now. Reading these properties needs no Microphone permission and shows no
 /// prompt; they only report that a process is running audio, never what it hears.
 enum CoreAudioProcessList {
-  /// The processes known to the audio system, nil when the list itself cannot be read (unknown,
-  /// never "nobody"). A process that vanishes between the list and its properties is left out.
-  static func read(_ access: some AudioObjectAccess) -> [AudioProcessState]? {
+  /// The processes known to the audio system, nil when the list itself cannot be read or a
+  /// listed process's flags cannot (unknown, never "nobody": a transient error must not end a
+  /// live meeting). A process that vanished between the list and its properties is left out.
+  static func read(
+    _ access: some AudioObjectAccess, log: (String) -> Void = { _ in }
+  ) -> [AudioProcessState]? {
     guard let objects = access.processObjects() else { return nil }
-    return objects.compactMap { object in
-      guard let pid = access.pid(of: object),
-        let input = try? access.isRunningInput(object),
-        let output = try? access.isRunningOutput(object)
-      else { return nil }
-      return AudioProcessState(
-        pid: pid, bundleID: access.bundleID(of: object) ?? "", isRunningInput: input,
-        isRunningOutput: output)
+    var states: [AudioProcessState] = []
+    for object in objects {
+      do throws(PropertyReadFailure) {
+        let pid = try access.pid(of: object)
+        let input = try access.isRunningInput(object)
+        let output = try access.isRunningOutput(object)
+        states.append(
+          AudioProcessState(
+            pid: pid, bundleID: access.bundleID(of: object) ?? "", isRunningInput: input,
+            isRunningOutput: output))
+      } catch {
+        if error.objectIsGone { continue }
+        log("audio process \(object) not read (status \(error.status)); the snapshot is unknown")
+        return nil
+      }
     }
+    return states
   }
 }
 
@@ -58,22 +75,16 @@ struct LiveAudioObjects: AudioObjectAccess {
     return Array(objects.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
   }
 
-  func pid(of object: UInt32) -> Int32? {
-    scalar(object, kAudioProcessPropertyPID).map { Int32(bitPattern: $0) }
+  func pid(of object: UInt32) throws(PropertyReadFailure) -> Int32 {
+    Int32(bitPattern: try scalar(object, kAudioProcessPropertyPID))
   }
 
   func isRunningInput(_ object: UInt32) throws(PropertyReadFailure) -> Bool {
-    guard let value = scalar(object, kAudioProcessPropertyIsRunningInput) else {
-      throw PropertyReadFailure()
-    }
-    return value != 0
+    try scalar(object, kAudioProcessPropertyIsRunningInput) != 0
   }
 
   func isRunningOutput(_ object: UInt32) throws(PropertyReadFailure) -> Bool {
-    guard let value = scalar(object, kAudioProcessPropertyIsRunningOutput) else {
-      throw PropertyReadFailure()
-    }
-    return value != 0
+    try scalar(object, kAudioProcessPropertyIsRunningOutput) != 0
   }
 
   func bundleID(of object: UInt32) -> String? {
@@ -85,11 +96,14 @@ struct LiveAudioObjects: AudioObjectAccess {
     return value.takeRetainedValue() as String
   }
 
-  private func scalar(_ object: UInt32, _ selector: AudioObjectPropertySelector) -> UInt32? {
+  private func scalar(
+    _ object: UInt32, _ selector: AudioObjectPropertySelector
+  ) throws(PropertyReadFailure) -> UInt32 {
     var address = Self.address(selector)
     var value: UInt32 = 0
     var size = UInt32(MemoryLayout<UInt32>.size)
     let status = AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
-    return status == noErr ? value : nil
+    guard status == noErr else { throw PropertyReadFailure(status: status) }
+    return value
   }
 }

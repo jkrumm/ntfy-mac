@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.controller = controller
     let services = controller.services
     model = AppModel(
-      source: controller, config: services.config,
+      source: controller, meeting: services.meeting, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
       clock: services.clock, configChanges: { ConfigWatcher().changes() },
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })

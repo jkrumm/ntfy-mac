@@ -73,6 +73,7 @@ struct ModelRig {
   let source = ManualPipelineSource()
   let permission = InMemoryNotificationPermission(.allowed)
   let configChanges = ChangeSignal()
+  let meeting = ManualMeetingState()
   let pipeline: PipelineFixture
   let model: AppModel
 
@@ -84,7 +85,8 @@ struct ModelRig {
     source.set(pipeline.handles)
     let signal = configChanges
     model = AppModel(
-      source: source, config: pipeline.config, permissions: permission, clock: pipeline.clock,
+      source: source, meeting: meeting, config: pipeline.config, permissions: permission,
+      clock: pipeline.clock,
       configChanges: { signal.stream() }, calendar: calendar, recentLimit: recentLimit)
   }
 

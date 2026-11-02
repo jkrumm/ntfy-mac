@@ -5,14 +5,12 @@ import NtfyIPC
 import NtfyTesting
 import Testing
 
-/// A pipeline source that also has a meeting detection.
-private struct MeetingPipelineSource: PipelineSource, MeetingSource {
-  let inner: ManualPipelineSource
-  let provider: ManualMeetingState
-
-  var meetingState: any MeetingStateProviding { provider }
-  func current() async -> PipelineHandles? { await inner.current() }
-  func rebuilds() -> AsyncStream<Void> { inner.rebuilds() }
+private actor UnwritableConfigStore: ConfigStore {
+  func load() -> Config { Config() }
+  func save(_ config: Config) throws(NtfyError) { throw .storage("read-only") }
+  func update(_ change: @Sendable (inout Config) -> Void) throws(NtfyError) {
+    throw .storage("read-only")
+  }
 }
 
 @MainActor @Suite struct AppModelMeetingTests {
@@ -25,9 +23,8 @@ private struct MeetingPipelineSource: PipelineSource, MeetingSource {
       pipeline = PipelineFixture(config: Config(meeting: MeetingSettings(mode: mode)))
       let source = ManualPipelineSource()
       source.set(pipeline.handles)
-      let source2 = MeetingPipelineSource(inner: source, provider: provider)
       model = AppModel(
-        source: source2, config: pipeline.config,
+        source: source, meeting: provider, config: pipeline.config,
         permissions: InMemoryNotificationPermission(.allowed),
         clock: pipeline.clock, configChanges: { AsyncStream { $0.finish() } })
     }
@@ -83,7 +80,40 @@ private struct MeetingPipelineSource: PipelineSource, MeetingSource {
     rig.model.stop()
   }
 
-  @Test func withoutADetectionSourceOnlyTheOverrideCounts() async {
+  @Test func presentingLastsAnHourUnlessTold() async {
+    let rig = Rig(mode: .off)
+    rig.model.start()
+    await rig.model.setPresenting(true)
+    let stored = await rig.pipeline.config.load().meeting.presentingUntil
+    #expect(stored == rig.pipeline.clock.now().addingTimeInterval(3600))
+    #expect(rig.model.presentingUntil == stored)
+    rig.model.stop()
+  }
+
+  @Test func aFailedWriteSurfacesAndTheNextOneClearsIt() async {
+    let pipeline = PipelineFixture()
+    let source = ManualPipelineSource()
+    let model = AppModel(
+      source: source, meeting: ManualMeetingState(), config: UnwritableConfigStore(),
+      permissions: InMemoryNotificationPermission(.allowed), clock: pipeline.clock,
+      configChanges: { AsyncStream { $0.finish() } })
+    await model.setPresenting(true)
+    #expect(model.presentingError != nil)
+    #expect(!model.isPresentingOverride)
+  }
+
+  @Test func theReasonFollowsTheSharedEffectiveState() async {
+    let rig = Rig(mode: .pause)
+    rig.model.start()
+    await rig.model.refresh()
+    rig.provider.set(.active(.slackHuddle))
+    #expect(await rig.eventually { rig.model.meetingReason == .slackHuddle })
+    await rig.model.setPresenting(true)
+    #expect(rig.model.meetingReason == .presenting)
+    rig.model.stop()
+  }
+
+  @Test func withoutADetectionOnlyTheOverrideCounts() async {
     let rig = ModelRig()
     rig.model.start()
     await rig.model.setPresenting(true)

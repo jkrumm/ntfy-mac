@@ -20,7 +20,8 @@ public struct SystemMeetingSignalSource: MeetingSignalSource {
       Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
     }
     return MeetingSnapshot(
-      audio: CoreAudioProcessList.read(LiveAudioObjects()),
+      audio: CoreAudioProcessList.read(
+        LiveAudioObjects(), log: { Log.logger(.meeting).info("\($0, privacy: .private)") }),
       camera: CoreMediaCamera.read(LiveCameras()), runningApps: apps, ownPID: ownPID)
   }
 

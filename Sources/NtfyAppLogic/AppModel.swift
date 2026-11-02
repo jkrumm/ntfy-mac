@@ -26,14 +26,16 @@ public final class AppModel {
   public private(set) var pausedUntil: Date?
   /// Nil until the first check.
   public private(set) var permission: NotificationPermission?
-  /// What the meeting detection reports, whatever the mode is. Follows `MeetingSource`.
+  /// What the meeting detection reports, whatever the mode is. Follows the injected provider.
   public private(set) var detectedMeeting = MeetingState.inactive
-  /// The meeting mode as last read from the config.
-  public private(set) var meetingMode = MeetingMode.off
-  /// The end of the manual "I am presenting" override while it runs, nil when it is off.
-  public private(set) var presentingUntil: Date?
+  /// The meeting settings as last read from the config; an override that has ended is dropped.
+  public private(set) var meetingSettings = MeetingSettings()
+  /// Why the last "I am presenting" change could not be stored; cleared by the next one that
+  /// works.
+  public internal(set) var presentingError: String?
 
   @ObservationIgnored let source: any PipelineSource
+  @ObservationIgnored let meeting: any MeetingStateProviding
   @ObservationIgnored let config: any ConfigStore
   @ObservationIgnored let permissions: any NotificationPermissionProviding
   @ObservationIgnored let clock: any NtfyCore.Clock
@@ -49,13 +51,14 @@ public final class AppModel {
   @ObservationIgnored private var presentingExpiry: Task<Void, Never>?
 
   public init(
-    source: any PipelineSource, config: any ConfigStore,
+    source: any PipelineSource, meeting: any MeetingStateProviding, config: any ConfigStore,
     permissions: any NotificationPermissionProviding, clock: any NtfyCore.Clock,
     configChanges: @escaping @Sendable () -> AsyncStream<Void>,
     calendar: Calendar = .current, recentLimit: Int = AppModel.defaultRecentLimit,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.source = source
+    self.meeting = meeting
     self.config = config
     self.permissions = permissions
     self.clock = clock
@@ -89,9 +92,14 @@ public final class AppModel {
 
   /// Why, nil when no meeting holds notifications back. The override wins.
   public var meetingReason: MeetingReason? {
-    if isPresentingOverride { return .presenting }
-    return meetingMode == .pause ? detectedMeeting.reason : nil
+    meetingSettings.effectiveState(detected: detectedMeeting, at: clock.now()).reason
   }
+
+  /// The meeting mode as last read from the config.
+  public var meetingMode: MeetingMode { meetingSettings.mode }
+
+  /// The end of the manual "I am presenting" override while it runs, nil when it is off.
+  public var presentingUntil: Date? { meetingSettings.presentingUntil }
 
   /// The manual override is on.
   public var isPresentingOverride: Bool { presentingUntil != nil }
@@ -113,12 +121,11 @@ public final class AppModel {
       },
       Task { await refreshPermission() },
     ]
-    if let meetings = (source as? any MeetingSource)?.meetingState.changes() {
-      tasks.append(
-        Task {
-          for await state in meetings { detectedMeeting = state }
-        })
-    }
+    let meetings = meeting.changes()
+    tasks.append(
+      Task {
+        for await state in meetings { detectedMeeting = state }
+      })
   }
 
   /// Stops following. The last values stay readable.
@@ -226,11 +233,10 @@ extension AppModel {
   /// override.
   func readMeeting() async {
     do throws(NtfyError) {
-      let settings = try await config.load().meeting
-      meetingMode = settings.mode
-      let until = settings.presentingUntil.flatMap { $0 > clock.now() ? $0 : nil }
-      presentingUntil = until
-      schedulePresentingExpiry(of: until)
+      var settings = try await config.load().meeting
+      settings.presentingUntil = settings.presentingUntil.flatMap { $0 > clock.now() ? $0 : nil }
+      meetingSettings = settings
+      schedulePresentingExpiry(of: settings.presentingUntil)
     } catch {
       log("config not read: \(error)")
     }

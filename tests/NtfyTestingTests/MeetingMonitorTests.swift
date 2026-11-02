@@ -1,6 +1,7 @@
 import Foundation
 import NtfyCore
 import NtfyTesting
+import Synchronization
 import Testing
 
 @Suite struct MeetingMonitorTests {
@@ -94,6 +95,7 @@ import Testing
     var iterator = monitor.changes().makeAsyncIterator()
     #expect(await iterator.next() == .inactive)
     await monitor.start()
+    #expect(await iterator.next() == .inactive)  // the first reading landed
     #expect(await eventually { source.snapshotCount == 1 })
     source.update(zoom)
     await debounced(reads: 2)
@@ -125,4 +127,95 @@ import Testing
     #expect(source.snapshotCount == 1)
     await monitor.stop()
   }
+
+  // MARK: First reading and overlapping lifecycle
+
+  @Test func startReturnsOnceTheFirstReadingExists() async {
+    let monitor = monitor()
+    #expect(await monitor.hasReading())  // never started: nothing to wait for
+    await monitor.start()
+    #expect(await monitor.hasReading())
+    #expect(source.snapshotCount == 1)
+    #expect(clock.sleeperCount <= 1)  // no leftover timeout
+    await monitor.stop()
+  }
+
+  @Test func startLetsGoAfterTheTimeoutWhenTheFirstReadingIsSlow() async {
+    let slow = SlowSource()
+    let monitor = MeetingMonitor(source: slow, clock: clock)
+    let started = Task { await monitor.start() }
+    #expect(await eventually { clock.sleeperCount >= 1 })
+    #expect(!(await monitor.hasReading()))
+    await advance(3)
+    await started.value
+    #expect(!(await monitor.hasReading()))
+    slow.release()
+    #expect(await eventually { await monitor.hasReading() })
+    await monitor.stop()
+  }
+
+  @Test func aStopWhileStartWaitsEndsTheWaitAndLeavesItStopped() async {
+    let slow = SlowSource()
+    let monitor = MeetingMonitor(source: slow, clock: clock)
+    let started = Task { await monitor.start() }
+    #expect(await eventually { clock.sleeperCount >= 1 })
+    slow.release()
+    await monitor.stop()
+    await started.value
+    source.update(zoom)
+    await advance(60)
+    #expect(slow.reads == 1)
+    #expect(await monitor.current() == .inactive)
+  }
+
+  @Test func aStartDuringAStopKeepsItsOwnState() async {
+    let monitor = monitor()
+    await monitor.start()
+    source.update(zoom)
+    await debounced(reads: 2)
+    #expect(await pass(upTo: 10) { await monitor.current().isActive })
+    async let stopping: Void = monitor.stop()
+    async let starting: Void = monitor.start()
+    _ = await (stopping, starting)
+    #expect(await pass(upTo: 10) { await monitor.current().isActive })
+    await monitor.stop()
+    #expect(await monitor.current() == .inactive)
+  }
+}
+
+/// A source whose snapshot waits until the test releases it (only the first one).
+private final class SlowSource: MeetingSignalSource {
+  private let gate = Mutex(State())
+
+  private struct State {
+    var waiting: CheckedContinuation<Void, Never>?
+    var released = false
+    var reads = 0
+  }
+
+  var reads: Int { gate.withLock { $0.reads } }
+
+  func release() {
+    let waiter = gate.withLock { state -> CheckedContinuation<Void, Never>? in
+      state.released = true
+      defer { state.waiting = nil }
+      return state.waiting
+    }
+    waiter?.resume()
+  }
+
+  func snapshot() async -> MeetingSnapshot {
+    gate.withLock { $0.reads += 1 }
+    await withCheckedContinuation { continuation in
+      let resumeNow = gate.withLock { state -> Bool in
+        if state.released { return true }
+        state.waiting = continuation
+        return false
+      }
+      if resumeNow { continuation.resume() }
+    }
+    return MeetingSnapshot()
+  }
+
+  func changes() -> AsyncStream<Void> { AsyncStream { _ in } }
 }

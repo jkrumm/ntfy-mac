@@ -36,7 +36,8 @@ private struct NoQuitGuard: QuitGuarding {
     let source = NoPipeline()
     let clock = rig.clock
     let app = AppModel(
-      source: source, config: rig.config, permissions: InMemoryNotificationPermission(.allowed),
+      source: source, meeting: ManualMeetingState(), config: rig.config,
+      permissions: InMemoryNotificationPermission(.allowed),
       clock: clock, configChanges: { AsyncStream { $0.finish() } })
     let flow = NotificationPermissionFlow(
       permissions: InMemoryNotificationPermission(.allowed), opener: NoLinks(),

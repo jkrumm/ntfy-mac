@@ -99,7 +99,8 @@ struct SettingsRig {
     permissionProvider = InMemoryNotificationPermission(permission)
     let signal = configChanges
     app = AppModel(
-      source: source, config: store, permissions: permissionProvider, clock: pipeline.clock,
+      source: source, meeting: ManualMeetingState(), config: store,
+      permissions: permissionProvider, clock: pipeline.clock,
       configChanges: { signal.stream() })
     let flow = NotificationPermissionFlow(
       permissions: permissionProvider, opener: opener, quitGuard: quitGuard, source: source,

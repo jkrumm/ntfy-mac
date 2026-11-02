@@ -56,8 +56,16 @@ struct MenuBarContent: View {
         .padding(.vertical, 4)
     } else {
       MenuRow("I'm presenting (1 hour)", systemImage: "rectangle.on.rectangle") {
-        Task { await model.setPresenting(true, for: 60 * 60) }
+        Task { await model.setPresenting(true) }
       }
+    }
+    if let problem = model.presentingError {
+      Label(problem, systemImage: "exclamationmark.triangle.fill")
+        .font(.caption)
+        .foregroundStyle(.orange)
+        .lineLimit(3)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 6)
     }
   }
 

@@ -213,8 +213,9 @@ public enum SettingsCatalog {
       example: "ntfy-mac config meeting set --no-urgent-bypass"),
     SettingEntry(
       .presenting, .meetings, "I am presenting", key: "meeting.presentingUntil",
-      command: "present", example: "ntfy-mac present on --for 1h",
+      command: "present", example: "ntfy-mac present on --for 2h",
       note: "Holds notifications whatever the detection says, even with the mode off. "
+        + "It lasts one hour unless you pass `--for` or `--indefinitely`; "
         + "`ntfy-mac present off` ends it."),
     SettingEntry(
       .allowPrivateNetworkActions, .actions, "Allow actions to reach the private network",

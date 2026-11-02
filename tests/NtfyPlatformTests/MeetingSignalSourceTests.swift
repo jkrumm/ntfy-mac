@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 import NtfyCore
 import Testing
@@ -10,17 +11,24 @@ private struct FakeAudio: AudioObjectAccess {
   var bundles: [UInt32: String] = [:]
   var inputs: Set<UInt32> = []
   var outputs: Set<UInt32> = []
+  /// Objects whose flags fail with a transient error.
   var unreadableFlags: Set<UInt32> = []
+  /// Objects that went away since they were listed.
+  var vanished: Set<UInt32> = []
 
   func processObjects() -> [UInt32]? { objects }
-  func pid(of object: UInt32) -> Int32? { pids[object] }
+  func pid(of object: UInt32) throws(PropertyReadFailure) -> Int32 {
+    if vanished.contains(object) { throw PropertyReadFailure(status: kAudioHardwareBadObjectError) }
+    guard let pid = pids[object] else { throw PropertyReadFailure(status: -1) }
+    return pid
+  }
   func bundleID(of object: UInt32) -> String? { bundles[object] }
   func isRunningInput(_ object: UInt32) throws(PropertyReadFailure) -> Bool {
-    if unreadableFlags.contains(object) { throw PropertyReadFailure() }
+    if unreadableFlags.contains(object) { throw PropertyReadFailure(status: -1) }
     return inputs.contains(object)
   }
   func isRunningOutput(_ object: UInt32) throws(PropertyReadFailure) -> Bool {
-    if unreadableFlags.contains(object) { throw PropertyReadFailure() }
+    if unreadableFlags.contains(object) { throw PropertyReadFailure(status: -1) }
     return outputs.contains(object)
   }
 }
@@ -55,10 +63,23 @@ private struct FakeCameras: CameraAccess {
     #expect(CoreAudioProcessList.read(FakeAudio(objects: [])) == [])
   }
 
-  @Test func aProcessThatCannotBeReadIsLeftOut() {
+  @Test func aProcessThatVanishedIsLeftOut() {
     let audio = FakeAudio(
-      objects: [1, 2, 3], pids: [1: 10, 2: 20], inputs: [1, 2], unreadableFlags: [2])
-    #expect(CoreAudioProcessList.read(audio)?.map(\.pid) == [10])
+      objects: [1, 2, 3], pids: [1: 10, 3: 30], inputs: [1], vanished: [2])
+    #expect(CoreAudioProcessList.read(audio)?.map(\.pid) == [10, 30])
+  }
+
+  @Test func aFailedFlagReadMakesTheWholeSnapshotUnknownAndIsLogged() {
+    let audio = FakeAudio(
+      objects: [1, 2, 3], pids: [1: 10, 2: 20, 3: 30], inputs: [1, 2], unreadableFlags: [2])
+    var lines: [String] = []
+    #expect(CoreAudioProcessList.read(audio, log: { lines.append($0) }) == nil)
+    #expect(lines.count == 1)
+  }
+
+  @Test func aFailedPidReadIsUnknownToo() {
+    let audio = FakeAudio(objects: [1, 2], pids: [1: 10])
+    #expect(CoreAudioProcessList.read(audio) == nil)
   }
 }
 

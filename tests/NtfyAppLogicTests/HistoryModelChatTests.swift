@@ -258,6 +258,21 @@ import Testing
     rig.model.stop()
   }
 
+  @Test func textTypedWhileTheSendRunsSurvivesItsSuccess() async {
+    let (rig, publisher) = await rig()
+    rig.model.selectedTopic = "alerts"
+    await publisher.hold()
+    rig.model.draft = "first"
+    let sending = Task { await rig.model.send() }
+    #expect(await rig.eventually { rig.model.composerState == .sending })
+    rig.model.draft = "first and more"
+    await publisher.release()
+    await sending.value
+    #expect(rig.model.draft == "first and more")
+    #expect(rig.model.composerState == .idle)
+    rig.model.stop()
+  }
+
   @Test func eachConversationKeepsItsOwnDraft() async {
     let (rig, _) = await rig()
     rig.model.selectedTopic = "alerts"

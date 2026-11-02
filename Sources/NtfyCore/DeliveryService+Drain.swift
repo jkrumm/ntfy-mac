@@ -69,7 +69,9 @@ extension DeliveryService {
       await discard(message, ref: ref, repeating: repeatsLeft != nil)
       return .skipped
     }
-    if await holdBack(loaded, for: message, exempt: isLocal) {
+    let held = await holdBack(loaded, for: message, exempt: isLocal)
+    // holdBack suspends on the meeting state; a response may have settled the message meanwhile.
+    guard !held, inFlight?.fate == .keep else {
       inFlight = nil
       return .skipped
     }

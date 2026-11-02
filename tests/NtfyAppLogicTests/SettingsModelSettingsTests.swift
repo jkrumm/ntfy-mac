@@ -5,6 +5,20 @@ import NtfyTesting
 import Testing
 
 @MainActor @Suite struct SettingsModelSettingsTests {
+  // MARK: Presenting
+
+  @Test func presentingLastsAnHourOnTheInjectedClock() async {
+    let rig = SettingsRig()
+    await rig.model.setPresenting(true)
+    let stored = await rig.current.meeting.presentingUntil
+    #expect(stored == rig.pipeline.clock.now().addingTimeInterval(3600))
+    #expect(rig.model.isPresenting)
+    rig.pipeline.clock.advance(by: .seconds(3601))
+    #expect(!rig.model.isPresenting)
+    await rig.model.setPresenting(false)
+    #expect(await rig.current.meeting.presentingUntil == nil)
+  }
+
   // MARK: Topics
 
   @Test func topicsListServerThenLocalThenSeenOnes() async throws {

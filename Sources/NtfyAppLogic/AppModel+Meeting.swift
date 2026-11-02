@@ -1,23 +1,19 @@
 import Foundation
 import NtfyCore
 
-/// A `PipelineSource` that also has the meeting detection, which outlives pipeline rebuilds. The
-/// app root implements it; the model looks for it on its source.
-public protocol MeetingSource: Sendable {
-  var meetingState: any MeetingStateProviding { get }
-}
-
 extension AppModel {
   /// Says you are presenting (or not): notifications are held back like in a detected meeting,
-  /// for `duration` seconds or, without one, until it is switched off. What was held shows as
-  /// one summary afterwards.
-  public func setPresenting(_ presenting: Bool, for duration: TimeInterval? = nil) async {
-    let until: Date? =
-      presenting
-      ? duration.map { clock.now().addingTimeInterval($0) } ?? PauseWindow.indefinite : nil
+  /// for `duration` seconds (an hour unless told otherwise, so it cannot be forgotten). What was
+  /// held shows as one summary afterwards. A failed write shows in `presentingError`.
+  public func setPresenting(
+    _ presenting: Bool, for duration: TimeInterval = MeetingSettings.defaultPresentingDuration
+  ) async {
+    let until: Date? = presenting ? clock.now().addingTimeInterval(duration) : nil
     do throws(NtfyError) {
       try await config.update { $0.meeting.presentingUntil = until }
+      presentingError = nil
     } catch {
+      presentingError = "Presenting could not be changed: \(error)"
       log("presenting not stored: \(error)")
     }
     await refresh()

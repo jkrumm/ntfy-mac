@@ -12,11 +12,12 @@ extension SettingsModel {
     await write { $0.meeting.urgentBypass = bypass }
   }
 
-  /// The manual override, until switched off.
+  /// The manual override, for an hour or until switched off. A failed write shows in `notice`.
   public func setPresenting(_ presenting: Bool) async {
-    await write { $0.meeting.presentingUntil = presenting ? PauseWindow.indefinite : nil }
+    let until = app.clock.now().addingTimeInterval(MeetingSettings.defaultPresentingDuration)
+    await write { $0.meeting.presentingUntil = presenting ? until : nil }
   }
 
   /// The override is on.
-  public var isPresenting: Bool { config.meeting.isPresenting(at: Date()) }
+  public var isPresenting: Bool { config.meeting.isPresenting(at: app.clock.now()) }
 }
