@@ -29,25 +29,45 @@ It's been running stable for months with zero missed notifications across sleep/
 
 ## Install
 
-Requires macOS (Apple Silicon) and a running [ntfy](https://ntfy.sh) server.
+Requires an Apple Silicon Mac on macOS 15 or later and a running [ntfy](https://ntfy.sh) server.
 
 ### Homebrew (recommended)
 
 ```bash
 brew install jkrumm/tap/ntfy-mac
+ln -sfn "$(brew --prefix ntfy-mac)/NtfyMac.app" ~/Applications/NtfyMac.app   # for Spotlight and Login Items
 ntfy-mac setup
 ```
 
-### curl (one-liner)
+Homebrew owns this copy: `brew upgrade ntfy-mac` updates it, and notification permission survives the upgrade.
+
+### curl
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jkrumm/ntfy-mac/master/install.sh | bash
 ntfy-mac setup
 ```
 
-The daemon starts on login automatically after installation.
+The script downloads `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS` from the GitHub release, verifies the checksum before it extracts anything, and installs `NtfyMac.app` into `~/Applications` with `ntfy-mac` linked into `~/.local/bin`. It stops and installs nothing if the check fails. Rerun it to update. `NTFY_MAC_VERSION=2.0.0` pins a version; `NTFY_MAC_APP_DIR`, `NTFY_MAC_BIN_DIR` and `NTFY_MAC_NO_LAUNCH=1` change where it installs and whether it opens the app.
 
-> Install paths change with 2.0, which ships `NtfyMac.app` instead of a daemon; the steps above describe 1.x.
+### Manual
+
+Download `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS` from the [latest release](https://github.com/jkrumm/ntfy-mac/releases/latest), then:
+
+```bash
+shasum -a 256 -c --ignore-missing SHA256SUMS
+tar -xzf ntfy-mac-<version>-arm64.tar.gz
+mv NtfyMac.app ~/Applications/
+ln -sfn ~/Applications/NtfyMac.app/Contents/MacOS/ntfy-mac ~/.local/bin/ntfy-mac
+ntfy-mac migrate    # only when coming from 1.x
+open ~/Applications/NtfyMac.app
+```
+
+The app is ad-hoc signed, not notarized. If macOS refuses to open a copy that a browser downloaded, run `xattr -dr com.apple.quarantine ~/Applications/NtfyMac.app` once.
+
+### Upgrading from 1.x
+
+Nothing to reconfigure. Install 2.0 over the old version (any of the methods above). The first launch, or `ntfy-mac migrate`, stops and removes the 1.x daemon, its LaunchAgent or brew service and `ntfy-notify.app`, keeps your config and the message cursor, and moves the token into the Keychain. macOS ties notification permission to the app's bundle id, which changed, so allow notifications once more when the app asks. If you installed 1.x with curl, 2.0 replaces `~/.local/bin/ntfy-mac` with a link into the app.
 
 ---
 
@@ -63,7 +83,7 @@ The daemon starts on login automatically after installation.
 
 **Auto-discovery** — Picks up your subscribed topics automatically. Re-checks every 30 minutes — no restart needed when you add or remove topics.
 
-**Self-updating** — Checks for updates daily and notifies you or updates automatically.
+**Updates** — `brew upgrade ntfy-mac`, or rerun the installer. `ntfy-mac update --check` looks for a newer release.
 
 **Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
 
@@ -244,18 +264,21 @@ ntfy-mac ack --all --topic alerts             # clear what you have handled
 ## Update & uninstall
 
 ```bash
-ntfy-mac update       # Upgrades a Homebrew install; --check only looks for a new release
-ntfy-mac uninstall    # Removes config, history, state and the token
+brew upgrade ntfy-mac         # Homebrew installs
+ntfy-mac update --check       # look for a newer release without installing it
+ntfy-mac uninstall            # removes config, history, state and the token
 ```
+
+`ntfy-mac uninstall` leaves the app itself. Remove it with `brew uninstall jkrumm/tap/ntfy-mac`, or delete `NtfyMac.app` and the `~/.local/bin/ntfy-mac` link for a curl or manual install.
 
 ---
 
 ## Documentation
 
-- [How it works](docs/how-it-works.md) — streaming, reconnect, dedup, missed messages, priority mapping
+- [How it works](docs/how-it-works.md) — app and CLI, streaming, reconnect, dedup, missed messages, priority mapping
 - [CLI reference](docs/cli.md) — every command, flag, exit code and error code (generated)
 - [llms.txt](llms.txt) — the same for agents, with the JSON and NDJSON contracts
-- [Contributing](docs/contributing.md) — development setup, building, release process
+- [Contributing](docs/contributing.md) — Swift workflow, packaging, release process
 
 ## License
 

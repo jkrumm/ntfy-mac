@@ -2,85 +2,50 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) (`brew install bun`), still needed while the legacy 1.x code exists
-- Xcode with Swift ≥ 6.2 and XcodeGen (`brew install xcodegen`) for the 2.0 Swift rewrite
-- macOS (required for UserNotifications and the Swift helper)
-
-## Setup
+- macOS on Apple Silicon with Xcode and Swift 6.2 or later
+- `shellcheck` (`brew install shellcheck`) for the script lint in `make check`
+- The pinned tools (SwiftLint, Periphery, XcodeGen) download into `.tools/` on first use, SHA-256 verified; do not install them with Homebrew
 
 ```bash
 git clone https://github.com/jkrumm/ntfy-mac.git
 cd ntfy-mac
-bun install
 ```
 
-## 2.0 (Swift)
+## Workflow
 
 ```bash
-make check    # format lint, SwiftLint, build, test, app build, legacy validate
-make format   # format Swift sources in place
-make analyze  # Periphery dead-code scan
+make check            # the gate: format lint, SwiftLint, shellcheck, build, docs check, tests, installer test, app build
+make format           # write swift format changes
+make app              # build and ad-hoc sign NtfyMac.app into .build/xcode/Build/Products/Release
+make install-macbook  # copy the signed app to ~/Applications on the MacBook (ssh host iumac), never launches it
+make analyze          # Periphery dead-code scan
+make docs             # regenerate docs/cli.md, docs/settings.md and llms.txt from the CLI schema
 ```
 
-See `AGENTS.md` for the layout and `docs/waves/PLAN.md` for the rewrite plan.
+`make check` is the single gate and CI runs the same target. Never edit the generated docs by hand. A new command or setting needs a `CommandSpec` or `SettingsCatalog` entry first; `AGENTS.md` has the layout and the rules.
 
-## Development (1.x)
+Commits follow [Conventional Commits](https://www.conventionalcommits.org). The `commit-msg` hook (lefthook, `scripts/check-commit-msg.sh`) checks the header and the 100-character line limit; CI runs commitlint with the conventional preset.
+
+## Packaging
 
 ```bash
-bun src/index.ts setup     # Configure credentials interactively
-bun src/index.ts           # Run the daemon (Ctrl+C to stop)
-NTFY_DEBUG=1 bun src/index.ts  # Verbose mode: keepalives, message IDs, poll calls
-bun test                   # Run unit tests
-bun run validate           # Format + typecheck + lint + test
+scripts/stamp-version.sh 2.0.0    # writes the version into Version.swift and App/project.yml (do not commit)
+make package VERSION=2.0.0        # make app, then dist/ntfy-mac-2.0.0-arm64.tar.gz and dist/SHA256SUMS
+make installer-check              # install.sh against a fake release in temp dirs
 ```
 
-### Swift notification helper
+`make package` refuses a build whose CLI reports another version, so stamp first. The tarball holds `NtfyMac.app/` and `LICENSE`; the `LICENSE` sibling stops Homebrew from stripping a lone top-level `.app`. All signing goes through `scripts/sign.sh`; set `SIGN_IDENTITY` to switch from ad-hoc to a real identity.
 
-The notification system uses a Swift `.app` bundle (`assets/ntfy-notify.app`) that communicates with the TypeScript daemon via JSON on stdin. To build it:
-
-```bash
-bun run build:helper       # Compiles ntfy-notify.swift → assets/ntfy-notify.app
-```
-
-For development, copy the built helper to `~/Applications/` so Launch Services registers the icon:
-
-```bash
-cp -R assets/ntfy-notify.app ~/Applications/
-```
-
-## Building
-
-```bash
-bun run build    # Produces dist/ntfy-mac (arm64) + dist/ntfy-notify.app.tar.gz
-```
-
-Binaries are fully self-contained — no Bun runtime needed on the target machine.
-
-## Project structure
-
-```
-src/
-  index.ts          Entry point — CLI routing and daemon startup
-  ntfy.ts           SSE connection, polling, topic discovery
-  notify.ts         Message → notification payload mapping
-  notifications.ts  Swift helper communication (NotificationBuilder)
-  config.ts         Config file loading and persistence
-  config-cli.ts     `ntfy-mac config` subcommands
-  setup.ts          Interactive and non-interactive setup wizard
-  doctor.ts         `ntfy-mac doctor` health checks
-  dedup.ts          Message deduplication and state persistence
-  updater.ts        Version checking and auto-update
-  pidlock.ts        Single-instance enforcement
-  types.ts          Shared type definitions
-  emojis.ts         Tag → emoji mapping (generated)
-```
+`packaging/ntfy-mac.rb.in` is the Homebrew formula template; `scripts/render-formula.sh <version> <sha256>` fills it in.
 
 ## Release process
 
-Releases are triggered manually via the **Run workflow** button in the Actions tab:
+Releases run from the **Release** workflow (Actions, Run workflow). It is manual.
 
-1. Go to Actions → Release → Run workflow, optionally choose a release type
-2. Commit messages following [Conventional Commits](https://www.conventionalcommits.org) determine the version bump (or the chosen type overrides it)
-3. A GitHub Release is created with the changelog
-4. arm64 binary and Swift helper are compiled and attached
-5. `Formula/ntfy-mac.rb` in `jkrumm/homebrew-tap` is updated automatically with new version and SHA-256 checksums
+1. `make check` runs as a gate.
+2. semantic-release reads the commits since the last tag and picks the version. Releasable types are `feat` (minor), `fix` and `perf` (patch); a `BREAKING CHANGE:` footer or `!` makes a major.
+3. The exec plugin stamps the version, then builds, signs and packages `dist/`.
+4. The GitHub plugin creates a draft release, uploads the tarball and `SHA256SUMS`, then publishes it, so the assets exist before the release is visible. `CHANGELOG.md` is committed back as `chore(release): <version>`.
+5. The `tap` job downloads the published tarball, verifies it against `SHA256SUMS`, renders `Formula/ntfy-mac.rb` in `jkrumm/homebrew-tap`, runs `brew style` and pushes `chore(ntfy-mac): update to v<version>`.
+
+`CHANGELOG.md` is written by semantic-release; do not edit it. Do not tag or publish by hand.

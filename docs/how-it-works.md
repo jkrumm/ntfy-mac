@@ -1,10 +1,10 @@
 # How it works
 
-Technical details on the ntfy-mac daemon internals. The sections below describe the 1.x daemon; the 2.0 rewrite replaces them in the cutover wave. How the 2.0 CLI and app work together is the next section.
+One app holds the connection and the history. The CLI is a second front end over the same core. This page covers the moving parts; the code layout is in `AGENTS.md`.
 
-## CLI and app (2.0)
+## App and CLI
 
-The app holds the stream and writes the history; the `ntfy-mac` CLI never holds a connection.
+`NtfyMac.app` is a menu bar app with no Dock icon. It is the only long-lived process: it holds the stream, posts notifications and writes the history. The `ntfy-mac` CLI lives inside the bundle at `NtfyMac.app/Contents/MacOS/ntfy-mac`; Homebrew and `install.sh` link it onto your PATH. The CLI never holds a connection.
 
 - **Reads** (`ls`, `search`, `read`, `tail`, `wait`, `status`) go straight to the config and the history database, which is SQLite in WAL mode, so they work while the app is down. `tail --follow` and `wait` poll the database every 500 ms.
 - **Writes to state** (`config`, `subscribe`, `pause`, `resume`) edit the config file. The app watches it and applies the change, so it need not be reachable. `pause` stores `pausedUntil`; with no flags that is 2100-01-01 until `resume`. Held-back messages are stored and shown when the pause ends.
@@ -14,36 +14,41 @@ The app holds the stream and writes the history; the `ntfy-mac` CLI never holds 
 
 ## Streaming
 
-ntfy-mac connects using [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) (SSE) at `/<topics>/sse`. Messages arrive in real time. The connection is monitored via ntfy's keepalive events (sent every ~55 s) — if nothing arrives for 90 s, the connection is considered stalled and is re-established.
+The app connects to `/<topics>/json` and reads the NDJSON stream with `URLSession`. A reconnect state machine with an injectable clock drives it:
 
-On reconnect, a poll request fetches any messages delivered during the gap.
+- **Backoff** doubles from a short first delay up to 5 minutes, scaled by jitter into 50 to 100 percent. It resets only after a connection stayed up for 60 seconds, so a server that accepts and drops does not reset it.
+- **Watchdog.** If nothing arrives (message or keepalive) for twice the observed keepalive gap, at least 90 seconds, the connection counts as stalled and is replaced.
+- **Terminal answers.** A 401 or 403, or a redirect, stops the stream: the token is never sent to another host. A 429 waits long.
+- **Wake and network changes.** The app reconnects when the Mac wakes or the network path changes, without waiting for the watchdog.
+- **Offline.** While there is no network path, the app waits instead of counting failures.
 
-## Offline handling
+After every reconnect a poll request fetches what arrived during the gap. The cursor (`lastMessageId`, in `~/.local/share/ntfy-mac/state.json`) advances only after a message is stored.
 
-ntfy-mac uses `scutil --nwi` to detect whether the Mac has a network connection before counting a failure:
+## History and deduplication
 
-- **Offline** — waits 15 s and retries silently. No failure count, no alert.
-- **Online but server unreachable** — applies exponential backoff (5 s → 5 min). After ~40 min of sustained failure, a macOS notification is sent. Alerts are rate-limited to once per hour.
+Every message goes into the history database (GRDB over SQLite, WAL mode, mode 600) before it is shown. The key is `(server, topic, id)` and the insert ignores duplicates, so a replay after a reconnect, or a poll that overlaps the stream, creates no second row or notification. FTS5 powers search. Retention is per topic and pruning runs on a timer, not only at launch.
+
+`message_delete` and `message_clear` events withdraw the stored message and its notification. A message with a `sequence_id` replaces the earlier one.
 
 ## Notifications
 
-All notifications are delivered through a unified queue that paces sends ~1.5 s apart. This prevents macOS from suppressing banners during bursts (e.g., 9 uptime alerts at once). Higher-priority messages drain first. Failed deliveries are retried automatically.
-
-Each notification is sent via a Swift helper app (`ntfy-notify.app`) that uses `UNUserNotificationCenter`. The helper is a minimal `.app` bundle so macOS can attribute notifications to ntfy-mac and persist permission state.
+Delivery goes through one paced queue: sends are at least 1.5 seconds apart so macOS does not drop banners in a burst, higher priorities drain first, and failed posts are retried. The app posts through `UNUserNotificationCenter` as `com.jkrumm.ntfy-mac`; permission is per bundle id.
 
 ### Field mapping
 
-| ntfy field   | macOS notification                                                        |
-| ------------ | ------------------------------------------------------------------------- |
-| `title`      | Title (bold). Falls back to capitalized topic name                        |
-| `message`    | Body                                                                      |
-| `topic`      | Subtitle (with emoji tags if present), thread grouping                    |
-| `priority`   | Sound, interruption level, relevance score, auto-dismiss                  |
-| `tags`       | Rendered as emoji in the subtitle (`warning` → ⚠️, `rotating_light` → 🚨) |
-| `click`      | URL opened on notification click                                          |
-| `attachment` | Inline image (if image/\* mime type)                                      |
-| `icon`       | Fallback thumbnail                                                        |
-| `actions`    | Action buttons (view/http — up to 3 on macOS)                             |
+| ntfy field   | macOS notification                                         |
+| ------------ | ---------------------------------------------------------- |
+| `title`      | Title. Falls back to the topic name                        |
+| `message`    | Body                                                       |
+| `topic`      | Subtitle (with emoji tags if present), thread grouping     |
+| `priority`   | Sound, interruption level, relevance score, auto-dismiss   |
+| `tags`       | Emoji in the subtitle (`warning` is a warning sign)        |
+| `click`      | URL opened on click, limited to allowed schemes            |
+| `attachment` | Inline image for `image/*`; other types in the History window |
+| `icon`       | Thumbnail                                                  |
+| `actions`    | Buttons for `view` and `http`, plus Acknowledge            |
+
+Icons and attachments are fetched with a size cap, without redirects, and the token is sent only to the server's own origin.
 
 ### Priority behavior
 
@@ -55,39 +60,30 @@ Each notification is sent via a Swift helper app (`ntfy-notify.app`) that uses `
 | 2 (low)     | Tink  | active         | 5 s          | 0.25      |
 | 1 (min)     | Tink  | active         | 4 s          | 0.0       |
 
-Priority 4–5 notifications break through Focus/Do Not Disturb. All sounds and dismiss timings are configurable via `ntfy-mac config`.
+The time-sensitive level needs an entitlement that an ad-hoc signed build cannot carry yet, so for now priorities 4 and 5 are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
 
 ### Missed messages
 
-When reconnecting after a gap, messages are categorized by age:
+When the app reconnects after a gap, it sorts the batch by the age of its oldest message:
 
 | Age of oldest missed message | Behavior                                              |
 | ---------------------------- | ----------------------------------------------------- |
-| < 1 hour                     | Deliver each notification individually                |
-| 1 – 12 hours                 | Single summary: "N notifications while you were away" |
-| > 12 hours                   | Silent — no notification storm                        |
+| under 1 hour                 | Each message gets its own notification                |
+| 1 to 12 hours                | One summary: "N notifications while you were away"    |
+| over 12 hours                | Stored only, no notification                          |
 
-## Deduplication
+## Topics
 
-All delivered message IDs are persisted to `~/.local/share/ntfy-mac/state.json`. On restart, already-seen IDs are skipped. State is managed by a centralized state owner that coalesces rapid writes (e.g., a burst of 9 messages results in 1–2 disk writes, not 9). Writes are atomic (write to `.tmp`, then rename). On load, entries older than 48 h are dropped and capped at 1 000.
+The app asks `/v1/account` for the topics you subscribe to and re-checks every 30 minutes. `NTFY_TOPICS` or `ntfy-mac subscribe` adds local ones. Muted topics are stored and never notify; a per-topic minimum priority holds quieter messages back.
 
-## Topic auto-discovery
+## Credentials
 
-On startup, ntfy-mac queries the ntfy `/v1/account` endpoint to discover your subscribed topics. Topics are re-checked every 30 minutes — new subscriptions are picked up and removed ones are dropped without a restart.
+The server URL lives in `~/.config/ntfy-mac/config.json`. The token lives in the Keychain (service `com.jkrumm.ntfy-mac`). `NTFY_URL` and `NTFY_TOKEN` serve as fallbacks when nothing is configured.
 
-You can override auto-discovery by setting `NTFY_TOPICS=topic1,topic2` as an environment variable.
+## First run after 1.x
 
-## Update checks
+On launch the app checks for 1.x leftovers and removes them: the `com.jkrumm.ntfy-mac` LaunchAgent, the `homebrew.mxcl.ntfy-mac` service, the running daemon, `ntfy-notify.app` and its Launch Services entries, the old binary and logs. `config.json` and `state.json` stay. A plaintext token in `config.json` moves to the Keychain. `ntfy-mac migrate` does the same by hand; `--dry-run` lists what it would remove.
 
-Once per 24 h, ntfy-mac queries the GitHub Releases API. If a newer version is available:
+## Updates
 
-- **Homebrew installs** — a notification appears with the upgrade command
-- **curl installs** — auto-updates: downloads the new binary, replaces in-place, and launchd restarts the daemon
-
-## Credential storage
-
-In 2.0 the token lives in the Keychain and `ntfy-mac setup` writes the URL to `~/.config/ntfy-mac/config.json`; a 1.x plaintext token there is migrated on first run. In 1.x both were stored in the config file (written by `ntfy-mac setup`). Environment variables `NTFY_URL` and `NTFY_TOKEN` serve as fallbacks when no config file exists.
-
-## PID lock
-
-A PID lock file prevents multiple daemon instances from running simultaneously. The lock is released on SIGINT/SIGTERM.
+Release assets are `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS`. Everything that installs or updates (`install.sh`, the Homebrew formula, `ntfy-mac update`) checks the SHA-256 before it touches an existing install.
