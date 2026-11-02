@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Installs NtfyMac.app into ~/Applications and links the CLI into ~/.local/bin.
 # The download is checked against the release's SHA256SUMS before anything is extracted, and a
-# failed check installs nothing. Rerun to update.
+# failed check installs nothing; so does an extracted bundle with a bad code signature or a
+# symbolic link that leaves the bundle. Rerun to update.
 #
 # Environment:
 #   NTFY_MAC_VERSION    version to install (default: the latest GitHub release)
 #   NTFY_MAC_APP_DIR    where NtfyMac.app goes (default: ~/Applications)
 #   NTFY_MAC_BIN_DIR    where the ntfy-mac link goes (default: ~/.local/bin)
 #   NTFY_MAC_NO_LAUNCH  set to 1 to skip opening the app
-#   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download URL)
+#   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download
+#                       URL; only file://, http://127.0.0.1 and http://localhost are accepted)
 set -euo pipefail
 
 REPO="jkrumm/ntfy-mac"
@@ -43,7 +45,15 @@ version="${version#v}"
 archive="ntfy-mac-$version-arm64.tar.gz"
 base_url="${NTFY_MAC_BASE_URL:-https://github.com/$REPO/releases/download/v$version}"
 curl_opts=(-fsSL)
-[[ -n "${NTFY_MAC_BASE_URL:-}" ]] || curl_opts+=(--proto '=https' --tlsv1.2)
+if [[ -n "${NTFY_MAC_BASE_URL:-}" ]]; then
+  # A stray variable must not downgrade the https and TLS 1.2 pins below.
+  case "$NTFY_MAC_BASE_URL" in
+    file://* | http://127.0.0.1 | http://127.0.0.1[:/]* | http://localhost | http://localhost[:/]*) ;;
+    *) fail "NTFY_MAC_BASE_URL must be a file:// or local http:// URL (got $NTFY_MAC_BASE_URL); unset it to install from GitHub" ;;
+  esac
+else
+  curl_opts+=(--proto '=https' --tlsv1.2)
+fi
 
 work="$(mktemp -d)"
 cleanup() {
@@ -75,6 +85,20 @@ tar -xzf "$work/download/$archive" -C "$work/extract"
 cli_in_bundle="$work/extract/NtfyMac.app/Contents/MacOS/ntfy-mac"
 [[ -x "$cli_in_bundle" ]] || fail "$archive has no NtfyMac.app/Contents/MacOS/ntfy-mac"
 
+# A symbolic link that resolves outside the bundle (or nowhere) is refused before it can be installed.
+extracted="$work/extract/NtfyMac.app"
+bundle_root="$(realpath "$extracted")"
+while IFS= read -r -d '' link; do
+  resolved="$(realpath "$link" 2>/dev/null)" || fail "symbolic link $link in $archive does not resolve; nothing was installed"
+  case "$resolved" in
+    "$bundle_root" | "$bundle_root"/*) ;;
+    *) fail "symbolic link ${link#"$extracted"/} in $archive points outside the app; nothing was installed" ;;
+  esac
+done < <(find "$extracted" -type l -print0)
+
+codesign --verify --deep --strict "$extracted" 2>/dev/null \
+  || fail "the code signature of the extracted app does not verify; nothing was installed"
+
 # ── Install ───────────────────────────────────────────────────────────────────
 
 mkdir -p "$APP_DIR" "$BIN_DIR"
@@ -92,13 +116,17 @@ fi
 stage=""
 
 cli="$target/Contents/MacOS/ntfy-mac"
-ln -sfn "$cli" "$BIN_DIR/ntfy-mac"
 echo "Installed $target"
-echo "Linked $BIN_DIR/ntfy-mac"
 
 # ── Migrate from 1.x ──────────────────────────────────────────────────────────
 
-"$cli" migrate || fail "ntfy-mac migrate failed; the app is installed, rerun this script or run '$BIN_DIR/ntfy-mac migrate'"
+# Before the link is replaced: a running 1.x daemon is recognised by its executable path, which is
+# the old $BIN_DIR/ntfy-mac. Run through the bundle's own path, not the link. A failure is shown but
+# does not undo the install.
+"$cli" migrate || echo "ntfy-mac install: warning: 'migrate' failed; the app is installed. Run '$cli migrate' to retry." >&2
+
+ln -sfn "$cli" "$BIN_DIR/ntfy-mac"
+echo "Linked $BIN_DIR/ntfy-mac"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 
