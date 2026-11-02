@@ -5,23 +5,26 @@ on:
     branches: [master]
 
 jobs:
-  validate:
-    runs-on: macos-latest # macOS required: Bun types + Swift compilation
+  check:
+    runs-on: macos-26 # pinned image; macos-latest drifts
     steps:
       - uses: actions/checkout@v6
 
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2 # legacy TypeScript validation, removed with src/ in the cutover
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Swift helper
-        run: bun run build:helper
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Validate
-        run: bun run validate
+      - name: Check
+        run: make check
 
   commitlint:
     runs-on: ubuntu-latest
