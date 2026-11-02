@@ -65,6 +65,10 @@ open ~/Applications/NtfyMac.app
 
 The app is ad-hoc signed, not notarized. If macOS refuses to open a copy that a browser downloaded, run `xattr -dr com.apple.quarantine ~/Applications/NtfyMac.app` once.
 
+### One install per Mac
+
+Keep one copy of `NtfyMac.app`. A Homebrew copy and a curl copy share a bundle id and get in each other's way, so they must not coexist. `install.sh` refuses to run while a Homebrew copy exists; `brew upgrade ntfy-mac` updates that one, and `ntfy-mac update` updates a curl or manual one. `ntfy-mac doctor` warns when it finds a second copy, lists each with its channel and says which one is running. To drop one, run `brew uninstall ntfy-mac`, or delete the app and the `~/.local/bin/ntfy-mac` link. Config and history stay.
+
 ### Upgrading from 1.x
 
 Nothing to reconfigure. Install 2.0 over the old version (any of the methods above). The first launch, or `ntfy-mac migrate`, stops and removes the 1.x daemon, its LaunchAgent or brew service and `ntfy-notify.app`, keeps your config and the message cursor, and moves the token into the Keychain. macOS ties notification permission to the app's bundle id, which changed, so allow notifications once more when the app asks. If you installed 1.x with curl, 2.0 replaces `~/.local/bin/ntfy-mac` with a link into the app.
