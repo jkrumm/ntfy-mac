@@ -81,7 +81,7 @@ import Testing
   @Test func aPostedUrgentMessageIsMarkedNotified() async throws {
     let rig = DeliveryRig(config: Self.config)
     try await urgent(rig)
-    #expect(await rig.history.unnotified(limit: 10).isEmpty)
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).isEmpty)
     await rig.service.shutdown()
   }
 

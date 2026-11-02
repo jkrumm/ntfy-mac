@@ -50,7 +50,7 @@ let package = Package(
       name: "NtfyIPCTests", dependencies: ["NtfyIPC"], path: "tests/NtfyIPCTests",
       swiftSettings: strict),
     .testTarget(
-      name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore"],
+      name: "NtfyClientTests", dependencies: ["NtfyClient", "NtfyCore", "NtfyTesting"],
       path: "tests/NtfyClientTests", swiftSettings: strict),
     .testTarget(
       name: "NtfyStoreTests", dependencies: ["NtfyStore", "NtfyCore", "NtfyTesting"],

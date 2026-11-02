@@ -18,16 +18,27 @@ public struct URLSessionHTTPActionRunner: HTTPActionRunning {
 
   private let timeout: TimeInterval
   private let session: URLSession
+  private let resolver: any HostResolving
+  private let allowPrivateNetwork: @Sendable () async -> Bool
 
+  /// - Parameters:
+  ///   - resolver: looks up the target before the request goes out.
+  ///   - allowPrivateNetwork: read per run; `true` skips the lookup check (the user's
+  ///     `allowPrivateNetworkActions`).
   public init(
-    timeout: TimeInterval = 10, session: URLSession = URLSession(configuration: .ephemeral)
+    timeout: TimeInterval = 10, session: URLSession = URLSession(configuration: .ephemeral),
+    resolver: any HostResolving = SystemHostResolver(),
+    allowPrivateNetwork: @escaping @Sendable () async -> Bool = { false }
   ) {
     self.timeout = timeout
     self.session = session
+    self.resolver = resolver
+    self.allowPrivateNetwork = allowPrivateNetwork
   }
 
   public func run(_ call: HTTPCall) async throws(NtfyError) {
     let request = try makeRequest(call)
+    try await checkTarget(call.url)
     let (session, limit) = (session, Duration.seconds(timeout))
     let status: Int
     do {
@@ -40,6 +51,17 @@ public struct URLSessionHTTPActionRunner: HTTPActionRunning {
     }
     guard (200..<300).contains(status) else {
       throw .invalidResponse("http action failed (\(status))")
+    }
+  }
+
+  /// A name that points into the local network is refused, unless the user allowed that. A host
+  /// that already reads as private was judged by `ActionPolicy` (confirmation or opt-in) and is
+  /// not looked up again. No answer from the resolver counts as a refusal.
+  private func checkTarget(_ url: URL) async throws(NtfyError) {
+    guard let host = url.host(), !NetworkHost.isPrivate(host) else { return }
+    if await allowPrivateNetwork() { return }
+    guard await HostSafety.resolvesToPublicAddresses(host, using: resolver) else {
+      throw .invalidResponse("http action target resolves to a private or unknown address")
     }
   }
 

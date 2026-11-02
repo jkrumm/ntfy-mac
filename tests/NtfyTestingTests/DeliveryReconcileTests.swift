@@ -18,7 +18,7 @@ private let hour: TimeInterval = 3600
     await rig.nextSlot()
     #expect(await rig.waitForPosts(2))
     #expect(await rig.poster.postedIDs == ["a", "b"])
-    #expect(await rig.eventually { await rig.history.unnotified(limit: 10).isEmpty })
+    #expect(await rig.eventually { await rig.history.unnotified(limit: 10, offset: 0).isEmpty })
     await rig.service.shutdown()
   }
 
@@ -29,7 +29,7 @@ private let hour: TimeInterval = 3600
     #expect(await rig.eventually { await rig.poster.summaries.count == 1 })
     #expect(await rig.poster.summaries == [.init(count: 3, oldestTopic: "t")])
     #expect(await rig.poster.posted.isEmpty)
-    #expect(await rig.eventually { await rig.history.unnotified(limit: 10).isEmpty })
+    #expect(await rig.eventually { await rig.history.unnotified(limit: 10, offset: 0).isEmpty })
     await rig.service.shutdown()
   }
 
@@ -39,7 +39,7 @@ private let hour: TimeInterval = 3600
     await rig.service.reconcile()
     await rig.settle()
     #expect(await rig.poster.attempts == 0)
-    #expect(await rig.history.unnotified(limit: 10).isEmpty)
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).isEmpty)
     await rig.service.shutdown()
   }
 
@@ -50,7 +50,7 @@ private let hour: TimeInterval = 3600
     await rig.service.reconcile()
     #expect(await rig.waitForAttempts(1))
     await rig.settle()
-    #expect(await rig.history.unnotified(limit: 10).count == 2)
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).count == 2)
     await rig.service.shutdown()
   }
 
@@ -161,7 +161,103 @@ private let hour: TimeInterval = 3600
   }
 }
 
+@Suite struct DeliveryReconcilePagingTests {
+  @Test func moreThanOnePageOfUnnotifiedMessagesIsAnnouncedAsOneBatch() async throws {
+    let rig = DeliveryRig()
+    let count = 1_050
+    for index in 0..<count {
+      try await rig.history.append(rig.message("m\(index)", age: 3 * hour - Double(index) / 1000))
+    }
+    await rig.service.reconcile()
+    #expect(await rig.eventually { await rig.poster.summaries.count == 1 })
+    #expect(await rig.poster.summaries == [.init(count: count, oldestTopic: "t")])
+    #expect(await rig.eventually { await rig.history.unnotified(limit: 10, offset: 0).isEmpty })
+    await rig.service.shutdown()
+  }
+
+  @Test func expiryLookupFindsADeliveredNotificationBeyondTheFirstPage() async throws {
+    let rig = DeliveryRig(config: Config(reAlert: false))
+    let now = rig.clock.now()
+    try await rig.history.append(rig.message("old", age: 20))
+    await rig.history.markNotified(topic: "t", id: "old", at: now.addingTimeInterval(-20))
+    for index in 0..<(1_005) {
+      try await rig.history.append(rig.message("n\(index)"))
+    }
+    await rig.poster.setDelivered(["t/old"])
+    await rig.service.reconcile()
+    #expect(await rig.poster.removed == ["t/old"])
+    await rig.service.shutdown()
+  }
+}
+
 @Suite struct DeliveryReminderTests {
+  private func dueReminder(_ rig: DeliveryRig) async throws {
+    try await rig.history.append(rig.message("a", age: 600))
+    await rig.history.markNotified(topic: "t", id: "a", at: rig.clock.now())
+    await rig.history.snooze(topic: "t", id: "a", until: rig.clock.now().addingTimeInterval(-1))
+  }
+
+  private func stillDue(_ rig: DeliveryRig) async -> Bool {
+    await !rig.history.dueReminders(now: rig.clock.now().addingTimeInterval(3600)).isEmpty
+  }
+
+  @Test func aFailedPostLeavesTheReminderDueUntilALaterTickShowsIt() async throws {
+    let rig = DeliveryRig()
+    try await dueReminder(rig)
+    await rig.poster.failNext(3)
+    await rig.service.reconcile()
+    for attempts in 1...3 {
+      #expect(await rig.waitForAttempts(attempts))
+      await rig.nextSlot()
+    }
+    await rig.settle()
+    #expect(await rig.poster.posted.isEmpty)
+    #expect(await stillDue(rig))
+
+    await rig.service.start()
+    #expect(await rig.waitForSleepers(1))
+    await rig.advance(30)
+    #expect(await rig.waitForPosts(1))
+    #expect(await rig.eventually { await !stillDue(rig) })
+    await rig.service.shutdown()
+  }
+
+  @Test func aReminderQueuedAlreadyIsNotQueuedAgainByTheNextTick() async throws {
+    let rig = DeliveryRig()
+    try await dueReminder(rig)
+    await rig.poster.failNext(1)
+    await rig.service.reconcile()
+    #expect(await rig.waitForAttempts(1))
+    await rig.service.start()
+    await rig.advance(30)
+    #expect(await rig.waitForPosts(1))
+    await rig.settle()
+    #expect(await rig.poster.attempts == 2)
+    await rig.service.shutdown()
+  }
+
+  @Test func aReminderThatCannotBeClearedIsShownOnceAndClearedLater() async throws {
+    let rig = DeliveryRig()
+    try await dueReminder(rig)
+    await rig.history.setClearReminderFailure(.storage("locked"))
+    await rig.service.reconcile()
+    #expect(await rig.waitForPosts(1))
+    await rig.service.start()
+    for _ in 0..<3 {
+      #expect(await rig.waitForSleepers(1))
+      await rig.advance(30)
+    }
+    #expect(await rig.poster.posted.count == 1)
+    #expect(await stillDue(rig))
+
+    await rig.history.setClearReminderFailure(nil)
+    #expect(await rig.waitForSleepers(1))
+    await rig.advance(30)
+    #expect(await rig.eventually { await !stillDue(rig) })
+    #expect(await rig.poster.posted.count == 1)
+    await rig.service.shutdown()
+  }
+
   @Test func aReminderThatIsAlreadyDueFiresDuringReconcile() async throws {
     let rig = DeliveryRig()
     let message = rig.message("a", age: 600)

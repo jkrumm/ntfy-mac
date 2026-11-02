@@ -12,7 +12,7 @@ extension SQLiteHistoryStore: HistoryInbox {
     var select = HistorySelect(server: server)
     select.and("m.topic = ?", topic)
     select.and("m.id = ?", id)
-    select.ordered("m.rowid DESC", limit: 1)
+    select.ordered("m.pk DESC", limit: 1)
     return try await fetchStored(select).first
   }
 
@@ -38,7 +38,7 @@ extension SQLiteHistoryStore: HistoryInbox {
     var select = HistorySelect(server: server)
     select.and("m.acked_at IS NULL")
     select.and("m.priority >= ?", minPriority.rawValue)
-    select.ordered("m.time ASC, m.rowid ASC")
+    select.ordered("m.time ASC, m.pk ASC")
     return try await fetchStored(select)
   }
 
@@ -53,7 +53,7 @@ extension SQLiteHistoryStore: HistoryInbox {
   public func dueReminders(now: Date) async throws(NtfyError) -> [StoredMessage] {
     var select = HistorySelect(server: server)
     select.and("m.remind_at <= ?", now)
-    select.ordered("m.remind_at ASC, m.rowid ASC")
+    select.ordered("m.remind_at ASC, m.pk ASC")
     return try await fetchStored(select)
   }
 }

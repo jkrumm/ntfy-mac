@@ -20,6 +20,7 @@ public struct URLSessionImageFetcher: ImageFetching {
   private let totalTimeout: Duration
   private let session: URLSession
   private let directory: URL
+  private let resolver: any HostResolving
 
   /// - Parameters:
   ///   - server: the configured ntfy server; its origin is the only one that gets the token.
@@ -35,8 +36,10 @@ public struct URLSessionImageFetcher: ImageFetching {
     totalTimeout: Duration = .seconds(15),
     session: URLSession = URLSession(configuration: .ephemeral),
     directory: URL = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "ntfy-mac-images", isDirectory: true)
+      "ntfy-mac-images", isDirectory: true),
+    resolver: any HostResolving = SystemHostResolver()
   ) {
+    self.resolver = resolver
     self.server = server
     self.token = token
     self.allowInsecure = allowInsecure
@@ -47,7 +50,7 @@ public struct URLSessionImageFetcher: ImageFetching {
   }
 
   public func fetch(_ url: URL) async -> URL? {
-    guard let url = URLPolicy.imageURL(url) else { return nil }
+    guard let url = URLPolicy.imageURL(url), await isReachable(url) else { return nil }
     cleanUp(olderThan: Self.retention)
     let request = await makeRequest(url)
     let (session, directory) = (session, directory)
@@ -69,6 +72,14 @@ public struct URLSessionImageFetcher: ImageFetching {
       guard let modified, now.timeIntervalSince(modified) >= age else { continue }
       try? manager.removeItem(at: entry)
     }
+  }
+
+  /// The configured server's own origin is trusted. Any other host must resolve to public
+  /// addresses only, so a sender cannot make the app fetch from the local network.
+  private func isReachable(_ url: URL) async -> Bool {
+    if ServerResponse.sameOrigin(url, server) { return true }
+    guard let host = url.host() else { return false }
+    return await HostSafety.resolvesToPublicAddresses(host, using: resolver)
   }
 
   // MARK: Request

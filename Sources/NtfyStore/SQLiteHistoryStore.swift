@@ -42,7 +42,7 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
 
   public func recent(limit: Int) async throws(NtfyError) -> [NtfyMessage] {
     var select = HistorySelect(server: server)
-    select.ordered("m.time DESC, m.rowid DESC", limit: limit)
+    select.ordered("m.time DESC, m.pk DESC", limit: limit)
     return try await fetchMessages(select)
   }
 
@@ -50,7 +50,7 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
     let server = server
     return try await read { database in
       try String.fetchOne(
-        database, sql: "SELECT id FROM message WHERE server = ? ORDER BY rowid DESC LIMIT 1",
+        database, sql: "SELECT id FROM message WHERE server = ? ORDER BY pk DESC LIMIT 1",
         arguments: [server])
     }
   }
@@ -60,10 +60,10 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
       "notified_at = COALESCE(notified_at, ?)", where: "topic = ? AND id = ?", [time, topic, id])
   }
 
-  public func unnotified(limit: Int) async throws(NtfyError) -> [NtfyMessage] {
+  public func unnotified(limit: Int, offset: Int) async throws(NtfyError) -> [NtfyMessage] {
     var select = HistorySelect(server: server)
     select.and("m.notified_at IS NULL")
-    select.ordered("m.time ASC, m.rowid ASC", limit: limit)
+    select.ordered("m.time ASC, m.pk ASC", limit: limit, offset: offset)
     return try await fetchMessages(select)
   }
 
@@ -88,10 +88,10 @@ public final class SQLiteHistoryStore: HistoryStore, Sendable {
     return try await write { database in
       try database.execute(
         sql: """
-          DELETE FROM message WHERE server = ? AND (time < ? OR rowid IN (
-            SELECT rowid FROM (
-              SELECT rowid, ROW_NUMBER() OVER (
-                PARTITION BY topic ORDER BY time DESC, rowid DESC) AS position
+          DELETE FROM message WHERE server = ? AND (time < ? OR pk IN (
+            SELECT pk FROM (
+              SELECT pk, ROW_NUMBER() OVER (
+                PARTITION BY topic ORDER BY time DESC, pk DESC) AS position
               FROM message WHERE server = ?)
             WHERE position > ?))
           """,

@@ -53,6 +53,10 @@ public actor DeliveryService: Delivering {
   var drainTask: Task<Void, Never>?
   var reminderTask: Task<Void, Never>?
   var isFiringReminders = false
+  /// Reminders handed to the queue and not yet shown or given up on.
+  var queuedReminders: Set<MessageRef> = []
+  /// Reminders that were shown but could not be cleared in the history; never shown again.
+  var unclearedReminders: Set<MessageRef> = []
   var stopped = false
 
   public init(

@@ -13,6 +13,7 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
   let clock: any NtfyCore.Clock
   private var appendFailure: NtfyError?
   private var appendsBeforeFailure = 0
+  private var clearReminderFailure: NtfyError?
 
   public init(clock: any NtfyCore.Clock = FakeClock()) {
     self.clock = clock
@@ -23,6 +24,11 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
   public func setAppendFailure(_ failure: NtfyError?, afterSuccesses successes: Int = 0) {
     appendFailure = failure
     appendsBeforeFailure = successes
+  }
+
+  /// Makes `clearReminder` throw `failure`, or work again with `nil`.
+  public func setClearReminderFailure(_ failure: NtfyError?) {
+    clearReminderFailure = failure
   }
 
   @discardableResult
@@ -51,9 +57,9 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     change(topic: topic, id: id) { $0.notifiedAt = $0.notifiedAt ?? time }
   }
 
-  public func unnotified(limit: Int) -> [NtfyMessage] {
+  public func unnotified(limit: Int, offset: Int) -> [NtfyMessage] {
     let pending = visible().filter { $0.stored.notifiedAt == nil }
-    return Array(pending.prefix(max(limit, 0))).map(\.stored.message)
+    return Array(pending.dropFirst(max(offset, 0)).prefix(max(limit, 0))).map(\.stored.message)
   }
 
   public func withdraw(topic: String, sequenceID: String) {
@@ -91,12 +97,13 @@ public actor InMemoryHistoryStore: HistoryStore, HistoryInbox {
     let ordered = rows.enumerated().sorted {
       ($0.element.time, $0.offset) < ($1.element.time, $1.offset)
     }
-    return ordered.enumerated().filter { position, entry in
-      !entry.element.withdrawn
-        && !ordered[(position + 1)...].contains {
-          $0.element.matches(topic: entry.element.topic, sequenceID: entry.element.sequenceID)
-        }
-    }.map(\.element.element)
+    var seen = Set<[String]>()
+    var result: [Row] = []
+    for row in ordered.reversed().map(\.element) {
+      let isNewest = seen.insert([row.topic, row.sequenceID]).inserted
+      if isNewest, !row.withdrawn { result.append(row) }
+    }
+    return result.reversed()
   }
 
   func change(topic: String, id: String, _ edit: (inout StoredMessage) -> Void) {
@@ -162,7 +169,8 @@ extension InMemoryHistoryStore {
     change(topic: topic, id: id) { $0.remindAt = until }
   }
 
-  public func clearReminder(topic: String, id: String) {
+  public func clearReminder(topic: String, id: String) throws(NtfyError) {
+    if let clearReminderFailure { throw clearReminderFailure }
     change(topic: topic, id: id) { $0.remindAt = nil }
   }
 

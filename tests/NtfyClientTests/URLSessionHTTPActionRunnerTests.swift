@@ -1,12 +1,18 @@
 import Foundation
 import NtfyCore
+import NtfyTesting
 import Testing
 
 @testable import NtfyClient
 
 @Suite struct URLSessionHTTPActionRunnerTests {
-  private func runner(timeout: TimeInterval = 10) -> URLSessionHTTPActionRunner {
-    URLSessionHTTPActionRunner(timeout: timeout, session: StubURLProtocol.session())
+  private func runner(
+    timeout: TimeInterval = 10, resolver: StubHostResolver = .public8888,
+    allowPrivate: Bool = false
+  ) -> URLSessionHTTPActionRunner {
+    URLSessionHTTPActionRunner(
+      timeout: timeout, session: StubURLProtocol.session(), resolver: resolver,
+      allowPrivateNetwork: { allowPrivate })
   }
 
   private func call(
@@ -107,5 +113,42 @@ import Testing
   @Test func silentServerTimesOut() async {
     let base = StubURLProtocol.register(Stub(stall: true))
     #expect(await failure(of: call(base), timeout: 0.1) == .serverUnreachable)
+  }
+
+  // MARK: Resolution
+
+  @Test func aNameResolvingToTheLocalNetworkIsRefusedBeforeAnyRequest() async {
+    let base = StubURLProtocol.register(Stub())
+    let host = base.host() ?? ""
+    for address in ["192.168.1.5", "127.0.0.1", "::ffff:10.0.0.1"] {
+      let resolver = StubHostResolver([host: ["8.8.8.8", address]])
+      do {
+        try await runner(resolver: resolver).run(call(base))
+        Issue.record("expected a refusal for \(address)")
+      } catch {
+        guard case .invalidResponse = error else {
+          Issue.record("unexpected error \(error)")
+          return
+        }
+      }
+    }
+    #expect(StubURLProtocol.requests(for: base).isEmpty)
+  }
+
+  @Test func aFailedLookupRefusesTheAction() async {
+    let base = StubURLProtocol.register(Stub())
+    do {
+      try await runner(resolver: StubHostResolver()).run(call(base))
+      Issue.record("expected a refusal")
+    } catch {
+      #expect(StubURLProtocol.requests(for: base).isEmpty)
+    }
+  }
+
+  @Test func theOptInSkipsTheCheck() async throws {
+    let base = StubURLProtocol.register(Stub())
+    let resolver = StubHostResolver(["*": ["192.168.1.5"]])
+    try await runner(resolver: resolver, allowPrivate: true).run(call(base))
+    #expect(StubURLProtocol.requests(for: base).count == 1)
   }
 }

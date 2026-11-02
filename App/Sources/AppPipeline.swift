@@ -46,8 +46,8 @@ final class AppPipeline: Sendable {
     await delivery.start()
     await poster.restoreDeliveredCategories(inbox: store, config: services.config.load())
     await delivery.reconcile()
-    await services.router.use(
-      responseHandler(store: store, delivery: delivery, services: services))
+    let responses = responseHandler(store: store, delivery: delivery, services: services)
+    await services.router.use { await responses.handle($0) }
 
     let supervisor = StreamSupervisor(
       ports: ports(settings: settings, store: store, delivery: delivery, services: services),
@@ -88,7 +88,9 @@ final class AppPipeline: Sendable {
     return ResponseHandler(
       delivery: delivery, inbox: store, config: services.config, opener: WorkspaceLinkOpener(),
       presenter: ActivatingHistoryPresenter(), confirmer: AlertConfirmer(),
-      runner: URLSessionHTTPActionRunner(), log: { log.info("\($0, privacy: .public)") })
+      runner: URLSessionHTTPActionRunner(allowPrivateNetwork: {
+        await services.config.load().allowPrivateNetworkActions
+      }), log: { log.info("\($0, privacy: .public)") })
   }
 
   private static func ports(

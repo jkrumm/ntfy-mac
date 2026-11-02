@@ -1,4 +1,6 @@
 import Foundation
+import NtfyCore
+import NtfyTesting
 import Testing
 
 @testable import NtfyClient
@@ -13,11 +15,12 @@ import Testing
 
   private func fetcher(
     server: URL, token: String? = "tk", allowInsecure: Bool = false,
-    totalTimeout: Duration = .seconds(15)
+    totalTimeout: Duration = .seconds(15), resolver: StubHostResolver = .public8888
   ) -> URLSessionImageFetcher {
     URLSessionImageFetcher(
       server: server, token: { token }, allowInsecure: allowInsecure,
-      totalTimeout: totalTimeout, session: StubURLProtocol.session(), directory: directory)
+      totalTimeout: totalTimeout, session: StubURLProtocol.session(), directory: directory,
+      resolver: resolver)
   }
 
   private func image(_ data: Data, type: String = "image/png", status: Int = 200) -> Stub {
@@ -27,6 +30,30 @@ import Testing
   private func permissions(_ url: URL) throws -> Int {
     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
     return (attributes[.posixPermissions] as? Int) ?? -1
+  }
+
+  // MARK: Resolution
+
+  @Test func anotherHostResolvingToThePrivateNetworkIsSkipped() async {
+    let server = StubURLProtocol.register(image(Self.png))
+    let other = StubURLProtocol.register(image(Self.png))
+    let resolver = StubHostResolver([other.host() ?? "": ["10.0.0.7"]])
+    let file = await fetcher(server: server, resolver: resolver).fetch(other)
+    #expect(file == nil)
+    #expect(StubURLProtocol.requests(for: other).isEmpty)
+  }
+
+  @Test func aFailedLookupSkipsTheImage() async {
+    let server = StubURLProtocol.register(image(Self.png))
+    let other = StubURLProtocol.register(image(Self.png))
+    let file = await fetcher(server: server, resolver: StubHostResolver()).fetch(other)
+    #expect(file == nil)
+  }
+
+  @Test func theServersOwnOriginIsNotLookedUp() async {
+    let base = StubURLProtocol.register(image(Self.png))
+    let file = await fetcher(server: base, resolver: StubHostResolver()).fetch(base)
+    #expect(file != nil)
   }
 
   // MARK: Credentials

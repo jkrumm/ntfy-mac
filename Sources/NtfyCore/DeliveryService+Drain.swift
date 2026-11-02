@@ -22,6 +22,7 @@ extension DeliveryService {
       let outcome = await post(item)
       if outcome != .skipped { queue.recordAttempt(at: clock.now()) }
       await retryOrDrop(item, after: outcome)
+      dropAbandonedReminders()
     }
     drainTask = nil
   }
@@ -75,10 +76,14 @@ extension DeliveryService {
     inFlight = nil
     guard fate == .keep else {
       if fate == .withdrawn { await poster.remove(identifiers: [content.identifier]) }
+      await settleReminder(ref)
       return .posted
     }
     startTimers(for: content, message: message, repeatsLeft: repeatsLeft, config: config)
-    if repeatsLeft == nil { await markNotified(ref) }
+    if repeatsLeft == nil {
+      await markNotified(ref)
+      await settleReminder(ref)
+    }
     return .posted
   }
 

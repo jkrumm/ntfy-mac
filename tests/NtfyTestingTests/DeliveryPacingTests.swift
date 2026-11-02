@@ -85,7 +85,7 @@ import Testing
     #expect(await rig.poster.attempts == 3)
     #expect(await rig.poster.posted.isEmpty)
     #expect(rig.clock.sleeperCount == 0)
-    #expect(await rig.history.unnotified(limit: 10).map(\.id) == ["a"])
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).map(\.id) == ["a"])
     await rig.service.shutdown()
   }
 
@@ -100,7 +100,7 @@ import Testing
     #expect(await rig.poster.attempts == 1)
     #expect(await rig.poster.summaries.isEmpty)
     #expect(rig.clock.sleeperCount == 0)
-    #expect(await rig.history.unnotified(limit: 10).count == 2)
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).count == 2)
     await rig.service.shutdown()
   }
 
@@ -125,10 +125,10 @@ import Testing
     try await rig.receive("a")
     #expect(await rig.waitForAttempts(1))
     await rig.settle()
-    #expect(await rig.history.unnotified(limit: 10).map(\.id) == ["a"])
+    #expect(await rig.history.unnotified(limit: 10, offset: 0).map(\.id) == ["a"])
     await rig.nextSlot()
     #expect(await rig.waitForPosts(1))
-    #expect(await rig.eventually { await rig.history.unnotified(limit: 10).isEmpty })
+    #expect(await rig.eventually { await rig.history.unnotified(limit: 10, offset: 0).isEmpty })
     await rig.service.shutdown()
   }
 

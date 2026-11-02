@@ -56,7 +56,7 @@ import Testing
     try await rig.store.append(rig.message("3", at: 2))
     try await rig.store.withdraw(topic: "alerts", sequenceID: "seq")
     #expect(try await rig.store.recent(limit: 10).map(\.id) == ["3"])
-    #expect(try await rig.store.unnotified(limit: 10).map(\.id) == ["3"])
+    #expect(try await rig.store.unnotified(limit: 10, offset: 0).map(\.id) == ["3"])
     #expect(try await rig.store.append(rig.message("1", at: 0, sequenceID: "seq")) == false)
     #expect(try await rig.store.lastMessageID() == "3")
   }
@@ -201,10 +201,10 @@ import Testing
     for (index, id) in ["a", "b", "c"].enumerated() {
       try await rig.store.append(rig.message(id, at: Double(index)))
     }
-    #expect(try await rig.store.unnotified(limit: 10).map(\.id) == ["a", "b", "c"])
+    #expect(try await rig.store.unnotified(limit: 10, offset: 0).map(\.id) == ["a", "b", "c"])
     try await rig.store.markNotified(topic: "alerts", id: "a", at: rig.clock.now())
-    #expect(try await rig.store.unnotified(limit: 10).map(\.id) == ["b", "c"])
-    #expect(try await rig.store.unnotified(limit: 1).map(\.id) == ["b"])
+    #expect(try await rig.store.unnotified(limit: 10, offset: 0).map(\.id) == ["b", "c"])
+    #expect(try await rig.store.unnotified(limit: 1, offset: 0).map(\.id) == ["b"])
     let stored = try #require(try await rig.store.entries(HistoryQuery()).last)
     #expect(stored.notifiedAt != nil)
   }

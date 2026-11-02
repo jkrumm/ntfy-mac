@@ -8,7 +8,7 @@ struct HistorySelect: Sendable {
     m.withdrawn_at IS NULL AND NOT EXISTS (
       SELECT 1 FROM message n
       WHERE n.server = m.server AND n.topic = m.topic AND n.sequence_id = m.sequence_id
-        AND (n.time > m.time OR (n.time = m.time AND n.rowid > m.rowid)))
+        AND (n.time > m.time OR (n.time = m.time AND n.pk > m.pk)))
     """
 
   private var join = ""
@@ -26,7 +26,7 @@ struct HistorySelect: Sendable {
   }
 
   mutating func matching(_ pattern: FTS5Pattern) {
-    join = "JOIN message_ft ON message_ft.rowid = m.rowid"
+    join = "JOIN message_ft ON message_ft.rowid = m.pk"
     and("message_ft MATCH ?", pattern)
   }
 
@@ -56,7 +56,7 @@ extension HistoryQuery {
       guard let pattern = FTS5Pattern(matchingAllPrefixesIn: text) else { return nil }
       select.matching(pattern)
     }
-    select.ordered("m.time DESC, m.rowid DESC", limit: limit, offset: offset)
+    select.ordered("m.time DESC, m.pk DESC", limit: limit, offset: offset)
     return select
   }
 }

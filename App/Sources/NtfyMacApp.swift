@@ -5,7 +5,7 @@ import SwiftUI
 import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-  private let router = ResponseRouter()
+  private let router = ResponseRouter { Log.logger(.delivery).info("\($0, privacy: .public)") }
   private let responder: NotificationResponder
   private let controller: AppController
 

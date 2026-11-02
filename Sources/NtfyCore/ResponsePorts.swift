@@ -31,3 +31,27 @@ public protocol ImageFetching: Sendable {
   /// delivery.
   func fetch(_ url: URL) async -> URL?
 }
+
+/// Turns a host name into the numeric addresses it points to.
+///
+/// Known residual: the answer can change between this check and the connection that follows
+/// (DNS rebinding). Closing that would mean connecting to the checked address itself; the
+/// check is a guard against a sender pointing a name at the local network, not a guarantee.
+public protocol HostResolving: Sendable {
+  /// Numeric addresses (IPv4 or IPv6 text), or nil when the lookup failed or took too long.
+  func addresses(of host: String) async -> [String]?
+}
+
+/// The run-time half of the private-network check: what a name resolves to.
+public enum HostSafety {
+  /// `true` only when the host resolved and every address is public. A failed lookup counts as
+  /// unsafe.
+  public static func resolvesToPublicAddresses(
+    _ host: String, using resolver: any HostResolving
+  ) async -> Bool {
+    guard let addresses = await resolver.addresses(of: host), !addresses.isEmpty else {
+      return false
+    }
+    return !addresses.contains { NetworkHost.isPrivate($0) }
+  }
+}

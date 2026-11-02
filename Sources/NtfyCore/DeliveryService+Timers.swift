@@ -59,19 +59,51 @@ extension DeliveryService {
     }
   }
 
-  /// Shows every reminder that came due again and clears it, so it fires once. A reminder is
-  /// cleared when queued, not when shown: a failed post leaves the message in history, unread.
+  /// Queues every reminder that came due. A reminder is cleared in the history only after its
+  /// post succeeded (`settleReminder`); a failed or interrupted post leaves it due, so the next
+  /// tick or boot fires it again. One whose clearing failed is not shown twice: it is only
+  /// cleared again.
   func fireDueReminders() async {
     guard !stopped, !isFiringReminders else { return }
     isFiringReminders = true
     defer { isFiringReminders = false }
+    let due: [StoredMessage]
     do throws(NtfyError) {
-      for stored in try await inbox.dueReminders(now: clock.now()) {
-        deliver(stored.message)
-        try await inbox.clearReminder(topic: stored.message.topic, id: stored.message.id)
-      }
+      due = try await inbox.dueReminders(now: clock.now())
     } catch {
-      log("reminders not fired: \(error)")
+      log("reminders not read: \(error)")
+      return
+    }
+    for stored in due {
+      let ref = MessageRef(topic: stored.message.topic, id: stored.message.id)
+      if unclearedReminders.contains(ref) {
+        await clearReminder(ref)
+        continue
+      }
+      guard !queuedReminders.contains(ref) else { continue }
+      queuedReminders.insert(ref)
+      deliver(stored.message)
+    }
+  }
+
+  /// Called when a post of `ref` went through: clears its reminder if it was one.
+  func settleReminder(_ ref: MessageRef) async {
+    guard queuedReminders.remove(ref) != nil else { return }
+    await clearReminder(ref)
+  }
+
+  /// Forgets reminders whose post will not happen (given up, superseded, withdrawn).
+  func dropAbandonedReminders() {
+    queuedReminders = queuedReminders.filter { isPending($0) }
+  }
+
+  private func clearReminder(_ ref: MessageRef) async {
+    do throws(NtfyError) {
+      try await inbox.clearReminder(topic: ref.topic, id: ref.id)
+      unclearedReminders.remove(ref)
+    } catch {
+      unclearedReminders.insert(ref)
+      log("reminder \(ref.topic)/\(ref.id) not cleared: \(error)")
     }
   }
 }

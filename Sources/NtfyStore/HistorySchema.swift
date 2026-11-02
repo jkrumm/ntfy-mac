@@ -8,6 +8,7 @@ enum HistorySchema {
       try database.execute(
         sql: """
           CREATE TABLE message (
+            pk INTEGER PRIMARY KEY AUTOINCREMENT,
             server TEXT NOT NULL,
             topic TEXT NOT NULL,
             id TEXT NOT NULL,

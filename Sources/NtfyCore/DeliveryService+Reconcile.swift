@@ -21,7 +21,15 @@ extension DeliveryService {
 
   private func announceUnnotified() async {
     do throws(NtfyError) {
-      let rows = try await history.unnotified(limit: Self.reconcileLimit)
+      var rows: [NtfyMessage] = []
+      var pages = 0
+      while true {
+        let page = try await history.unnotified(limit: Self.reconcileLimit, offset: rows.count)
+        pages += 1
+        rows += page
+        if page.count < Self.reconcileLimit { break }
+      }
+      if pages > 1 { log("reconcile read \(rows.count) unnotified messages in \(pages) pages") }
       await announceMissed(rows)
     } catch {
       log("unnotified messages not read: \(error)")
@@ -53,28 +61,45 @@ extension DeliveryService {
   private func expireDelivered(_ config: Config) async {
     let delivered = await poster.deliveredIdentifiers()
     guard !delivered.isEmpty else { return }
-    let rows: [StoredMessage]
-    do throws(NtfyError) {
-      rows = try await inbox.entries(HistoryQuery(limit: Self.reconcileLimit))
-    } catch {
-      log("history not read: \(error)")
-      return
-    }
     let now = clock.now()
     var expired: [String] = []
-    for stored in rows {
-      let identifier = stored.message.notificationIdentifier
-      guard delivered.contains(identifier), let shownAt = stored.notifiedAt else { continue }
-      let profile = PriorityProfile(priority: stored.message.priority.rawValue, config: config)
-      guard let after = profile.dismissAfter else { continue }
-      let remaining = shownAt.addingTimeInterval(after.timeInterval).timeIntervalSince(now)
-      if remaining <= 0 {
-        expired.append(identifier)
-        continue
+    var found = Set<String>()
+    var offset = 0
+    var pages = 0
+    scan: while true {
+      let rows: [StoredMessage]
+      do throws(NtfyError) {
+        rows = try await inbox.entries(HistoryQuery(limit: Self.reconcileLimit, offset: offset))
+      } catch {
+        log("history not read: \(error)")
+        break
       }
-      let ref = MessageRef(topic: stored.message.topic, id: stored.message.id)
-      scheduleDismiss(identifier: identifier, ref: ref, after: remaining)
+      pages += 1
+      offset += rows.count
+      for stored in rows {
+        let identifier = stored.message.notificationIdentifier
+        guard delivered.contains(identifier) else { continue }
+        found.insert(identifier)
+        if let gone = expire(stored, config: config, now: now) { expired.append(gone) }
+        if found.count == delivered.count { break scan }
+      }
+      if rows.count < Self.reconcileLimit { break }
     }
+    if pages > 1 { log("reconcile read \(offset) history rows in \(pages) pages") }
     if !expired.isEmpty { await poster.remove(identifiers: expired) }
+  }
+
+  /// Schedules the auto-dismiss of a delivered notification for the rest of its time, or returns
+  /// its identifier when that time is already over.
+  private func expire(_ stored: StoredMessage, config: Config, now: Date) -> String? {
+    let identifier = stored.message.notificationIdentifier
+    guard let shownAt = stored.notifiedAt else { return nil }
+    let profile = PriorityProfile(priority: stored.message.priority.rawValue, config: config)
+    guard let after = profile.dismissAfter else { return nil }
+    let remaining = shownAt.addingTimeInterval(after.timeInterval).timeIntervalSince(now)
+    if remaining <= 0 { return identifier }
+    let ref = MessageRef(topic: stored.message.topic, id: stored.message.id)
+    scheduleDismiss(identifier: identifier, ref: ref, after: remaining)
+    return nil
   }
 }

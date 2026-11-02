@@ -35,23 +35,6 @@ struct ActivatingHistoryPresenter: HistoryPresenting {
   }
 }
 
-/// Where notification responses go. The delegate is installed once at launch, the handler
-/// behind it changes with every pipeline rebuild.
-actor ResponseRouter {
-  private var handler: ResponseHandler?
-  private let log = Log.logger(.delivery)
-
-  func use(_ handler: ResponseHandler?) { self.handler = handler }
-
-  func handle(_ response: NotificationResponse) async {
-    guard let handler else {
-      log.info("notification response ignored: no pipeline is running")
-      return
-    }
-    await handler.handle(response)
-  }
-}
-
 /// Keeps App Nap away while the stream runs. The token is opaque and only handed back to
 /// `endActivity`, so sharing it across threads is safe.
 final class ProcessActivity: @unchecked Sendable {

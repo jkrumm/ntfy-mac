@@ -118,3 +118,19 @@ public actor InMemoryNotificationPermission: NotificationPermissionProviding {
     return state
   }
 }
+
+/// Answers lookups from a table; hosts it does not know fail, like an unresolvable name.
+public struct StubHostResolver: HostResolving {
+  private let table: [String: [String]]
+
+  public init(_ table: [String: [String]] = [:]) {
+    self.table = table
+  }
+
+  /// Every host resolves to the public address 8.8.8.8.
+  public static let public8888 = StubHostResolver(["*": ["8.8.8.8"]])
+
+  public func addresses(of host: String) async -> [String]? {
+    table[host.lowercased()] ?? table["*"]
+  }
+}

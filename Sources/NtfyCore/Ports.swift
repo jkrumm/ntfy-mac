@@ -80,7 +80,7 @@ public protocol HistoryStore: Sendable {
   /// Records that the message was shown.
   func markNotified(topic: String, id: String, at time: Date) async throws(NtfyError)
   /// Stored messages that were never shown, oldest first (boot reconcile).
-  func unnotified(limit: Int) async throws(NtfyError) -> [NtfyMessage]
+  func unnotified(limit: Int, offset: Int) async throws(NtfyError) -> [NtfyMessage]
 
   /// The server deleted the sequence (`message_delete`): hide every row of it.
   func withdraw(topic: String, sequenceID: String) async throws(NtfyError)
