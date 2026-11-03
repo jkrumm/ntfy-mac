@@ -35,7 +35,7 @@ struct ChatBubble: View {
   }
 
   private var bubble: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 8) {
       if showsTopic {
         Text(verbatim: detail.key.topic)
           .font(.caption.weight(.semibold))
@@ -58,8 +58,8 @@ struct ChatBubble: View {
     }
     .foregroundStyle(ink)
     .tint(isOwn ? .white : nil)
-    .padding(.horizontal, 12)
-    .padding(.vertical, 8)
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
     .background(
       Self.shape.fill(isOwn ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
     )

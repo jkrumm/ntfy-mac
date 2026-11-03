@@ -140,7 +140,9 @@ private struct ConversationRowLayout<Avatar: View>: View {
         .frame(height: 16)
       }
     }
-    .padding(.vertical, 3)
+    .padding(.vertical, 4)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
   }
 }

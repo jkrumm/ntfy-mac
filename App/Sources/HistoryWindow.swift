@@ -16,7 +16,7 @@ struct HistoryWindow: View {
   var body: some View {
     NavigationSplitView {
       HistorySidebar(model: model)
-        .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 380)
+        .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
     } detail: {
       VStack(spacing: 0) {
         ChatHeader(model: model)
@@ -30,7 +30,10 @@ struct HistoryWindow: View {
     .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search messages")
     .toolbar { HistoryFilterBar(model: model, export: export) }
     .toolbar(removing: .title)
-    .frame(minWidth: 760, idealWidth: 980, minHeight: 480, idealHeight: 680)
+    .frame(
+      minWidth: CGFloat(AppWindow.history.minimumSize.width),
+      minHeight: CGFloat(AppWindow.history.minimumSize.height)
+    )
     .fileQuickLook($quickLook)
     .environment(\.openURL, OpenURLAction(handler: Self.open))
     .confirmationDialog(

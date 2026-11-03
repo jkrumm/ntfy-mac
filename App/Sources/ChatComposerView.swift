@@ -35,8 +35,8 @@ struct ChatComposerView: View {
         }
       }
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 10)
+    .padding(.horizontal, 20)
+    .padding(.vertical, 12)
     .background(.bar)
     .task(id: model.selectedTopic) { focused = model.selectedTopic != nil }
   }

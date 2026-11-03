@@ -16,7 +16,10 @@ struct SettingsWindow: View {
     NavigationSplitView {
       List(selection: $section) {
         ForEach(SettingsSection.allCases) { section in
-          Label(section.title, systemImage: section.symbol).tag(section)
+          Label(section.title, systemImage: section.symbol)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .tag(section)
         }
       }
       .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
