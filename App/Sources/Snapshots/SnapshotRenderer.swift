@@ -20,6 +20,8 @@
 
     let window: NSWindow
     let isPopover: Bool
+    /// The size of the area below the title bar, which is what a SwiftUI frame sizes.
+    private let contentSize: NSSize
 
     /// - Parameter height: nil sizes the window to its content, as the popover is.
     init(
@@ -44,6 +46,7 @@
       window.contentViewController = host
       window.setContentSize(NSSize(width: CGFloat(width), height: contentHeight))
       window.setFrameOrigin(NSPoint(x: -30000, y: -30000))
+      contentSize = NSSize(width: CGFloat(width), height: contentHeight)
       if isPopover {
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -63,6 +66,7 @@
     func settle(_ milliseconds: Int = 500) async {
       window.orderFrontRegardless()
       try? await Task.sleep(for: .milliseconds(milliseconds))
+      fitContentLayout()
       window.contentView?.layoutSubtreeIfNeeded()
       captured.displayIfNeeded()
     }
@@ -83,6 +87,17 @@
       draw(view, into: rep)
       guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
       return (data, Int(bounds.height.rounded()))
+    }
+
+    /// The toolbar makes the title bar taller after the window was sized, which would squeeze
+    /// the content below its minimum size: grow the window until the content area is as asked.
+    private func fitContentLayout() {
+      guard !isPopover else { return }
+      let missing = contentSize.height - window.contentLayoutRect.height
+      guard abs(missing) > 0.5 else { return }
+      var frame = window.frame
+      frame.size.height += missing
+      window.setFrame(frame, display: true)
     }
 
     /// Every view below `root` whose class name contains `name`, outermost first.
