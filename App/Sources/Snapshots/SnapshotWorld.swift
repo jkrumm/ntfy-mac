@@ -64,18 +64,7 @@
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
       let clock = SystemClock()
-      var stored = Config(
-        url: "https://ntfy.example.com", extraTopics: ["home", "ci", "alerts"],
-        topicSettings: [
-          "ci": TopicSettings(minPriority: 3, emoji: "🛠"),
-          "home": TopicSettings(emoji: "🏠"),
-          "alerts": TopicSettings(emoji: "🚨"),
-        ])
-      stored.sounds[3] = .named("Glass")
-      stored.dismiss[2] = 6
-      options.config(&stored, now)
-      let config = FileConfigStore(url: directory.appending(path: "config.json"))
-      try? await config.save(stored)
+      let config = await Self.makeConfig(options, now: now, directory: directory)
 
       let store = try SQLiteHistoryStore.open(
         at: directory.appending(path: "history.sqlite"), server: "https://ntfy.example.com",
@@ -104,11 +93,7 @@
       history.publisher = SnapshotPublisherProvider(mode: options.composer)
       let secrets = SnapshotSecrets(token: "tk_snapshot")
       let loginItem = SnapshotLoginItem(current: .enabled)
-      func flow() -> NotificationPermissionFlow {
-        NotificationPermissionFlow(
-          permissions: permissions, opener: SnapshotSettingsOpener(),
-          quitGuard: SnapshotQuitGuard(), source: source, clock: clock)
-      }
+      let flow = { Self.flow(permissions, source: source, clock: clock) }
       settings = SettingsModel(
         SettingsModel.Dependencies(
           config: config, secrets: secrets, tester: SnapshotServerTester(),
@@ -128,6 +113,34 @@
       await app.refresh()
       await history.refresh()
       await settings.reload()
+    }
+
+    /// The settings file of the world: a configured server, three topics, a few overrides, and
+    /// whatever the scenario adds.
+    private static func makeConfig(
+      _ options: SnapshotWorldOptions, now: Date, directory: URL
+    ) async -> FileConfigStore {
+      var stored = Config(
+        url: "https://ntfy.example.com", extraTopics: ["home", "ci", "alerts"],
+        topicSettings: [
+          "ci": TopicSettings(minPriority: 3, emoji: "🛠"),
+          "home": TopicSettings(emoji: "🏠"),
+          "alerts": TopicSettings(emoji: "🚨"),
+        ])
+      stored.sounds[3] = .named("Glass")
+      stored.dismiss[2] = 6
+      options.config(&stored, now)
+      let config = FileConfigStore(url: directory.appending(path: "config.json"))
+      try? await config.save(stored)
+      return config
+    }
+
+    private static func flow(
+      _ permissions: SnapshotPermissions, source: SnapshotSource, clock: SystemClock
+    ) -> NotificationPermissionFlow {
+      NotificationPermissionFlow(
+        permissions: permissions, opener: SnapshotSettingsOpener(), quitGuard: SnapshotQuitGuard(),
+        source: source, clock: clock)
     }
 
     func stop() async {

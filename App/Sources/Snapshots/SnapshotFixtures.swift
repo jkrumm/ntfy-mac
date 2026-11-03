@@ -25,11 +25,21 @@
       """
 
     static func entries(now: Date) -> [Entry] {
-      func at(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
-      let hour = 60.0
-      let day = 24 * hour
+      alerts(now: now) + ci(now: now) + home(now: now) + kubernetes(now: now)
+    }
+
+    /// The minutes before `now`, as a date.
+    private static func ago(_ minutes: Double, from now: Date) -> Date {
+      now.addingTimeInterval(-minutes * 60)
+    }
+
+    private static let hour = 60.0
+    private static let day = 24 * hour
+
+    /// The urgent one, unacknowledged, with actions and an image, and older acknowledged ones.
+    private static func alerts(now: Date) -> [Entry] {
+      func at(_ minutes: Double) -> Date { ago(minutes, from: now) }
       return [
-        // alerts: the urgent one, unacknowledged, with actions and an image.
         Entry(
           message: NtfyMessage(
             id: "al-1", topic: "alerts", time: at(4), title: "Disk almost full on nas-01",
@@ -65,7 +75,13 @@
             id: "al-4", topic: "alerts", time: at(3 * day), title: "UPS on battery",
             body: "Power returned after 42 seconds.", priority: .max, tags: ["zap"]),
           isRead: true, isAcknowledged: true),
-        // ci: normal, low and min with emoji tags.
+      ]
+    }
+
+    /// Normal, low and min with emoji tags.
+    private static func ci(now: Date) -> [Entry] {
+      func at(_ minutes: Double) -> Date { ago(minutes, from: now) }
+      return [
         Entry(
           message: NtfyMessage(
             id: "ci-1", topic: "ci", time: at(11), title: "Build #4812 passed",
@@ -88,7 +104,13 @@
             id: "ci-4", topic: "ci", time: at(day + 6 * hour), body: "runner-3 heartbeat",
             priority: .min),
           isRead: true, isAcknowledged: false),
-        // home: normal, markdown, long.
+      ]
+    }
+
+    /// Normal, markdown and a very long title and body.
+    private static func home(now: Date) -> [Entry] {
+      func at(_ minutes: Double) -> Date { ago(minutes, from: now) }
+      return [
         Entry(
           message: NtfyMessage(
             id: "ho-1", topic: "home", time: at(38), title: "Front door opened",
@@ -115,7 +137,13 @@
               + "when that happens. It keeps going for several lines on purpose.",
             priority: .default, tags: ["memo"]),
           isRead: true, isAcknowledged: false),
-        // a long topic name.
+      ]
+    }
+
+    /// A topic with a very long name.
+    private static func kubernetes(now: Date) -> [Entry] {
+      func at(_ minutes: Double) -> Date { ago(minutes, from: now) }
+      return [
         Entry(
           message: NtfyMessage(
             id: "k8-1", topic: longTopic, time: at(160), title: "Rollout complete",

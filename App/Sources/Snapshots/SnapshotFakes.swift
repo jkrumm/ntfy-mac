@@ -174,7 +174,11 @@
           let point = NSPoint(
             x: 30 + CGFloat(index) * (rect.width - 60) / CGFloat(points.count - 1),
             y: 30 + value * (rect.height - 60))
-          index == 0 ? line.move(to: point) : line.line(to: point)
+          if index == 0 {
+            line.move(to: point)
+          } else {
+            line.line(to: point)
+          }
         }
         NSColor.systemOrange.setStroke()
         line.lineWidth = 4
