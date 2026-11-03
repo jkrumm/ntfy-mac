@@ -79,7 +79,8 @@ struct MenuBarContent: View {
       VStack(alignment: .leading, spacing: 2) {
         ForEach(model.recent) { row in
           MessageRowView(
-            row: row, acknowledge: { Task { await model.acknowledge(row) } },
+            row: row, showsAcknowledge: model.canAcknowledge(row),
+            acknowledge: { Task { await model.acknowledge(row) } },
             open: {
               Task { await model.markRead(row) }
               windows.showHistory(selecting: row.key)
@@ -95,6 +96,11 @@ struct MenuBarContent: View {
       if model.unacknowledgedCount > 0 {
         MenuRow("Acknowledge all", systemImage: "checkmark.circle") {
           Task { await model.acknowledgeAll() }
+        } trailing: {
+          Text("\(model.unacknowledgedCount)")
+            .font(.callout)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
         }
       }
       MenuPauseRow(model: model)
@@ -143,6 +149,8 @@ private struct StatusLine: View {
 
 private struct MessageRowView: View {
   let row: MessageRow
+  /// Only messages that need an acknowledgement have the button; opening any other marks it read.
+  let showsAcknowledge: Bool
   let acknowledge: () -> Void
   let open: () -> Void
 
@@ -167,7 +175,7 @@ private struct MessageRowView: View {
         .lineLimit(1)
       }
       Spacer(minLength: 4)
-      if !row.isAcknowledged {
+      if showsAcknowledge {
         Button(action: acknowledge) { Image(systemName: "checkmark.circle") }
           .buttonStyle(.borderless)
           .help("Acknowledge")

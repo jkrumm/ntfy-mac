@@ -21,7 +21,8 @@ struct HistoryModelRig {
     self.pipeline = pipeline
     source.set(pipeline.handles)
     model = HistoryModel(
-      source: source, opener: opener, clock: pipeline.clock, calendar: Self.utc,
+      source: source, opener: opener, clock: pipeline.clock, config: pipeline.config,
+      calendar: Self.utc,
       pageSize: pageSize, searchDebounce: .milliseconds(300))
   }
 

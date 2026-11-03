@@ -138,7 +138,7 @@ struct ChatBubble: View {
         Circle().fill(Color.accentColor).frame(width: 7, height: 7)
           .accessibilityLabel("Unread")
       }
-      if !detail.isAcknowledged && detail.priority >= .high {
+      if model.canAcknowledge(detail) {
         Button("Acknowledge") { Task { await model.acknowledge(message.key) } }
           .buttonStyle(.bordered)
           .controlSize(.mini)
@@ -164,9 +164,19 @@ struct ChatBubble: View {
     .foregroundStyle(subdued)
   }
 
+  /// Right-click on a bubble: copy what it says, open its link, then what can be done to it.
   @ViewBuilder private var menu: some View {
-    Button("Acknowledge") { Task { await model.acknowledge(message.key) } }
-      .disabled(detail.isAcknowledged)
+    Button("Copy Text") { copy(detail.body.isEmpty ? detail.title : detail.body) }
+    if detail.hasTitle {
+      Button("Copy Title") { copy(detail.title) }
+    }
+    if let url = detail.clickURL {
+      Button("Open Link") { Task { _ = await model.open(url) } }
+    }
+    Divider()
+    if model.canAcknowledge(detail) {
+      Button("Acknowledge") { Task { await model.acknowledge(message.key) } }
+    }
     Button(detail.isRead ? "Mark Unread" : "Mark Read") {
       Task {
         if detail.isRead {
@@ -182,15 +192,11 @@ struct ChatBubble: View {
       }
     }
     Divider()
-    if let url = detail.clickURL {
-      Button("Open Link") { Task { _ = await model.open(url) } }
-    }
-    Button("Copy Text") {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(
-        detail.body.isEmpty ? detail.title : detail.body, forType: .string)
-    }
-    Divider()
     Button("Delete…", role: .destructive) { delete(message.key) }
+  }
+
+  private func copy(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
   }
 }

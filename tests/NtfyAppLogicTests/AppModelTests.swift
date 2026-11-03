@@ -7,7 +7,7 @@ import Testing
 @MainActor @Suite struct AppModelTests {
   @Test func aPipelineWithoutAServerIsNotConfiguredAndShowsTheHistory() async {
     let rig = ModelRig()
-    await rig.pipeline.seed(["a", "b", "c"])
+    await rig.pipeline.seed(["a", "b", "c"], priority: .max)
     rig.model.start()
     #expect(await rig.eventually { rig.model.recent.count == 3 })
     #expect(rig.model.connection == .notConfigured)
@@ -43,7 +43,7 @@ import Testing
 
   @Test func acknowledgeMarksTheRowAndLowersTheCounts() async {
     let rig = ModelRig()
-    await rig.pipeline.seed(["a", "b"])
+    await rig.pipeline.seed(["a", "b"], priority: .max)
     rig.model.start()
     #expect(await rig.eventually { rig.model.recent.count == 2 })
     await rig.model.acknowledge(rig.model.recent[0])
@@ -53,9 +53,9 @@ import Testing
     rig.model.stop()
   }
 
-  @Test func acknowledgeAllSettlesEverything() async {
+  @Test func acknowledgeAllSettlesTheMessagesThatNeedIt() async {
     let rig = ModelRig()
-    await rig.pipeline.seed(["a", "b", "c"])
+    await rig.pipeline.seed(["a", "b", "c"], priority: .max)
     rig.model.start()
     #expect(await rig.eventually { rig.model.unacknowledgedCount == 3 })
     await rig.model.acknowledgeAll()
@@ -65,9 +65,39 @@ import Testing
     rig.model.stop()
   }
 
+  @Test func lowerPrioritiesNeverNeedAnAcknowledgement() async {
+    let rig = ModelRig()
+    await rig.pipeline.seed(["n1", "n2"], priority: .default)
+    _ = try? await rig.pipeline.history.append(
+      rig.pipeline.message("u", age: 0, priority: .max))
+    rig.model.start()
+    #expect(await rig.eventually { rig.model.recent.count == 3 })
+    #expect(rig.model.unacknowledgedCount == 1)
+    let normal = rig.model.recent.first { $0.key.id == "n1" }
+    let urgent = rig.model.recent.first { $0.key.id == "u" }
+    #expect(normal.map(rig.model.canAcknowledge) == false)
+    #expect(urgent.map(rig.model.canAcknowledge) == true)
+    await rig.model.acknowledgeAll()
+    #expect(rig.model.unacknowledgedCount == 0)
+    // The normal messages are left as they were: unread and never acknowledged.
+    #expect(rig.model.unreadCount == 2)
+    #expect(rig.model.recent.filter(\.isAcknowledged).map(\.key.id) == ["u"])
+    rig.model.stop()
+  }
+
+  @Test func theThresholdFollowsTheReAlertMinimum() async {
+    let rig = ModelRig(pipeline: PipelineFixture(config: Config(reAlertMinPriority: 4)))
+    await rig.pipeline.seed(["h"], priority: .high)
+    rig.model.start()
+    #expect(await rig.eventually { rig.model.recent.count == 1 })
+    #expect(rig.model.unacknowledgedCount == 1)
+    #expect(rig.model.canAcknowledge(rig.model.recent[0]))
+    rig.model.stop()
+  }
+
   @Test func markReadKeepsTheMessageUnacknowledged() async {
     let rig = ModelRig()
-    await rig.pipeline.seed(["a"])
+    await rig.pipeline.seed(["a"], priority: .max)
     rig.model.start()
     #expect(await rig.eventually { rig.model.recent.count == 1 })
     await rig.model.markRead(rig.model.recent[0])
