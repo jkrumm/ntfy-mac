@@ -22,7 +22,9 @@ struct HistoryWindow: View {
         ChatHeader(model: model)
         Divider()
         ChatThreadView(
-          model: model, quickLook: $quickLook, deleting: $deleting, report: { notice = $0 })
+          model: model, quickLook: $quickLook, deleting: $deleting, report: { notice = $0 }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         Divider()
         ChatComposerView(model: model)
       }
