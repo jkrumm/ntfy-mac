@@ -80,7 +80,8 @@ package:
 installer-check:
 	scripts/test-install.sh
 
-# Copies the ad-hoc-signed app to ~/Applications on the MacBook (ssh host $(MACBOOK)). Never launches it.
+# Copies the ad-hoc-signed app to ~/Applications on the MacBook (ssh host $(MACBOOK)), quits the
+# running copy and opens the new one, so the next thing the owner sees is this build.
 install-macbook: app
 	ssh -o BatchMode=yes $(MACBOOK) 'mkdir -p ~/Applications'
 	rsync -a --delete -e 'ssh -o BatchMode=yes' $(APP)/ $(MACBOOK):$(MACBOOK_APP)/
@@ -88,3 +89,4 @@ install-macbook: app
 		codesign --verify --deep --strict ~/$(MACBOOK_APP) && \
 		echo "installed: $$HOME/$(MACBOOK_APP)" && \
 		codesign -dv ~/$(MACBOOK_APP) 2>&1 | grep -E "^(Identifier|Signature|Format|CodeDirectory)"'
+	ssh -o BatchMode=yes $(MACBOOK) 'pkill -x NtfyMac; sleep 1; open ~/$(MACBOOK_APP) && echo "relaunched: $$HOME/$(MACBOOK_APP)"'
