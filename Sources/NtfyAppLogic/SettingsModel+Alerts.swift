@@ -32,6 +32,37 @@ extension SettingsModel {
     await write { $0.reAlertMaxRepeats = repeats }
   }
 
+  /// What re-alert does with the current settings, for the section's footer. It names which
+  /// priorities re-alert: the same ones that get an Acknowledge button (`AcknowledgePolicy`).
+  public var reAlertSummary: String {
+    guard config.reAlert else {
+      return "Re-alert is off: every message notifies once, whatever its priority."
+    }
+    let minimum = Priority(clamping: config.reAlertMinPriority)
+    let scope =
+      minimum == .max
+      ? "Only urgent (priority 5) messages"
+      : "Messages with priority \(minimum.rawValue) (\(minimum.label)) or higher"
+    let every = Self.durationText(seconds: config.reAlertIntervalSeconds)
+    let repeats = config.reAlertMaxRepeats == 1 ? "once" : "\(config.reAlertMaxRepeats) times"
+    return "\(scope) notify again every \(every), up to \(repeats), until you acknowledge them. "
+      + "Lower priorities never re-alert, and only these messages have an Acknowledge button "
+      + "in the menu and in History."
+  }
+
+  /// `300` is "5 minutes", `90` is "90 seconds".
+  static func durationText(seconds: Int) -> String {
+    if seconds >= 3600, seconds % 3600 == 0 {
+      let hours = seconds / 3600
+      return hours == 1 ? "hour" : "\(hours) hours"
+    }
+    if seconds >= 60, seconds % 60 == 0 {
+      let minutes = seconds / 60
+      return minutes == 1 ? "minute" : "\(minutes) minutes"
+    }
+    return seconds == 1 ? "second" : "\(seconds) seconds"
+  }
+
   // MARK: Quiet hours
 
   public func setQuietHoursEnabled(_ enabled: Bool) async {
