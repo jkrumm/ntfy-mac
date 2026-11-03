@@ -7,30 +7,32 @@ struct SettingsTopicsSection: View {
 
   var body: some View {
     Form {
-      Section {
-        if model.topicRows.isEmpty {
+      if model.topicRows.isEmpty {
+        Section {
           Text("No topics yet. Add one below, or connect a server with subscriptions.")
             .foregroundStyle(.secondary)
         }
-        ForEach(model.topicRows) { row in
-          TopicRowView(model: model, row: row)
-        }
-      } header: {
-        Text("Topics")
-      } footer: {
-        Text(
-          "Topics from your ntfy account are managed in the ntfy web app. Muted topics are still stored in the history."
-        )
       }
-      Section(settingLabel(.topicSubscribe)) {
+      ForEach(model.topicRows) { row in
+        TopicRowView(model: model, row: row)
+      }
+      Section {
         HStack {
           TextField("Topic name", text: $model.newTopicText)
+            .labelsHidden()
             .autocorrectionDisabled()
             .onSubmit { Task { await model.addTypedTopic() } }
           Button("Add") { Task { await model.addTypedTopic() } }
             .disabled(model.newTopicText.isEmpty)
         }
         .help(settingCommandHint(.topicSubscribe))
+      } header: {
+        Text(settingLabel(.topicSubscribe))
+      } footer: {
+        Text(
+          "Topics from your ntfy account are managed in the ntfy web app. "
+            + "Muted topics are still stored in the history."
+        )
       }
     }
     .formStyle(.grouped)
@@ -38,6 +40,8 @@ struct SettingsTopicsSection: View {
   }
 }
 
+/// One topic as its own group: the name and where it comes from on top, then the three
+/// settings as labelled rows, so labels and controls line up the same way for every topic.
 private struct TopicRowView: View {
   let model: SettingsModel
   let row: TopicRow
@@ -51,40 +55,52 @@ private struct TopicRowView: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text(row.name).fontWeight(.semibold)
-        Text(origin).font(.caption).foregroundStyle(.secondary)
-        Spacer()
-        if row.isLocal {
-          Button("Remove", role: .destructive) { Task { await model.unsubscribe(row.name) } }
-            .help(settingCommandHint(.topicUnsubscribe))
-        }
-      }
-      HStack(spacing: 16) {
-        Toggle(
-          "Mute",
-          isOn: Binding(
-            get: { row.settings.mute },
-            set: { value in Task { await model.setMute(value, topic: row.name) } })
-        )
-        .help(settingCommandHint(.topicMute))
+    Section {
+      Toggle(
+        "Mute",
+        isOn: Binding(
+          get: { row.settings.mute },
+          set: { value in Task { await model.setMute(value, topic: row.name) } })
+      )
+      .help(settingCommandHint(.topicMute))
+      LabeledContent("Minimum priority") {
         Picker("Minimum priority", selection: priority) {
           Text("Any").tag(0)
-          ForEach(SettingsModel.priorities, id: \.self) { value in
+          ForEach(SettingsModel.priorities.reversed(), id: \.self) { value in
             Text(SettingsModel.priorityTitle(value)).tag(value)
           }
         }
-        .help(settingCommandHint(.topicMinPriority))
+        .labelsHidden()
+        .fixedSize()
+      }
+      .help(settingCommandHint(.topicMinPriority))
+      LabeledContent("Emoji") {
         TextField("Emoji", text: $emoji)
-          .frame(width: 80)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          .frame(width: 72)
           .focused($emojiFocused)
           .onSubmit(commitEmoji)
           .onChange(of: emojiFocused) { if !emojiFocused { commitEmoji() } }
-          .help(settingCommandHint(.topicEmoji))
       }
+      .help(settingCommandHint(.topicEmoji))
+    } header: {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        Text(verbatim: row.name)
+          .font(.headline)
+          .lineLimit(1)
+          .truncationMode(.middle)
+          .help(row.name)
+        Text(origin).font(.caption).foregroundStyle(.secondary).fixedSize()
+        Spacer(minLength: 8)
+        if row.isLocal {
+          Button("Remove", role: .destructive) { Task { await model.unsubscribe(row.name) } }
+            .controlSize(.small)
+            .help(settingCommandHint(.topicUnsubscribe))
+        }
+      }
+      .textCase(nil)
     }
-    .padding(.vertical, 2)
   }
 
   private var priority: Binding<Int> {
