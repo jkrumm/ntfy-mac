@@ -7,7 +7,17 @@ Runs as a background app that streams messages in real time, handles reconnects 
 [![Release](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml/badge.svg)](https://github.com/jkrumm/ntfy-mac/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<!-- screenshot placeholder -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/menu-bar-dark.png">
+    <img src="docs/images/menu-bar-light.png" alt="The menu bar popover: connection state, recent messages, acknowledge, pause and history" width="170">
+  </picture>
+  &nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/history-dark.png">
+    <img src="docs/images/history-light.png" alt="The history window: topics, filters, a message with its actions and an attachment" width="500">
+  </picture>
+</p>
 
 ---
 
