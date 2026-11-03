@@ -1,6 +1,7 @@
 import Foundation
 import NtfyCore
 import NtfyIPC
+import NtfyTesting
 import Testing
 
 @testable import NtfyMacCLI
@@ -20,6 +21,13 @@ private actor Answers {
     return calls <= notReadyFor
       ? .failure(id: request.id, code: .appUnavailable, message: "starting")
       : .success(id: request.id)
+  }
+}
+
+extension FakeClock {
+  /// Returns once a task is parked in `sleep`; no wall-clock time involved.
+  fileprivate func untilSleeping() async {
+    while sleeperCount == 0 { await Task.yield() }
   }
 }
 
@@ -82,12 +90,19 @@ private actor Answers {
     defer { cleanup() }
     let answers = Answers(notReadyFor: .max)
     let server = IPCServer(path: socket) { await answers.next($0) }
+    let clock = FakeClock()
     let link = AppLink(
       socket: socket, app: app, launch: { _ in (try? server.start()) != nil },
-      launchTimeout: .milliseconds(1500))
-    let response = try await link.send(ping)
+      launchTimeout: .milliseconds(1500), clock: clock)
+    let pending = Task { try await link.send(ping) }
+    // The retry loop parks on the fake clock after every attempt; nothing moves until we say so.
+    await clock.untilSleeping()
+    clock.advance(by: .milliseconds(20))
+    await clock.untilSleeping()
+    clock.advance(by: .seconds(2))
+    let response = try await pending.value
     #expect(response.code == .appUnavailable)
-    #expect(await answers.calls > 1)
+    #expect(await answers.calls == 2)
     await server.stop()
   }
 

@@ -12,10 +12,17 @@ import Foundation
 public struct ConfigWatcher: Sendable {
   private let file: URL
   private let debounce: Duration
+  private let didRelease: @Sendable () -> Void
 
   public init(file: URL = FileConfigStore.defaultURL, debounce: Duration = .milliseconds(150)) {
+    self.init(file: file, debounce: debounce, didRelease: {})
+  }
+
+  /// `didRelease` runs once per watch, right after its descriptor is closed.
+  init(file: URL, debounce: Duration, didRelease: @escaping @Sendable () -> Void) {
     self.file = file
     self.debounce = debounce
+    self.didRelease = didRelease
   }
 
   /// One signal per settled change. Each call starts its own watch; it stops, and releases its
@@ -23,7 +30,9 @@ public struct ConfigWatcher: Sendable {
   /// Finishes immediately if the directory cannot be watched.
   public func changes() -> AsyncStream<Void> {
     AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-      guard let watch = DirectoryWatch(file: file, debounce: debounce, continuation: continuation)
+      guard
+        let watch = DirectoryWatch(
+          file: file, debounce: debounce, continuation: continuation, didRelease: didRelease)
       else {
         continuation.finish()
         return
@@ -50,7 +59,10 @@ private final class DirectoryWatch: @unchecked Sendable {
   private var pending: DispatchWorkItem?
   private var last: Fingerprint?
 
-  init?(file: URL, debounce: Duration, continuation: AsyncStream<Void>.Continuation) {
+  init?(
+    file: URL, debounce: Duration, continuation: AsyncStream<Void>.Continuation,
+    didRelease: @escaping @Sendable () -> Void
+  ) {
     let directory = file.deletingLastPathComponent()
     try? FileManager.default.createDirectory(
       at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -69,7 +81,10 @@ private final class DirectoryWatch: @unchecked Sendable {
       fileDescriptor: descriptor, eventMask: [.write, .rename, .delete, .extend, .link],
       queue: queue)
     source.setEventHandler { [weak self] in self?.directoryChanged() }
-    source.setCancelHandler { close(descriptor) }
+    source.setCancelHandler {
+      close(descriptor)
+      didRelease()
+    }
     self.source = source
     source.resume()
   }

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import NtfyCore
 import NtfyIPC
+import NtfyPlatform
 
 /// The CLI's channel to the running app: sends a request over the socket and, when nobody
 /// listens, launches the enclosing `NtfyMac.app` through LaunchServices and retries for a
@@ -14,17 +15,20 @@ struct AppLink: Sendable {
   private let app: URL?
   private let launch: Launcher
   private let launchTimeout: Duration
+  private let clock: any NtfyCore.Clock
   private let client: IPCClient
 
   init(
     socket: URL = AppLink.defaultSocket, app: URL? = AppBundle.enclosing(),
     launch: @escaping Launcher = AppLink.openWithLaunchServices,
-    launchTimeout: Duration = .seconds(10), responseTimeout: Duration = .seconds(10)
+    launchTimeout: Duration = .seconds(10), responseTimeout: Duration = .seconds(10),
+    clock: any NtfyCore.Clock = SystemClock()
   ) {
     self.socket = socket
     self.app = app
     self.launch = launch
     self.launchTimeout = launchTimeout
+    self.clock = clock
     client = IPCClient(path: socket, responseTimeout: responseTimeout)
   }
 
@@ -54,10 +58,10 @@ struct AppLink: Sendable {
   /// answer is retried too; if it is still that at the deadline, it is returned as it is.
   private func launchAndRetry(_ request: Request) async throws(NtfyError) -> Response {
     guard let app, await launch(app) else { throw .appUnavailable }
-    let deadline = ContinuousClock.now.advanced(by: launchTimeout)
+    let deadline = clock.now().addingTimeInterval(launchTimeout.timeInterval)
     var delay = Duration.milliseconds(20)
     var notReady: Response?
-    while ContinuousClock.now < deadline {
+    while clock.now() < deadline {
       do throws(IPCError) {
         let response = try await client.send(request)
         guard response.code == .appUnavailable else { return response }
@@ -67,7 +71,7 @@ struct AppLink: Sendable {
       } catch {
         throw Self.map(error)
       }
-      try? await Task.sleep(for: delay)
+      try? await clock.sleep(for: delay)
       delay = min(delay * 3 / 2, .milliseconds(250))
     }
     guard let notReady else { throw .appUnavailable }
@@ -95,6 +99,12 @@ struct AppLink: Sendable {
     } catch {
       return false
     }
+  }
+}
+
+extension Duration {
+  fileprivate var timeInterval: TimeInterval {
+    TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
   }
 }
 

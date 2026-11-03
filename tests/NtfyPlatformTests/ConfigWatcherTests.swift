@@ -84,16 +84,22 @@ private func eventually(
   @Test func cancellingTheConsumerEndsIterationAndReleasesDescriptors() async throws {
     let dir = TempDirectory()
     let path = dir.file("config.json")
-    let before = openDescriptorCount()
-    var watches: [Watch] = []
-    for _ in 0..<30 { watches.append(Watch(file: path)) }
-    #expect(openDescriptorCount() >= before + 30)
-    for watch in watches { watch.consumer.cancel() }
-    for watch in watches { await watch.consumer.value }
-    #expect(await eventually { openDescriptorCount() <= before + 10 })
-  }
-
-  private func openDescriptorCount() -> Int {
-    (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? 0
+    let (releases, release) = AsyncStream<Void>.makeStream()
+    let count = 30
+    let watcher = ConfigWatcher(file: path, debounce: .milliseconds(50)) { release.yield() }
+    var consumers: [Task<Void, Never>] = []
+    for _ in 0..<count {
+      let stream = watcher.changes()
+      consumers.append(Task { for await _ in stream {} })
+    }
+    for consumer in consumers { consumer.cancel() }
+    for consumer in consumers { await consumer.value }
+    // Every watch reports its descriptor closed; this suspends until all of them have.
+    var released = 0
+    for await _ in releases {
+      released += 1
+      if released == count { break }
+    }
+    #expect(released == count)
   }
 }
