@@ -11,7 +11,8 @@ extension HistoryModel {
     _ summaries: [TopicSummary], in inbox: any HistoryInbox
   ) async throws(NtfyError) -> [Conversation] {
     let urgent = Set(
-      try await inbox.unacknowledged(minPriority: .high).map(\.message.topic))
+      try await inbox.unacknowledged(minPriority: acknowledgePolicy.minPriority).map(
+        \.message.topic))
     var result: [Conversation] = []
     for summary in summaries {
       let newest = try await inbox.entries(

@@ -40,6 +40,8 @@ public final class HistoryModel {
   public internal(set) var attachments: [MessageKey: AttachmentState] = [:]
   /// A pipeline (and so a history) is running. False while one is rebuilt or before the first.
   public private(set) var isAvailable = false
+  /// Which priorities need an acknowledgement; follows the re-alert minimum in the config.
+  public private(set) var acknowledgePolicy = AcknowledgePolicy()
 
   // MARK: Filters
 
@@ -93,6 +95,7 @@ public final class HistoryModel {
   @ObservationIgnored let source: any PipelineSource
   @ObservationIgnored let opener: any LinkOpening
   @ObservationIgnored let clock: any NtfyCore.Clock
+  @ObservationIgnored let config: any ConfigStore
   @ObservationIgnored let calendar: Calendar
   @ObservationIgnored let pageSize: Int
   @ObservationIgnored let searchDebounce: Duration
@@ -110,7 +113,8 @@ public final class HistoryModel {
 
   public init(
     source: any PipelineSource, opener: any LinkOpening, clock: any NtfyCore.Clock,
-    calendar: Calendar = .current, pageSize: Int = HistoryModel.defaultPageSize,
+    config: any ConfigStore, calendar: Calendar = .current,
+    pageSize: Int = HistoryModel.defaultPageSize,
     searchDebounce: Duration = HistoryModel.defaultSearchDebounce,
     readDebounce: Duration = HistoryModel.defaultReadDebounce,
     log: @escaping @Sendable (String) -> Void = { _ in }
@@ -118,6 +122,7 @@ public final class HistoryModel {
     self.source = source
     self.opener = opener
     self.clock = clock
+    self.config = config
     self.calendar = calendar
     self.pageSize = max(pageSize, 1)
     self.searchDebounce = searchDebounce
@@ -194,6 +199,7 @@ public final class HistoryModel {
     guard let inbox = handles?.inbox else { return }
     do throws(NtfyError) {
       let query = currentQuery(limit: loadedLimit)
+      acknowledgePolicy = AcknowledgePolicy(config: try await config.load())
       let summaries = try await inbox.topics()
       let overview = try await buildConversations(summaries, in: inbox)
       let count = try await inbox.count(query)

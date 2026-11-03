@@ -10,9 +10,20 @@ extension AppModel {
     await refresh()
   }
 
+  /// The Acknowledge button belongs on this row: its priority needs one and it has none yet.
+  public func canAcknowledge(_ row: MessageRow) -> Bool {
+    acknowledgePolicy.isPending(priority: row.priority, isAcknowledged: row.isAcknowledged)
+  }
+
+  /// Acknowledges the messages that need it (`unacknowledgedCount`); the rest stay as they are.
   public func acknowledgeAll() async {
+    guard let handles else { return }
     do throws(NtfyError) {
-      _ = try await handles?.messages.acknowledgeAll(topic: nil)
+      let pending = try await handles.inbox.unacknowledged(
+        minPriority: acknowledgePolicy.minPriority)
+      for entry in pending {
+        await handles.delivery.acknowledge(topic: entry.message.topic, id: entry.message.id)
+      }
     } catch {
       log("acknowledge all failed: \(error)")
     }

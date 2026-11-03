@@ -60,9 +60,10 @@ struct PipelineFixture {
       body: "body \(id)", priority: priority)
   }
 
-  func seed(_ ids: [String]) async {
+  func seed(_ ids: [String], priority: Priority = .default) async {
     for (index, id) in ids.enumerated() {
-      _ = try? await history.append(message(id, age: Double(ids.count - index)))
+      _ = try? await history.append(
+        message(id, age: Double(ids.count - index), priority: priority))
     }
   }
 }

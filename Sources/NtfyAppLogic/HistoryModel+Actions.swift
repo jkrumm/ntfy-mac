@@ -5,6 +5,11 @@ import NtfyCore
 /// without waiting for the history signal. A `key` of nil means the selected message; an action
 /// on nothing does nothing.
 extension HistoryModel {
+  /// The Acknowledge button belongs on this message: its priority needs one and it has none yet.
+  public func canAcknowledge(_ detail: MessageDetail) -> Bool {
+    acknowledgePolicy.isPending(priority: detail.priority, isAcknowledged: detail.isAcknowledged)
+  }
+
   /// Acknowledges the message (which also reads it) and withdraws its notification.
   public func acknowledge(_ key: MessageKey? = nil) async {
     guard let key = key ?? selection else { return }

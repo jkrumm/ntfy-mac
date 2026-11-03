@@ -18,8 +18,11 @@ public final class AppModel {
 
   public private(set) var connection = ConnectionSummary.connecting
   public private(set) var unreadCount = 0
-  /// Messages nobody acknowledged yet, in the whole history.
+  /// Messages that need an acknowledgement and have none, in the whole history. Lower
+  /// priorities never count (`acknowledgePolicy`).
   public private(set) var unacknowledgedCount = 0
+  /// Which priorities need an acknowledgement; follows the re-alert minimum in the config.
+  public private(set) var acknowledgePolicy = AcknowledgePolicy()
   /// Newest first.
   public private(set) var recent: [MessageRow] = []
   /// The end of a pause that is still running, nil when notifications are on.
@@ -190,7 +193,9 @@ public final class AppModel {
       let rows = try await inbox.entries(HistoryQuery(limit: recentLimit))
       let unread = try await inbox.entries(
         HistoryQuery(unreadOnly: true, limit: Self.unreadCountCap))
-      let unacknowledged = try await inbox.unacknowledged(minPriority: .min)
+      let policy = AcknowledgePolicy(config: try await config.load())
+      let unacknowledged = try await inbox.unacknowledged(minPriority: policy.minPriority)
+      acknowledgePolicy = policy
       recent = rows.map(MessageRow.init)
       unreadCount = unread.count
       unacknowledgedCount = unacknowledged.count

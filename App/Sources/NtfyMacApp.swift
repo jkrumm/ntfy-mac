@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
     historyModel = HistoryModel(
       source: controller, opener: WorkspaceLinkOpener(), clock: services.clock,
+      config: services.config,
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
     let configChanges: @Sendable () -> AsyncStream<Void> = { ConfigWatcher().changes() }
     let secrets = KeychainSecretStore()
