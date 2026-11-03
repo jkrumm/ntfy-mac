@@ -82,7 +82,7 @@ The server URL lives in `~/.config/ntfy-mac/config.json`. The token lives in the
 
 ## First run after 1.x
 
-On launch the app checks for 1.x leftovers and removes them: the `com.jkrumm.ntfy-mac` LaunchAgent, the `homebrew.mxcl.ntfy-mac` service, the running daemon, `ntfy-notify.app` and its Launch Services entries, the old binary and logs. `config.json` and `state.json` stay. A plaintext token in `config.json` moves to the Keychain. `ntfy-mac migrate` does the same by hand; `--dry-run` lists what it would remove.
+On launch the app checks for 1.x leftovers and removes them: the `com.jkrumm.ntfy-mac` LaunchAgent, the Homebrew service (`sh.brew.ntfy-mac`, or `homebrew.mxcl.ntfy-mac` from older Homebrew, plus any LaunchAgent plist whose program is the formula's `ntfy-mac`), the running daemon, `ntfy-notify.app` and its Launch Services entries, the old binary and logs. `config.json` and `state.json` stay. A plaintext token in `config.json` moves to the Keychain. `ntfy-mac migrate` does the same by hand; `--dry-run` lists what it would remove.
 
 ## Updates
 
