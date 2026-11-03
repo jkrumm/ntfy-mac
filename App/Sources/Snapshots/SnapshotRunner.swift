@@ -53,23 +53,23 @@
       }
       defer { try? fileManager.removeItem(at: root) }
       var failures = 0
+      var written = 0
       for spec in SnapshotPlan.specs where Self.only.isEmpty || spec.id.contains(Self.only) {
         do {
-          try await draw(spec, root: root)
+          written += try await draw(spec, root: root)
         } catch {
           print("FAILED \(spec.id): \(error)")
           failures += 1
         }
       }
-      print(
-        "wrote \(SnapshotPlan.specs.count * SnapshotAppearance.allCases.count - failures * 2) images to \(output.path)"
-      )
+      print("wrote \(written) images to \(output.path)")
       return failures
     }
 
     /// One world and one window per appearance: a window that switches appearance keeps parts of
     /// its AppKit-backed views (the sidebar) in the old one.
-    private func draw(_ spec: SnapshotSpec, root: URL) async throws {
+    private func draw(_ spec: SnapshotSpec, root: URL) async throws -> Int {
+      var written = 0
       for appearance in SnapshotAppearance.allCases {
         let world = try await SnapshotWorld(SnapshotWorldOptions(for: spec.target), root: root)
         let renderer = SnapshotRenderer(
@@ -86,8 +86,10 @@
         let name = spec.fileName(appearance, renderedHeight: image.height)
         try image.data.write(to: output.appending(path: name))
         print(name)
+        written += 1
         await world.stop()
       }
+      return written
     }
   }
 
