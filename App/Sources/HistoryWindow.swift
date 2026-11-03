@@ -3,9 +3,9 @@ import NtfyAppLogic
 import NtfyCore
 import SwiftUI
 
-/// The History window, a chat: conversations (topics) on the left, the selected one as a thread
-/// with a composer on the right. The model is built by the app delegate; the window runs it
-/// while it is open.
+/// The History window, a notification log: topics on the left, the messages of the selected one
+/// in the middle under their filters, the selected message in full on the right. The model is
+/// built by the app delegate; the window runs it while it is open.
 struct HistoryWindow: View {
   @Bindable var model: HistoryModel
   let windows: WindowRouter
@@ -16,21 +16,15 @@ struct HistoryWindow: View {
   var body: some View {
     NavigationSplitView {
       HistorySidebar(model: model)
-        .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
+        .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 230)
+    } content: {
+      HistoryList(model: model, deleting: $deleting)
+        .navigationSplitViewColumnWidth(min: 300, ideal: 370, max: 440)
     } detail: {
-      VStack(spacing: 0) {
-        ChatHeader(model: model)
-        Divider()
-        ChatThreadView(
-          model: model, quickLook: $quickLook, deleting: $deleting, report: { notice = $0 }
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        Divider()
-        ChatComposerView(model: model)
-      }
+      detail
     }
     .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search messages")
-    .toolbar { HistoryFilterBar(model: model, export: export) }
+    .toolbar { HistoryToolbar(model: model, export: export) }
     .toolbar(removing: .title)
     .frame(
       minWidth: CGFloat(AppWindow.history.minimumSize.width),
@@ -66,6 +60,18 @@ struct HistoryWindow: View {
     .onDisappear { model.stop() }
     .onChange(of: windows.pendingSelection) { applyPendingSelection() }
     .onChange(of: model.isAvailable) { applyPendingSelection() }
+  }
+
+  @ViewBuilder private var detail: some View {
+    if let shown = model.detail {
+      HistoryDetail(
+        model: model, detail: shown, quickLook: $quickLook, deleting: $deleting,
+        report: { notice = $0 })
+    } else {
+      ContentUnavailableView(
+        "No message selected", systemImage: "tray",
+        description: Text("Pick a message to read it here."))
+    }
   }
 
   /// Applies the router's selection once the history is readable, and clears it.

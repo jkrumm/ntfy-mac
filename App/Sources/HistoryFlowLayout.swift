@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Lays children out in rows, wrapping at the proposed width. For the tag chips of a bubble.
-struct ChatFlowLayout: Layout {
+/// Lays children out in rows, wrapping at the proposed width. For tags and sender actions.
+struct HistoryFlowLayout: Layout {
   var spacing: CGFloat = 4
 
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

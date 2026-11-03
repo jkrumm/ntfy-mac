@@ -2,33 +2,29 @@ import Foundation
 import NtfyCore
 import Observation
 
-/// What the History window shows and does: the conversations (topics) with unread counts, the
-/// chat thread of the selected conversation (filtered, paged, grouped by day), a composer that
-/// publishes to it, and the actions on a message.
+/// What the History window shows and does: the topics with unread counts, the message log of the
+/// selected topic (filtered, paged, grouped by day), the selected message in full, a composer
+/// that publishes a new message, and the actions on a message.
 ///
 /// Like `AppModel` it follows the running pipeline through `PipelineSource`: the history change
-/// signal refreshes it, and it attaches again when a pipeline is built or torn down. Messages
-/// become read when the view reports them visible (`messageAppeared`, debounced) or when one is
-/// selected; loading the thread never does. Everything is plain values; the view reads the
+/// signal refreshes it, and it attaches again when a pipeline is built or torn down. A message
+/// becomes read when it is selected; loading the list never does. Everything is plain values; the view reads the
 /// properties and calls the actions, and owns the AppKit parts (save panel, Quick Look,
 /// consuming `WindowRouter`).
 @MainActor @Observable
 public final class HistoryModel {
   public static let defaultPageSize = 50
   public static let defaultSearchDebounce: Duration = .milliseconds(300)
-  public static let defaultReadDebounce: Duration = .milliseconds(600)
 
   // MARK: State
 
   /// Every topic with messages, newest first, with its unread count.
   public private(set) var topics: [TopicSummary] = []
-  /// The same topics as sidebar entries, newest activity first.
-  public private(set) var conversations: [Conversation] = []
+  /// Topics with an unacknowledged message that needs one, for the sidebar's marker.
+  public private(set) var urgentTopics: Set<String> = []
   /// The messages matching the filters, as far as loaded (`loadMore()` extends it).
   public private(set) var rows: [MessageRow] = []
-  /// The loaded messages as bubbles, oldest first.
-  public private(set) var thread: [ChatMessage] = []
-  /// `thread` grouped by calendar day, oldest first.
+  /// `rows` grouped by calendar day, newest first.
   public private(set) var days: [DayGroup] = []
   /// How many messages match the filters, loaded or not ("N results").
   public private(set) var resultCount = 0
@@ -36,7 +32,7 @@ public final class HistoryModel {
   public private(set) var selection: MessageKey?
   /// The selected message in full; nil without a selection or once the message is gone.
   public private(set) var detail: MessageDetail?
-  /// Fetch state of the attachments the thread showed, by message.
+  /// Fetch state of the attachments that were loaded, by message.
   public internal(set) var attachments: [MessageKey: AttachmentState] = [:]
   /// A pipeline (and so a history) is running. False while one is rebuilt or before the first.
   public private(set) var isAvailable = false
@@ -49,7 +45,6 @@ public final class HistoryModel {
   public var selectedTopic: String? {
     didSet {
       guard selectedTopic != oldValue else { return }
-      if case .failed = composerState { composerState = .idle }
       filtersChanged()
     }
   }
@@ -75,9 +70,16 @@ public final class HistoryModel {
   @ObservationIgnored public var publisher: (any PublisherProviding)?
   public var composerPriority = Priority.default
   public internal(set) var composerState = ComposerState.idle
-  var drafts: [String: String] = [:]
-  /// Messages this app published, so their bubbles sit on the right. Lives as long as the model.
-  var ownKeys: Set<MessageKey> = []
+  /// The topic a new message goes to; nil follows the selected topic (see `openComposer()`).
+  public var composerTopic: String? {
+    didSet { if composerTopic != oldValue { clearComposerFailure() } }
+  }
+  /// The text of the new message. Editing it clears a failed send's error.
+  public var draft = "" {
+    didSet { if draft != oldValue { clearComposerFailure() } }
+  }
+  /// Topics from the subscription settings, which may not have a message yet.
+  var configuredTopics: [String] = []
 
   // MARK: Derived
 
@@ -99,13 +101,10 @@ public final class HistoryModel {
   @ObservationIgnored let calendar: Calendar
   @ObservationIgnored let pageSize: Int
   @ObservationIgnored let searchDebounce: Duration
-  @ObservationIgnored let readDebounce: Duration
   @ObservationIgnored let log: @Sendable (String) -> Void
   @ObservationIgnored var handles: PipelineHandles?
   @ObservationIgnored var loadedLimit: Int
   @ObservationIgnored var attachmentTasks: [MessageKey: Task<Void, Never>] = [:]
-  @ObservationIgnored var visibleKeys: Set<MessageKey> = []
-  @ObservationIgnored var readTask: Task<Void, Never>?
   @ObservationIgnored private var lastRefresh: Task<Void, Never>?
   @ObservationIgnored private var searchTask: Task<Void, Never>?
   @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -116,7 +115,6 @@ public final class HistoryModel {
     config: any ConfigStore, calendar: Calendar = .current,
     pageSize: Int = HistoryModel.defaultPageSize,
     searchDebounce: Duration = HistoryModel.defaultSearchDebounce,
-    readDebounce: Duration = HistoryModel.defaultReadDebounce,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.source = source
@@ -126,7 +124,6 @@ public final class HistoryModel {
     self.calendar = calendar
     self.pageSize = max(pageSize, 1)
     self.searchDebounce = searchDebounce
-    self.readDebounce = readDebounce
     self.log = log
     loadedLimit = max(pageSize, 1)
   }
@@ -152,9 +149,6 @@ public final class HistoryModel {
     pipelineTasks = []
     searchTask?.cancel()
     searchTask = nil
-    readTask?.cancel()
-    readTask = nil
-    visibleKeys = []
     for key in Array(attachmentTasks.keys) { cancelAttachment(for: key) }
     lastRefresh = nil
   }
@@ -199,9 +193,11 @@ public final class HistoryModel {
     guard let inbox = handles?.inbox else { return }
     do throws(NtfyError) {
       let query = currentQuery(limit: loadedLimit)
-      acknowledgePolicy = AcknowledgePolicy(config: try await config.load())
+      let stored = try await config.load()
+      let policy = AcknowledgePolicy(config: stored)
       let summaries = try await inbox.topics()
-      let overview = try await buildConversations(summaries, in: inbox)
+      let urgent = Set(
+        try await inbox.unacknowledged(minPriority: policy.minPriority).map(\.message.topic))
       let count = try await inbox.count(query)
       let entries = try await inbox.entries(query)
       var shown: MessageDetail?
@@ -210,17 +206,13 @@ public final class HistoryModel {
           MessageDetail($0, now: clock.now())
         }
       }
+      acknowledgePolicy = policy
+      configuredTopics = stored.extraTopics
       topics = summaries
-      conversations = overview
+      urgentTopics = urgent
       resultCount = count
       rows = entries.map(MessageRow.init)
-      let now = clock.now()
-      thread = ChatGrouping.chronological(
-        entries.map {
-          let detail = MessageDetail($0, now: now)
-          return ChatMessage(detail: detail, isOwn: ownKeys.contains(detail.key))
-        })
-      days = ChatGrouping.days(of: thread, calendar: calendar)
+      days = HistoryGrouping.days(of: rows, calendar: calendar)
       if selection != nil {
         detail = shown
         if shown == nil { clearSelection() }

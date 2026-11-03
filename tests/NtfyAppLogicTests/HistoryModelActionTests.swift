@@ -284,6 +284,7 @@ extension MessageKey {
     let rig = await rig(attachment: file)
     await rig.pipeline.attachments.set(file: local)
     await rig.pipeline.attachments.hold()
+    await rig.model.select(key)
     rig.model.loadAttachment(for: key)
     await rig.model.select(MessageKey(topic: "alerts", id: "plain"))
     #expect(rig.model.attachmentState(for: key) == .loading)
@@ -299,10 +300,14 @@ extension MessageKey {
     await rig.start()
     await rig.pipeline.attachments.set(file: local)
     let other = MessageKey(topic: "alerts", id: "b")
+    await rig.model.select(key)
     rig.model.loadAttachment(for: key)
     #expect(rig.model.attachmentState(for: other) == .idle)
     #expect(await rig.eventually { rig.model.attachmentState(for: key) == .ready(local) })
     #expect(rig.model.attachmentState(for: other) == .idle)
+    await rig.model.select(other)
+    rig.model.loadAttachment(for: other)
+    #expect(await rig.eventually { rig.model.attachmentState(for: other) == .ready(local) })
     rig.model.stop()
   }
 

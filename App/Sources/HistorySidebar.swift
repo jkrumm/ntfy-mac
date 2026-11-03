@@ -1,7 +1,7 @@
 import NtfyAppLogic
 import SwiftUI
 
-/// The conversations: "All" and one row per topic, newest activity first.
+/// The topics: "All messages" and one compact row per topic, newest activity first.
 struct HistorySidebar: View {
   private enum Item: Hashable {
     case all
@@ -13,11 +13,20 @@ struct HistorySidebar: View {
 
   var body: some View {
     List(selection: selection) {
-      allRow.tag(Item.all)
-      ForEach(model.conversations) { conversation in
-        ConversationRow(conversation: conversation)
-          .tag(Item.topic(conversation.topic))
-          .contextMenu { menu(.topic(conversation.topic), unread: conversation.unread) }
+      row("All messages", symbol: "tray.full", unread: model.totalUnread, urgent: false)
+        .tag(Item.all)
+        .contextMenu { menu(.all, unread: model.totalUnread) }
+      if !model.topics.isEmpty {
+        Section("Topics") {
+          ForEach(model.topics, id: \.topic) { summary in
+            row(
+              summary.topic, symbol: "number", unread: summary.unread,
+              urgent: model.urgentTopics.contains(summary.topic)
+            )
+            .tag(Item.topic(summary.topic))
+            .contextMenu { menu(.topic(summary.topic), unread: summary.unread) }
+          }
+        }
       }
     }
     .listStyle(.sidebar)
@@ -35,14 +44,38 @@ struct HistorySidebar: View {
     }
   }
 
-  private var allRow: some View {
-    let newest = model.conversations.first
-    return ConversationRowLayout(
-      avatar: { ChatAllAvatarView() }, title: "All", time: newest?.time,
-      preview: newest.map { "\($0.topic): \($0.preview)" } ?? "No messages yet",
-      unread: model.totalUnread, hasUrgent: model.conversations.contains(where: \.hasUrgent)
-    )
-    .contextMenu { menu(.all, unread: model.totalUnread) }
+  /// Symbol and name on the left; an urgent marker and the unread count on the right.
+  private func row(_ title: String, symbol: String, unread: Int, urgent: Bool) -> some View {
+    HStack(spacing: 6) {
+      Image(systemName: symbol)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(width: 14)
+        .accessibilityHidden(true)
+      Text(verbatim: title)
+        .fontWeight(unread > 0 ? .semibold : .regular)
+        .lineLimit(1)
+        .truncationMode(.middle)
+      Spacer(minLength: 4)
+      if urgent {
+        Image(systemName: "exclamationmark.circle.fill")
+          .font(.caption)
+          .foregroundStyle(.red)
+          .help("Urgent message waiting")
+          .accessibilityLabel("Urgent message waiting")
+      }
+      if unread > 0 {
+        Text("\(unread)")
+          .font(.caption2.weight(.semibold))
+          .monospacedDigit()
+          .foregroundStyle(.white)
+          .padding(.horizontal, 5)
+          .background(Color.accentColor, in: Capsule())
+          .accessibilityLabel("\(unread) unread")
+      }
+    }
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
   }
 
   private func menu(_ item: Item, unread: Int) -> some View {
@@ -77,88 +110,5 @@ struct HistorySidebar: View {
       return
     }
     for summary in model.topics { await model.deleteAll(topic: summary.topic) }
-  }
-}
-
-private struct ConversationRow: View {
-  let conversation: Conversation
-
-  var body: some View {
-    ConversationRowLayout(
-      avatar: { ChatAvatarView(avatar: conversation.avatar) }, title: conversation.topic,
-      time: conversation.time, preview: conversation.preview, unread: conversation.unread,
-      hasUrgent: conversation.hasUrgent)
-  }
-}
-
-/// Avatar, name and one-line preview on the left; time, unread badge and urgent marker on the right.
-private struct ConversationRowLayout<Avatar: View>: View {
-  @ViewBuilder let avatar: () -> Avatar
-  let title: String
-  let time: Date?
-  let preview: String
-  let unread: Int
-  let hasUrgent: Bool
-
-  var body: some View {
-    HStack(spacing: 10) {
-      avatar()
-      VStack(alignment: .leading, spacing: 2) {
-        Text(verbatim: title)
-          .fontWeight(unread > 0 ? .semibold : .medium)
-          .lineLimit(1)
-        Text(verbatim: preview)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
-      Spacer(minLength: 4)
-      VStack(alignment: .trailing, spacing: 4) {
-        if let time {
-          ChatTimeText(time: time)
-            .font(.caption)
-            .foregroundStyle(unread > 0 ? Color.accentColor : Color.secondary)
-        }
-        HStack(spacing: 4) {
-          if hasUrgent {
-            Image(systemName: "exclamationmark.circle.fill")
-              .foregroundStyle(.red)
-              .help("Urgent message waiting")
-              .accessibilityLabel("Urgent message waiting")
-          }
-          if unread > 0 {
-            Text("\(unread)")
-              .font(.caption2.weight(.semibold))
-              .monospacedDigit()
-              .foregroundStyle(.white)
-              .padding(.horizontal, 6)
-              .padding(.vertical, 1)
-              .background(Color.accentColor, in: Capsule())
-              .accessibilityLabel("\(unread) unread")
-          }
-        }
-        .frame(height: 16)
-      }
-    }
-    .padding(.vertical, 4)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .contentShape(Rectangle())
-    .accessibilityElement(children: .combine)
-  }
-}
-
-/// Today as a clock time, yesterday by name, older days as a short date.
-struct ChatTimeText: View {
-  let time: Date
-
-  var body: some View {
-    let calendar = Calendar.current
-    if calendar.isDateInToday(time) {
-      Text(time.formatted(date: .omitted, time: .shortened))
-    } else if calendar.isDateInYesterday(time) {
-      Text("Yesterday")
-    } else {
-      Text(time.formatted(.dateTime.day().month(.abbreviated)))
-    }
   }
 }

@@ -3,7 +3,7 @@ import ImageIO
 import NtfyAppLogic
 import SwiftUI
 
-/// The attachment of a message, inline in its bubble: facts, a button to fetch it, then a
+/// The attachment of a message, in the detail pane: facts, a button to fetch it, then a
 /// preview and the file actions once it is local. A click on the preview opens Quick Look.
 struct AttachmentPreview: View {
   let model: HistoryModel

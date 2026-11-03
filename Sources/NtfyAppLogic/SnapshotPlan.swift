@@ -12,7 +12,19 @@ public enum PopoverScenario: String, Sendable, CaseIterable {
 
 /// The states of the History window that are reviewed.
 public enum HistoryScenario: String, Sendable, CaseIterable {
-  case thread, all, empty, sending, failed
+  /// The urgent message with an attachment and actions is selected.
+  case selected
+  /// Nothing is selected.
+  case all
+  /// Priority, date and unread filters are on.
+  case filtered
+  /// A message with a very long title and body is selected.
+  case long
+  /// The filters hide every message.
+  case noMatch
+  case empty
+  /// The New message popover: idle, sending and failed.
+  case newMessage, sending, failed
 }
 
 /// One image of the UI snapshot set: what is drawn and at which size. The app's snapshot build
@@ -91,11 +103,12 @@ public enum SnapshotPlan {
     SnapshotSpec(.popover($0), width: popoverWidth, height: nil)
   }
 
-  /// The thread and the All view at both sizes; the other states at the default size.
+  /// The log with a selection and without, and the filtered one, at both sizes; the other states
+  /// at the default size.
   private static let histories: [SnapshotSpec] = {
     let window = AppWindow.history
-    let both: [HistoryScenario] = [.thread, .all]
-    let defaultOnly: [HistoryScenario] = [.empty, .sending, .failed]
+    let both: [HistoryScenario] = [.selected, .all, .filtered]
+    let defaultOnly: [HistoryScenario] = [.long, .noMatch, .empty, .newMessage, .sending, .failed]
     return both.flatMap { scenario in
       [window.defaultSize, window.minimumSize].map { SnapshotSpec(.history(scenario), size: $0) }
     } + defaultOnly.map { SnapshotSpec(.history($0), size: window.defaultSize) }

@@ -18,7 +18,7 @@ extension AppWindow {
   /// snapshots, so what is reviewed is what ships.
   public var defaultSize: WindowSize {
     switch self {
-    case .history: WindowSize(1000, 700)
+    case .history: WindowSize(1000, 680)
     case .settings: WindowSize(780, 580)
     case .onboarding: WindowSize(520, 420)
     }
@@ -27,7 +27,7 @@ extension AppWindow {
   /// The smallest size the content is laid out for; the window cannot shrink below it.
   public var minimumSize: WindowSize {
     switch self {
-    case .history: WindowSize(720, 480)
+    case .history: WindowSize(760, 480)
     case .settings: WindowSize(680, 480)
     case .onboarding: WindowSize(520, 420)
     }

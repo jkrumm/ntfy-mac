@@ -8,17 +8,17 @@ public enum ComposerState: Sendable, Hashable {
   case failed(String)
 }
 
-/// Whether the composer can be used for the current view.
+/// Whether the composer can be used, and for which topic.
 public enum ComposerAvailability: Sendable, Hashable {
   case ready(topic: String)
-  /// The "All" entry: a message goes to one topic.
-  case needsConversation
+  /// No topic has messages or is subscribed, so there is nowhere to send to.
+  case noTopic
 
   /// What the disabled composer says.
   public var explanation: String? {
     switch self {
     case .ready: nil
-    case .needsConversation: "Pick a conversation to reply. A message goes to one topic."
+    case .noTopic: "There is no topic to send to yet. Subscribe to one in Settings."
     }
   }
 }

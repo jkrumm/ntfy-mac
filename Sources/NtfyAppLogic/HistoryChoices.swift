@@ -16,6 +16,16 @@ public enum HistoryDateFilter: String, Sendable, CaseIterable, Hashable {
     }
   }
 
+  /// The label of the filter control, where the menu lists the full titles.
+  public var shortTitle: String {
+    switch self {
+    case .all: "Any time"
+    case .today: "Today"
+    case .week: "7 days"
+    case .month: "30 days"
+    }
+  }
+
   /// The earliest time to show; nil for everything. "Today" starts at midnight on the calendar's
   /// clock, the others count back from `now`.
   public func start(from now: Date, calendar: Calendar) -> Date? {

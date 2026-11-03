@@ -159,6 +159,8 @@ import Testing
     let monitor = MeetingMonitor(source: slow, clock: clock)
     let started = Task { await monitor.start() }
     #expect(await eventually { clock.sleeperCount >= 1 })
+    // The first reading is under way before the stop, so it is exactly one under any scheduling.
+    #expect(await eventually { slow.reads >= 1 })
     slow.release()
     await monitor.stop()
     await started.value
@@ -174,9 +176,12 @@ import Testing
     source.update(zoom)
     await debounced(reads: 2)
     #expect(await pass(upTo: 10) { await monitor.current().isActive })
-    async let stopping: Void = monitor.stop()
-    async let starting: Void = monitor.start()
-    _ = await (stopping, starting)
+    // The stop's synchronous part (state reset) has run once `current()` reads inactive; only
+    // then does the start overlap the rest of the stop, in a fixed order.
+    let stopping = Task { await monitor.stop() }
+    #expect(await eventually { await monitor.current() == .inactive })
+    await monitor.start()
+    await stopping.value
     #expect(await pass(upTo: 10) { await monitor.current().isActive })
     await monitor.stop()
     #expect(await monitor.current() == .inactive)

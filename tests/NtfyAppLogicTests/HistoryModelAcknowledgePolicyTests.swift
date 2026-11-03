@@ -10,13 +10,13 @@ import Testing
     await rig.add("high", priority: .high)
     await rig.add("urgent", priority: .max)
     await rig.start()
-    let pending = rig.model.thread.filter { rig.model.canAcknowledge($0.detail) }.map(\.key.id)
+    let pending = rig.model.rows.filter { rig.model.canAcknowledge($0) }.map(\.key.id)
     #expect(pending == ["urgent"])
     // The sidebar's urgent marker follows the same threshold, so it can always be cleared.
-    #expect(rig.model.conversation("alerts")?.hasUrgent == true)
+    #expect(rig.model.urgentTopics == ["alerts"])
     await rig.model.acknowledge(MessageKey(topic: "alerts", id: "urgent"))
-    #expect(rig.model.thread.allSatisfy { !rig.model.canAcknowledge($0.detail) })
-    #expect(rig.model.conversation("alerts")?.hasUrgent == false)
+    #expect(rig.model.rows.allSatisfy { !rig.model.canAcknowledge($0) })
+    #expect(rig.model.urgentTopics.isEmpty)
     rig.model.stop()
   }
 
@@ -24,7 +24,7 @@ import Testing
     let rig = HistoryModelRig(pipeline: PipelineFixture(config: Config(reAlertMinPriority: 4)))
     await rig.add("high", priority: .high)
     await rig.start()
-    #expect(rig.model.canAcknowledge(rig.model.thread[0].detail))
+    #expect(rig.model.canAcknowledge(rig.model.rows[0]))
     rig.model.stop()
   }
 }

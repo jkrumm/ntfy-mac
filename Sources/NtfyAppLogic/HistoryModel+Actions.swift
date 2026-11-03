@@ -129,17 +129,17 @@ extension HistoryModel {
   }
 }
 
-/// The attachment previews: fetched on demand, per message, so several can load at once and a
-/// thread scrolling away does not cancel one.
+/// The attachment previews: fetched on demand, per message, so several can load at once and
+/// selecting another message does not cancel one.
 extension HistoryModel {
   public func attachmentState(for key: MessageKey) -> AttachmentState {
     attachments[key] ?? .idle
   }
 
-  /// Starts downloading the message's attachment; `attachments[key]` follows. Does nothing
+  /// Starts downloading the selected message's attachment; `attachments[key]` follows. Does nothing
   /// without one, or while its download runs. An expired attachment fails without a request.
   public func loadAttachment(for key: MessageKey) {
-    guard let file = thread.first(where: { $0.key == key })?.detail.attachment,
+    guard let file = detail.flatMap({ $0.key == key ? $0.attachment : nil }),
       let fetcher = handles?.attachments
     else { return }
     if case .loading = attachmentState(for: key) { return }
