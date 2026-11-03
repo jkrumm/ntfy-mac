@@ -5,7 +5,12 @@ import SwiftUI
 /// server address and token are the one place with an explicit "Test and save".
 struct SettingsWindow: View {
   @Bindable var model: SettingsModel
-  @State private var section = SettingsSection.server
+  @State private var section: SettingsSection
+
+  init(model: SettingsModel, section: SettingsSection = .server) {
+    self.model = model
+    _section = State(initialValue: section)
+  }
 
   var body: some View {
     NavigationSplitView {
@@ -28,10 +33,12 @@ struct SettingsWindow: View {
       }
       .navigationTitle(section.title)
     }
-    .frame(minWidth: 760, minHeight: 500)
+    .frame(minWidth: CGFloat(minimum.width), minHeight: CGFloat(minimum.height))
     .task { model.start() }
     .onDisappear { model.stop() }
   }
+
+  private var minimum: WindowSize { AppWindow.settings.minimumSize }
 
   @ViewBuilder private var detail: some View {
     switch section {

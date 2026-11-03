@@ -5,7 +5,7 @@ MACBOOK := iumac
 MACBOOK_APP := Applications/NtfyMac.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check toolchain format lint-format lint lint-sh analyze build test app package installer-check docs docs-check install-macbook
+.PHONY: check toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
 check: toolchain lint-format lint lint-sh build docs-check test installer-check app
 
@@ -68,6 +68,21 @@ app:
 	scripts/sign.sh $(APP)
 	test -x $(APP)/Contents/MacOS/ntfy-mac
 	$(APP)/Contents/MacOS/ntfy-mac version
+
+# UI snapshots: a review aid, not a test. A separate build of the app with the SNAPSHOT_HARNESS flag (its own
+# derived-data path, so the release app never contains the harness) draws every window and the popover offscreen,
+# in light and dark, into SNAP_DIR. Isolated: temp HOME, in-memory fixtures, no real config, Keychain, network,
+# notifications or windows on screen.
+SNAP_APP := .build/xcode-snap/Build/Products/Release/NtfyMac.app
+SNAP_DIR ?= .build/snapshots
+
+snapshots:
+	cd App && "$$(../$(TOOLS) xcodegen)" generate
+	xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
+		-derivedDataPath .build/xcode-snap SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
+	scripts/sign.sh $(SNAP_APP)
+	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
+		HOME="$$home" CFFIXED_USER_HOME="$$home" $(SNAP_APP)/Contents/MacOS/NtfyMac --ui-snapshot "$(SNAP_DIR)"
 
 # Builds, signs and packages the release assets into dist/. The version must already be stamped into the
 # tree (scripts/stamp-version.sh); package.sh refuses a CLI that reports another version.

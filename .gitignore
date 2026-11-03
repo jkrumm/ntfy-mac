@@ -3,6 +3,8 @@ dist/
 
 # Swift 2.0
 .build/
+# UI snapshots: `make snapshots` writes to .build/snapshots; SNAP_DIR=snapshots at the repo root is ignored too.
+/snapshots/
 App/NtfyMac.xcodeproj
 App/Info.plist
 *.xcuserstate
