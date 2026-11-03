@@ -14,38 +14,51 @@ struct SettingsReAlertSection: View {
             get: { model.config.reAlert }, set: { value in Task { await model.setReAlert(value) } })
         )
         .help(settingCommandHint(.reAlert))
-        Stepper(
-          "\(settingLabel(.reAlertIntervalSeconds)): \(model.config.reAlertIntervalSeconds)",
-          value: Binding(
-            get: { model.config.reAlertIntervalSeconds },
-            set: { value in Task { await model.setReAlertInterval(seconds: value) } }),
-          in: 10...86_400, step: 30
-        )
-        .help(settingCommandHint(.reAlertIntervalSeconds))
-        Picker(
-          settingLabel(.reAlertMinPriority),
-          selection: Binding(
-            get: { model.config.reAlertMinPriority },
-            set: { value in Task { await model.setReAlertMinPriority(value) } })
-        ) {
-          ForEach(SettingsModel.priorities, id: \.self) { value in
-            Text(SettingsModel.priorityTitle(value)).tag(value)
+        LabeledContent(settingLabel(.reAlertMinPriority)) {
+          Picker(
+            settingLabel(.reAlertMinPriority),
+            selection: Binding(
+              get: { model.config.reAlertMinPriority },
+              set: { value in Task { await model.setReAlertMinPriority(value) } })
+          ) {
+            ForEach(SettingsModel.priorities.reversed(), id: \.self) { value in
+              Text(SettingsModel.priorityTitle(value)).tag(value)
+            }
           }
+          .labelsHidden()
+          .fixedSize()
         }
         .help(settingCommandHint(.reAlertMinPriority))
-        Stepper(
-          "\(settingLabel(.reAlertMaxRepeats)): \(model.config.reAlertMaxRepeats)",
-          value: Binding(
-            get: { model.config.reAlertMaxRepeats },
-            set: { value in Task { await model.setReAlertMaxRepeats(value) } }),
-          in: 0...100
-        )
+        LabeledContent(settingLabel(.reAlertIntervalSeconds)) {
+          HStack {
+            Text("\(model.config.reAlertIntervalSeconds) s").monospacedDigit()
+            Stepper(
+              "",
+              value: Binding(
+                get: { model.config.reAlertIntervalSeconds },
+                set: { value in Task { await model.setReAlertInterval(seconds: value) } }),
+              in: 10...86_400, step: 30
+            )
+            .labelsHidden()
+          }
+        }
+        .help(settingCommandHint(.reAlertIntervalSeconds))
+        LabeledContent(settingLabel(.reAlertMaxRepeats)) {
+          HStack {
+            Text("\(model.config.reAlertMaxRepeats)").monospacedDigit()
+            Stepper(
+              "",
+              value: Binding(
+                get: { model.config.reAlertMaxRepeats },
+                set: { value in Task { await model.setReAlertMaxRepeats(value) } }),
+              in: 0...100
+            )
+            .labelsHidden()
+          }
+        }
         .help(settingCommandHint(.reAlertMaxRepeats))
       } footer: {
-        Text(
-          "Messages at or above the minimum priority notify again until you acknowledge them, "
-            + "up to the maximum number of repeats."
-        )
+        Text(model.reAlertSummary)
       }
     }
     .formStyle(.grouped)
