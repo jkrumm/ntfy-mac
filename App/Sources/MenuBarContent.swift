@@ -183,7 +183,7 @@ private struct MessageRowView: View {
     }
     .padding(.horizontal, 6)
     .padding(.vertical, 4)
-    .menuHover()
+    .menuHover(id: row.id)
     .onTapGesture(perform: open)
   }
 

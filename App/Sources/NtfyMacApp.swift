@@ -112,7 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 }
 
-@main
+#if !SNAPSHOT_HARNESS
+  @main
+#endif
 struct NtfyMacApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 

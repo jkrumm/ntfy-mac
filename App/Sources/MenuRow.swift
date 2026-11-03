@@ -6,8 +6,13 @@ import SwiftUI
 /// never moves the layout, and the keyboard focus ring of the underlying control is left alone.
 struct MenuHover: ViewModifier {
   var pressed = false
+  /// Names the row for the UI snapshots, which draw one row as hovered.
+  var rowID: String?
   @State private var hovering = false
   @Environment(\.isEnabled) private var isEnabled
+  #if SNAPSHOT_HARNESS
+    @Environment(\.snapshotHoverID) private var snapshotHoverID
+  #endif
 
   func body(content: Content) -> some View {
     content
@@ -16,30 +21,38 @@ struct MenuHover: ViewModifier {
       .onHover { hovering = $0 }
   }
 
+  private var isHovered: Bool {
+    #if SNAPSHOT_HARNESS
+      if let rowID, rowID == snapshotHoverID { return true }
+    #endif
+    return hovering
+  }
+
   private var fill: Color {
     guard isEnabled else { return .clear }
     let selection = Color(nsColor: .selectedContentBackgroundColor)
     if pressed { return selection.opacity(0.4) }
-    return hovering ? selection.opacity(0.25) : .clear
+    return isHovered ? selection.opacity(0.25) : .clear
   }
 }
 
 extension View {
   /// Hover highlight for a row that is not a `Button` (it holds nested controls of its own).
-  func menuHover() -> some View { modifier(MenuHover()) }
+  func menuHover(id: String? = nil) -> some View { modifier(MenuHover(rowID: id)) }
 }
 
 /// Button style for every actionable popover row. `compact` is for controls that sit inside a
 /// status line rather than in the action list.
 struct MenuRowStyle: ButtonStyle {
   var compact = false
+  var rowID: String?
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, 6)
       .padding(.vertical, compact ? 2 : 4)
-      .modifier(MenuHover(pressed: configuration.isPressed))
+      .modifier(MenuHover(pressed: configuration.isPressed, rowID: rowID))
   }
 }
 
@@ -87,7 +100,7 @@ struct MenuRow<Trailing: View>: View {
     Button(action: action) {
       MenuRowLabel(title: title, systemImage: systemImage) { trailing }
     }
-    .buttonStyle(.menuRow)
+    .buttonStyle(MenuRowStyle(rowID: title))
   }
 }
 

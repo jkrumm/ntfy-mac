@@ -46,6 +46,10 @@ Human checks: never ask the owner to look at the mini's screen. Install on the M
 
 Commits: Conventional Commits (`scripts/check-commit-msg.sh` via lefthook, commitlint in CI; the pre-commit hook lints staged Swift).
 
+## UI snapshots
+
+`make snapshots` builds the app with `SNAPSHOT_HARNESS` (own derived-data path `.build/xcode-snap`, so the release app never contains the harness or its fixtures) and runs it with `--ui-snapshot`: every window and the popover, drawn offscreen over in-memory fixtures in light and dark, into `.build/snapshots/<surface>-<state>-<light|dark>-<WxH>.png` (`SNAP_DIR` overrides it, `SNAP_ONLY=<substring>` draws one entry). It needs no display, permission or real data (temp `HOME`, no config, Keychain, network, notifications or visible windows). Use it to look at a UI change; read the PNGs, there is no golden file and no assertion. What is drawn is `SnapshotPlan` (`Sources/NtfyAppLogic`, a test keeps it covering every window and settings section); the harness code is `App/Sources/Snapshots/`. The sidebar's glass is approximated, because AppKit cannot draw it offscreen.
+
 ## Release process
 
 Manual: Actions, Release, Run workflow (`.github/workflows/release.yml`). Do not tag or publish by hand.
