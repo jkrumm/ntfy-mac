@@ -47,21 +47,25 @@ public struct LegacyInstallCleanup: Sendable {
   private let agents: any LaunchAgentManaging
   private let registry: any LaunchServicesRegistering
   private let processes: any LegacyProcessTerminating
+  private let plists: any LaunchAgentPlistReading
   private let runningExecutable: URL?
   private let processID: Int32
 
   /// - Parameters:
+  ///   - plists: Finds a brew service under a label other than the known ones.
   ///   - runningExecutable: The executable doing the cleanup; never removed.
   ///   - processID: The cleaning process; never signalled.
   public init(
     layout: LegacyInstallLayout, agents: any LaunchAgentManaging,
     registry: any LaunchServicesRegistering, processes: any LegacyProcessTerminating,
+    plists: any LaunchAgentPlistReading = NoLaunchAgentPlists(),
     runningExecutable: URL?, processID: Int32
   ) {
     self.layout = layout
     self.agents = agents
     self.registry = registry
     self.processes = processes
+    self.plists = plists
     self.runningExecutable = runningExecutable?.resolvingSymlinksInPath()
     self.processID = processID
   }
@@ -92,14 +96,7 @@ public struct LegacyInstallCleanup: Sendable {
   // MARK: Inventory
 
   private func inventory(_ scope: Scope) async -> ([Artifact], String?) {
-    var artifacts: [Artifact] = []
-    for label in [LegacyInstallLayout.curlLabel, LegacyInstallLayout.brewLabel] {
-      let plist = layout.plist(label: label)
-      let loaded = await agents.isLoaded(label: label, uid: layout.uid)
-      if loaded || LegacyFiles.exists(plist) {
-        artifacts.append(.service(label: label, plist: plist, loaded: loaded))
-      }
-    }
+    var artifacts = await services()
     let daemon = legacyDaemon()
     if let daemon { artifacts.append(.daemon(pid: daemon.pid)) }
     artifacts += existing(
@@ -119,6 +116,43 @@ public struct LegacyInstallCleanup: Sendable {
     } catch {
       return (artifacts, "Launch Services scan (\(error))")
     }
+  }
+
+  /// The curl agent and both brew service labels, by label and file name; then any other plist
+  /// whose program is the formula's `ntfy-mac`. A plist that is neither is never listed.
+  private func services() async -> [Artifact] {
+    var artifacts: [Artifact] = []
+    var listed: Set<String> = []
+    for label in [LegacyInstallLayout.curlLabel] + LegacyInstallLayout.brewLabels {
+      let plist = layout.plist(label: label)
+      listed.insert(plist.standardized.path)
+      let loaded = await agents.isLoaded(label: label, uid: layout.uid)
+      if loaded || LegacyFiles.exists(plist) {
+        artifacts.append(.service(label: label, plist: plist, loaded: loaded))
+      }
+    }
+    let candidates = plists.plists(in: layout.launchAgents).sorted { $0.file.path < $1.file.path }
+    for candidate in candidates {
+      guard
+        let program = candidate.program, layout.isFormulaProgram(program),
+        listed.insert(candidate.file.standardized.path).inserted
+      else { continue }
+      let label = Self.serviceLabel(of: candidate)
+      let loaded = await agents.isLoaded(label: label, uid: layout.uid)
+      artifacts.append(.service(label: label, plist: candidate.file, loaded: loaded))
+    }
+    return artifacts
+  }
+
+  /// The plist's `Label`, or the file name without `.plist` when it has none or one that could
+  /// not be a plain `gui/<uid>/<label>` target.
+  private static func serviceLabel(of plist: LaunchAgentPlist) -> String {
+    if let label = plist.label, !label.isEmpty, !label.contains("/"),
+      label.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+    {
+      return label
+    }
+    return plist.file.deletingPathExtension().lastPathComponent
   }
 
   private func existing(_ items: [(String, URL)]) -> [Artifact] {
@@ -161,7 +195,7 @@ public struct LegacyInstallCleanup: Sendable {
   private func remove(_ artifact: Artifact) async throws(NtfyError) {
     switch artifact {
     case .service(let label, let plist, let loaded):
-      if loaded { try await agents.bootout(label: label, uid: layout.uid) }
+      if loaded { try await bootoutIfStillLoaded(label) }
       try delete(plist)
     case .daemon(let pid):
       // Launchd may have ended it already, and the pid may have been reused since the scan.
@@ -173,6 +207,16 @@ public struct LegacyInstallCleanup: Sendable {
       try delete(url)
     case .registration(let path):
       try await registry.unregister(path: path)
+    }
+  }
+
+  /// A service that went away between the scan and the bootout (the 1.x daemon stopping
+  /// itself, a brew upgrade) is not a failure.
+  private func bootoutIfStillLoaded(_ label: String) async throws(NtfyError) {
+    do throws(NtfyError) {
+      try await agents.bootout(label: label, uid: layout.uid)
+    } catch {
+      if await agents.isLoaded(label: label, uid: layout.uid) { throw error }
     }
   }
 

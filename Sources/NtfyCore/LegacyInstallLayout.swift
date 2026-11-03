@@ -4,7 +4,12 @@ import Foundation
 /// home directory, so tests point it at a temp directory.
 public struct LegacyInstallLayout: Sendable, Equatable {
   public static let curlLabel = "com.jkrumm.ntfy-mac"
-  public static let brewLabel = "homebrew.mxcl.ntfy-mac"
+  /// What Homebrew 5 and later names a formula's service (`sh.brew.<formula>`).
+  public static let brewLabel = "sh.brew.ntfy-mac"
+  /// What older Homebrew named it (`homebrew.mxcl.<formula>`).
+  public static let oldBrewLabel = "homebrew.mxcl.ntfy-mac"
+  /// Every label a 1.x Homebrew install can have registered, current first.
+  public static let brewLabels = [brewLabel, oldBrewLabel]
   public static let helperName = "ntfy-notify.app"
   public static let formulaName = "ntfy-mac"
   static let logNames = ["ntfy-mac.log", "ntfy-mac-error.log"]
@@ -51,6 +56,26 @@ public struct LegacyInstallLayout: Sendable, Equatable {
 
   var logs: [URL] {
     Self.logNames.map { stateDirectory.appending(path: $0, directoryHint: .notDirectory) }
+  }
+
+  /// Whether `program` (a LaunchAgent's `ProgramArguments[0]`) is the `ntfy-mac` binary inside
+  /// the formula's keg or `opt` link under a Homebrew prefix. Checked as written and with
+  /// symlinks resolved, so an `opt` link and the keg it points at both match, and so does a
+  /// path whose keg is already gone.
+  func isFormulaProgram(_ program: String) -> Bool {
+    guard program.hasPrefix("/") else { return false }
+    let executable = URL(fileURLWithPath: program)
+    guard executable.lastPathComponent == Self.formulaName else { return false }
+    let programs = [executable.standardized.path, executable.resolvingSymlinksInPath().path]
+    var roots: [String] = []
+    for prefix in brewPrefixes {
+      for directory in ["opt", "Cellar"] {
+        let root = prefix.appending(
+          path: "\(directory)/\(Self.formulaName)", directoryHint: .isDirectory)
+        roots += [root.standardized.path, root.resolvingSymlinksInPath().path]
+      }
+    }
+    return programs.contains { program in roots.contains { program.hasPrefix($0 + "/") } }
   }
 
   /// The helper inside each Homebrew keg, plus the `opt` link's when it points somewhere the

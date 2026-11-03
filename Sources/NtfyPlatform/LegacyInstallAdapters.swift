@@ -83,6 +83,32 @@ public struct LaunchctlAgents: LaunchAgentManaging {
   }
 }
 
+/// The LaunchAgent plists of a directory, parsed as property lists.
+public struct LaunchAgentPlistFiles: LaunchAgentPlistReading {
+  /// A real LaunchAgent plist is a few hundred bytes; anything bigger is not worth parsing.
+  private static let maxBytes = 1_000_000
+
+  public init() {}
+
+  public func plists(in directory: URL) -> [LaunchAgentPlist] {
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    return names.filter { $0.hasSuffix(".plist") }.sorted().compactMap { name in
+      let file = directory.appending(path: name, directoryHint: .notDirectory)
+      guard
+        let size = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.size]
+          as? Int, size <= Self.maxBytes,
+        let data = try? Data(contentsOf: file),
+        let root = try? PropertyListSerialization.propertyList(from: data, format: nil)
+          as? [String: Any]
+      else { return nil }
+      let arguments = root["ProgramArguments"] as? [String]
+      return LaunchAgentPlist(
+        file: file, label: root["Label"] as? String,
+        program: arguments?.first ?? root["Program"] as? String)
+    }
+  }
+}
+
 /// `lsregister`, the Launch Services database tool.
 public struct LSRegister: LaunchServicesRegistering {
   static let executable =
@@ -158,6 +184,7 @@ extension LegacyInstallCleanup {
     LegacyInstallCleanup(
       layout: LegacyInstallLayout(home: home, uid: getuid(), stateDirectory: stateDirectory),
       agents: LaunchctlAgents(), registry: LSRegister(), processes: SystemProcesses(),
+      plists: LaunchAgentPlistFiles(),
       runningExecutable: runningExecutable, processID: getpid())
   }
 }

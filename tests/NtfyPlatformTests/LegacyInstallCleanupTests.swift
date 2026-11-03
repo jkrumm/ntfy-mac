@@ -1,12 +1,14 @@
 import Foundation
 import NtfyCore
+import NtfyPlatform
 import NtfyTesting
 import Testing
 
 /// A 1.11 install on disk in a temp HOME, in its curl or brew variant, with fakes for launchd,
 /// Launch Services and process inspection. Nothing here touches the real home or any system tool.
 struct LegacyFixture {
-  enum Variant { case curl, brew }
+  /// `brew` is Homebrew 7 (`sh.brew.ntfy-mac`), `brewOld` the older `homebrew.mxcl.ntfy-mac`.
+  enum Variant { case curl, brew, brewOld }
 
   static let machO = Data([0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0])
 
@@ -34,8 +36,7 @@ struct LegacyFixture {
     let prefix = home.appendingPathComponent("homebrew")
     self.home = home
     self.variant = variant
-    let label =
-      variant == .curl ? LegacyInstallLayout.curlLabel : LegacyInstallLayout.brewLabel
+    let label = variant.label
     let binary =
       variant == .curl
       ? home.appendingPathComponent(".local/bin/ntfy-mac")
@@ -53,9 +54,26 @@ struct LegacyFixture {
     try build(label: label, binary: binary)
   }
 
+  func optPath(_ relative: String) -> String {
+    prefix.appendingPathComponent("opt/\(relative)").path
+  }
+
+  /// A LaunchAgent plist as Homebrew writes it for a `service` block with `keep_alive`.
+  func launchAgentPlist(label: String, program: String) -> String {
+    let lines = [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<plist version=\"1.0\">", "<dict>",
+      "<key>KeepAlive</key>", "<true/>", "<key>Label</key>", "<string>\(label)</string>",
+      "<key>ProgramArguments</key>", "<array>", "<string>\(program)</string>",
+      "<string>start</string>", "</array>", "<key>RunAtLoad</key>", "<true/>", "</dict>",
+      "</plist>",
+    ]
+    return lines.joined(separator: "\n")
+  }
+
   private func build(label: String, binary: URL) throws {
     let plist = home.appendingPathComponent("Library/LaunchAgents/\(label).plist")
-    try write("<plist><dict><key>Label</key><string>\(label)</string></dict></plist>", to: plist)
+    let program = variant == .curl ? binary.path : optPath("ntfy-mac/bin/ntfy-mac")
+    try write(launchAgentPlist(label: label, program: program), to: plist)
     try write(
       "{\"url\":\"https://ntfy.test\"}",
       to: home.appendingPathComponent(".config/ntfy-mac/config.json"))
@@ -76,7 +94,7 @@ struct LegacyFixture {
       ] {
         try write("x", to: helper.appendingPathComponent("Contents/MacOS/ntfy-notify"))
       }
-    case .brew:
+    case .brew, .brewOld:
       try write("x", to: kegHelper.appendingPathComponent("Contents/MacOS/ntfy-notify"))
       let opt = prefix.appendingPathComponent("opt")
       try FileManager.default.createDirectory(at: opt, withIntermediateDirectories: true)
@@ -92,10 +110,12 @@ struct LegacyFixture {
     try Data(text.utf8).write(to: url)
   }
 
-  func cleanup(runningExecutable: URL? = nil, processID: Int32 = 1) -> LegacyInstallCleanup {
+  func cleanup(
+    agents: InMemoryLaunchAgents? = nil, runningExecutable: URL? = nil, processID: Int32 = 1
+  ) -> LegacyInstallCleanup {
     LegacyInstallCleanup(
-      layout: layout, agents: agents, registry: registry, processes: processes,
-      runningExecutable: runningExecutable, processID: processID)
+      layout: layout, agents: agents ?? self.agents, registry: registry, processes: processes,
+      plists: LaunchAgentPlistFiles(), runningExecutable: runningExecutable, processID: processID)
   }
 
   func exists(_ path: String) -> Bool {
@@ -127,9 +147,9 @@ struct LegacyFixture {
           "Launch Services entry: \(path("Applications/ntfy-notify.app"))",
           "Launch Services entry: /Volumes/Old/ntfy-notify.app",
         ].sorted()
-    case .brew:
+    case .brew, .brewOld:
       return [
-        "launch agent homebrew.mxcl.ntfy-mac: \(path("Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist"))",
+        "launch agent \(variant.label): \(path("Library/LaunchAgents/\(variant.label).plist"))",
         "1.x daemon: pid 4242",
         "brew helper app: \(kegHelper.path)",
       ] + logs + temporary
@@ -141,8 +161,18 @@ struct LegacyFixture {
   }
 }
 
+extension LegacyFixture.Variant {
+  var label: String {
+    switch self {
+    case .curl: LegacyInstallLayout.curlLabel
+    case .brew: LegacyInstallLayout.brewLabel
+    case .brewOld: LegacyInstallLayout.oldBrewLabel
+    }
+  }
+}
+
 @Suite struct LegacyInstallCleanupTests {
-  @Test(arguments: [LegacyFixture.Variant.curl, .brew])
+  @Test(arguments: [LegacyFixture.Variant.curl, .brew, .brewOld])
   func removesExactlyTheLegacyArtifacts(variant: LegacyFixture.Variant) async throws {
     let fixture = try LegacyFixture(variant)
     defer { fixture.remove() }
@@ -152,11 +182,12 @@ struct LegacyFixture {
     #expect(report.failed.isEmpty)
     #expect(report.found == fixture.expected)
     #expect(report.removed == fixture.expected)
-    #expect(fixture.agents.bootouts.count == 1)
+    #expect(fixture.agents.bootouts == [variant.label])
     #expect(fixture.processes.terminated == [4242])
     #expect(fixture.registry.unregistered.count == (variant == .curl ? 3 : 2))
     for gone in [
       "Library/LaunchAgents/com.jkrumm.ntfy-mac.plist",
+      "Library/LaunchAgents/sh.brew.ntfy-mac.plist",
       "Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist",
       ".local/bin/ntfy-mac", ".local/share/ntfy-mac/ntfy-mac.log",
       ".local/share/ntfy-mac/ntfy-mac-error.log", ".local/share/ntfy-mac/ntfy-mac.pid",
@@ -171,7 +202,7 @@ struct LegacyFixture {
     #expect(fixture.exists(".local/share/ntfy-mac/.state.json.UUID.tmp"))
   }
 
-  @Test(arguments: [LegacyFixture.Variant.curl, .brew])
+  @Test(arguments: [LegacyFixture.Variant.curl, .brew, .brewOld])
   func aSecondRunFindsAndRemovesNothing(variant: LegacyFixture.Variant) async throws {
     let fixture = try LegacyFixture(variant)
     defer { fixture.remove() }
@@ -186,8 +217,9 @@ struct LegacyFixture {
     #expect(await cleanup.detect().isEmpty)
   }
 
-  @Test func detectListsEverythingAndChangesNothing() async throws {
-    let fixture = try LegacyFixture(.curl)
+  @Test(arguments: [LegacyFixture.Variant.curl, .brew, .brewOld])
+  func detectListsEverythingAndChangesNothing(variant: LegacyFixture.Variant) async throws {
+    let fixture = try LegacyFixture(variant)
     defer { fixture.remove() }
 
     let report = await fixture.cleanup().detect()
@@ -197,8 +229,9 @@ struct LegacyFixture {
     #expect(fixture.agents.bootouts.isEmpty)
     #expect(fixture.processes.terminated.isEmpty)
     #expect(fixture.registry.unregistered.isEmpty)
-    #expect(fixture.exists(".local/bin/ntfy-mac"))
-    #expect(fixture.exists("Library/LaunchAgents/com.jkrumm.ntfy-mac.plist"))
+    #expect(fixture.exists(".local/bin/ntfy-mac") || variant != .curl)
+    #expect(fixture.exists("Library/LaunchAgents/\(variant.label).plist"))
+    #expect(fixture.exists("homebrew/Cellar/ntfy-mac/1.11.0/bin/ntfy-mac") || variant == .curl)
   }
 
   @Test func quickScopeSkipsTheLaunchServicesScan() async throws {

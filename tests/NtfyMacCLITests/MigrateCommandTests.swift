@@ -6,8 +6,10 @@ import Testing
 @Suite struct MigrateCommandTests {
   private let rig = CLIRig()
 
-  private func plantLeftover() throws {
-    try rig.scratch.write("x", to: "Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist")
+  private static let leftover = "Library/LaunchAgents/sh.brew.ntfy-mac.plist"
+
+  private func plantLeftover(_ path: String = leftover) throws {
+    try rig.scratch.write("x", to: path)
   }
 
   @Test func aCleanHomeReportsNothingAndDoctorPasses() async throws {
@@ -31,7 +33,7 @@ import Testing
     #expect((report["removed"] as? [String])?.isEmpty == true)
     #expect(
       FileManager.default.fileExists(
-        atPath: rig.scratch.file("Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist").path))
+        atPath: rig.scratch.file(Self.leftover).path))
   }
 
   @Test func migrateRemovesTheLeftoverAndDoctorWarnsBeforehand() async throws {
@@ -48,6 +50,24 @@ import Testing
     #expect((try result.json()["removed"] as? [String])?.count == 1)
     #expect(
       !FileManager.default.fileExists(
-        atPath: rig.scratch.file("Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist").path))
+        atPath: rig.scratch.file(Self.leftover).path))
+  }
+
+  @Test func theOlderBrewLabelIsStillMigrated() async throws {
+    let older = "Library/LaunchAgents/homebrew.mxcl.ntfy-mac.plist"
+    try plantLeftover(older)
+    let dry = await rig.run("migrate", "--dry-run", "--json")
+    let found = try #require(try dry.json()["found"] as? [String])
+    #expect(found.count == 1 && found[0].hasPrefix("launch agent homebrew.mxcl.ntfy-mac:"))
+
+    let result = await rig.run("migrate", "--json")
+    #expect(result.exit == .success)
+    #expect(!FileManager.default.fileExists(atPath: rig.scratch.file(older).path))
+  }
+
+  @Test func theCurrentBrewLabelIsNamedInTheOutput() async throws {
+    try plantLeftover()
+    let result = await rig.run("migrate", "--dry-run")
+    #expect(result.stdout.contains("Would remove launch agent sh.brew.ntfy-mac:"))
   }
 }
