@@ -26,12 +26,11 @@ struct SettingsMeetingsSection: View {
             set: { value in Task { await model.setMeetingUrgentBypass(value) } })
         )
         .help(settingCommandHint(.meetingUrgentBypass))
-        Text("Urgent (priority 5) messages notify even during a meeting.")
-          .font(.callout).foregroundStyle(.secondary)
       } footer: {
         Text(
           "While a meeting is going on, banners and sounds are held back. Messages are stored, "
-            + "and when the meeting ends they show as one summary."
+            + "and when the meeting ends they show as one summary. With the switch above on, "
+            + "urgent (priority 5) messages notify even during a meeting."
         )
       }
       Section {
@@ -42,20 +41,23 @@ struct SettingsMeetingsSection: View {
             set: { value in Task { await model.setPresenting(value) } })
         )
         .help(settingCommandHint(.presenting))
-        Text(
-          "ntfy-mac cannot tell that you share your screen. Switch this on to hold notifications "
-            + "by hand for one hour, whatever the mode above says."
-        )
-        .font(.callout).foregroundStyle(.secondary)
         Button("Open Notification Settings") {
           if let url = NotificationSettingsLink.displaySharingPane { NSWorkspace.shared.open(url) }
         }
-        Text(
-          "macOS hides banners by itself while the display is shared or mirrored, unless "
-            + "\u{201C}Allow notifications when mirroring or sharing the display\u{201D} is on. "
-            + "Turn it off there."
-        )
-        .font(.callout).foregroundStyle(.secondary)
+      } header: {
+        Text("Presenting")
+      } footer: {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(
+            "ntfy-mac cannot tell that you share your screen. Switch this on to hold "
+              + "notifications by hand for one hour, whatever the mode above says."
+          )
+          Text(
+            "macOS hides banners by itself while the display is shared or mirrored, unless "
+              + "\u{201C}Allow notifications when mirroring or sharing the display\u{201D} is on. "
+              + "Turn it off there."
+          )
+        }
       }
       Section {
         Text(
