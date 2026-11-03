@@ -66,6 +66,9 @@ public struct LegacyInstallCleanup: Sendable {
     self.processID = processID
   }
 
+  /// Homebrew kegs that still hold the 1.x binary. Brew owns them, so cleanup never removes them.
+  public func homebrewV1Kegs() -> [URL] { layout.brewV1Kegs() }
+
   /// What exists, without changing anything.
   public func detect(scope: Scope = .full) async -> LegacyCleanupReport {
     let (artifacts, scanFailure) = await inventory(scope)
@@ -93,12 +96,23 @@ public struct LegacyInstallCleanup: Sendable {
 
   private func inventory(_ scope: Scope) async -> ([Artifact], String?) {
     var artifacts: [Artifact] = []
-    for label in [LegacyInstallLayout.curlLabel, LegacyInstallLayout.brewLabel] {
+    var coveredPlists: Set<String> = []
+    for label in [
+      LegacyInstallLayout.curlLabel, LegacyInstallLayout.brewLabel,
+      LegacyInstallLayout.brewServiceLabel,
+    ] {
       let plist = layout.plist(label: label)
+      coveredPlists.insert(plist.path)
       let loaded = await agents.isLoaded(label: label, uid: layout.uid)
       if loaded || LegacyFiles.exists(plist) {
         artifacts.append(.service(label: label, plist: plist, loaded: loaded))
       }
+    }
+    // A future rename of the service label: any other plist that runs a 1.x binary.
+    for plist in layout.launchAgentPlists() where !coveredPlists.contains(plist.path) {
+      guard let label = legacyServiceLabel(in: plist) else { continue }
+      let loaded = await agents.isLoaded(label: label, uid: layout.uid)
+      artifacts.append(.service(label: label, plist: plist, loaded: loaded))
     }
     let daemon = legacyDaemon()
     if let daemon { artifacts.append(.daemon(pid: daemon.pid)) }
@@ -109,6 +123,7 @@ public struct LegacyInstallCleanup: Sendable {
       artifacts.append(.file(kind: "curl binary", url: layout.curlBinary))
     }
     artifacts += existing(layout.logs.map { ("log", $0) })
+    artifacts += existing(layout.brewLogs().map { ("brew service log", $0) })
     // With a live daemon the pid file goes only after it has been stopped.
     let pidFile = daemon == nil ? [("pid file", layout.pidFile)] : []
     artifacts += existing(pidFile + temporaryFiles().map { ("temporary file", $0) })
@@ -119,6 +134,20 @@ public struct LegacyInstallCleanup: Sendable {
     } catch {
       return (artifacts, "Launch Services scan (\(error))")
     }
+  }
+
+  /// The plist's Label when it names an ntfy-mac service whose program is not inside an `.app`
+  /// bundle (the 2.0 app's own entries point into `NtfyMac.app`). Unreadable plists are skipped.
+  private func legacyServiceLabel(in plist: URL) -> String? {
+    guard
+      let data = try? Data(contentsOf: plist),
+      let object = try? PropertyListSerialization.propertyList(from: data, format: nil),
+      let dictionary = object as? [String: Any],
+      let label = dictionary["Label"] as? String, label.contains("ntfy-mac"),
+      let program = (dictionary["ProgramArguments"] as? [String])?.first,
+      !program.contains(".app/")
+    else { return nil }
+    return label
   }
 
   private func existing(_ items: [(String, URL)]) -> [Artifact] {

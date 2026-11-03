@@ -248,12 +248,23 @@ struct DoctorChecks {
   /// Read-only and quick: no Launch Services scan. `ntfy-mac migrate --dry-run` does the full one.
   private func legacyCheck() async -> DoctorCheck {
     let report = await environment.legacy.detect(scope: .quick)
-    guard !report.found.isEmpty else {
+    let kegs = environment.legacy.homebrewV1Kegs()
+    guard !report.found.isEmpty || !kegs.isEmpty else {
       return DoctorCheck("legacy-install", .passed, "No 1.x leftovers")
     }
+    var details: [String] = []
+    if !report.found.isEmpty { details.append("Remove the leftovers with: ntfy-mac migrate") }
+    if !kegs.isEmpty {
+      details.append(
+        "The 1.x binary is still on PATH via Homebrew: run `brew uninstall ntfy-mac` "
+          + "(config and history stay), then install 2.0 per the README")
+    }
+    let summary =
+      report.found.isEmpty
+      ? "Homebrew still has the 1.x ntfy-mac"
+      : "\(report.found.count) leftover(s) of a 1.x install"
     return DoctorCheck(
-      "legacy-install", .warn, "\(report.found.count) leftover(s) of a 1.x install",
-      detail: "Remove them with: ntfy-mac migrate")
+      "legacy-install", .warn, summary, detail: details.joined(separator: ". "))
   }
 
   private func duplicateCheck() -> DoctorCheck {

@@ -5,6 +5,8 @@ import Foundation
 public struct LegacyInstallLayout: Sendable, Equatable {
   public static let curlLabel = "com.jkrumm.ntfy-mac"
   public static let brewLabel = "homebrew.mxcl.ntfy-mac"
+  /// Homebrew 7 renamed services from `homebrew.mxcl.<name>` to `sh.brew.<name>`.
+  public static let brewServiceLabel = "sh.brew.ntfy-mac"
   public static let helperName = "ntfy-notify.app"
   public static let formulaName = "ntfy-mac"
   static let logNames = ["ntfy-mac.log", "ntfy-mac-error.log"]
@@ -33,6 +35,36 @@ public struct LegacyInstallLayout: Sendable, Equatable {
     userApplications = home.appending(path: "Applications", directoryHint: .isDirectory)
     curlBinary = home.appending(path: ".local/bin/ntfy-mac", directoryHint: .notDirectory)
     self.brewPrefixes = brewPrefixes
+  }
+
+  /// Plists in `~/Library/LaunchAgents`, sorted by name.
+  func launchAgentPlists() -> [URL] {
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: launchAgents.path)) ?? []
+    return names.sorted().filter { $0.hasSuffix(".plist") }.map {
+      launchAgents.appending(path: $0, directoryHint: .notDirectory)
+    }
+  }
+
+  /// The Homebrew service logs (`<prefix>/var/log/ntfy-mac[-error].log`) that exist.
+  func brewLogs() -> [URL] {
+    brewPrefixes.flatMap { prefix in
+      Self.logNames.map {
+        prefix.appending(path: "var/log/\($0)", directoryHint: .notDirectory)
+      }
+    }.filter(LegacyFiles.exists)
+  }
+
+  /// Kegs with the 1.x layout: a `bin/ntfy-mac` and no `NtfyMac.app` (the 2.0 formula ships the app).
+  public func brewV1Kegs() -> [URL] {
+    let manager = FileManager.default
+    return brewPrefixes.flatMap { prefix -> [URL] in
+      let cellar = prefix.appending(path: "Cellar/\(Self.formulaName)", directoryHint: .isDirectory)
+      let versions = (try? manager.contentsOfDirectory(atPath: cellar.path))?.sorted() ?? []
+      return versions.map { cellar.appending(path: $0, directoryHint: .isDirectory) }.filter {
+        LegacyFiles.exists($0.appending(path: "bin/ntfy-mac", directoryHint: .notDirectory))
+          && !LegacyFiles.exists($0.appending(path: "NtfyMac.app", directoryHint: .isDirectory))
+      }
+    }
   }
 
   public func plist(label: String) -> URL {

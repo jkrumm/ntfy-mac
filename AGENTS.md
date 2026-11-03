@@ -72,7 +72,7 @@ Every setting the UI exposes is a row in `SettingsCatalog` (`Sources/NtfyCore/Se
 - State `~/.local/share/ntfy-mac/state.json` (`lastMessageId` cursor carries over).
 - Every 1.x command and flag: `setup [--url --token]`, `doctor [--json]`, `subscribe [topic|reset]`, `unsubscribe`, `config [sounds|dismiss] [show|list|set|reset]`, `notify (-m -t -p --tag --url -d | --json)`, `sounds [filter]`, `logs [--error]`, `update`, `uninstall`, `version`, `start`.
 - Formula name `jkrumm/tap/ntfy-mac`; the priority mapping table in the README.
-- Old artifacts removed on migration: `com.jkrumm.ntfy-mac` LaunchAgent, `homebrew.mxcl.ntfy-mac` service, `ntfy-notify.app` and its Launch Services entries.
+- Old artifacts removed on migration: `com.jkrumm.ntfy-mac` LaunchAgent, the brew service (`homebrew.mxcl.ntfy-mac`, `sh.brew.ntfy-mac` on Homebrew 7, or any other `~/Library/LaunchAgents` plist whose Label contains `ntfy-mac` and whose program is outside an `.app`; booted out by the plist's own Label), the brew service logs (`<prefix>/var/log/ntfy-mac*.log`), `ntfy-notify.app` and its Launch Services entries.
 
 ## Dev server
 

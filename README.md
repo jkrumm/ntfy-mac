@@ -71,7 +71,7 @@ Keep one copy of `NtfyMac.app`. A Homebrew copy and a curl copy share a bundle i
 
 ### Upgrading from 1.x
 
-Nothing to reconfigure. Install 2.0 over the old version (any of the methods above). The first launch, or `ntfy-mac migrate`, stops and removes the 1.x daemon, its LaunchAgent or brew service and `ntfy-notify.app`, keeps your config and the message cursor, and moves the token into the Keychain. macOS ties notification permission to the app's bundle id, which changed, so allow notifications once more when the app asks. If you installed 1.x with curl, 2.0 replaces `~/.local/bin/ntfy-mac` with a link into the app.
+Nothing to reconfigure. Install 2.0 over the old version (any of the methods above). The first launch, or `ntfy-mac migrate`, stops and removes the 1.x daemon, its LaunchAgent or brew service (and the service logs) and `ntfy-notify.app`, keeps your config and the message cursor, and moves the token into the Keychain. macOS ties notification permission to the app's bundle id, which changed, so allow notifications once more when the app asks. If Homebrew still has the 1.x formula, `ntfy-mac doctor` says so: run `brew uninstall ntfy-mac` (config and history stay), then install 2.0. If you installed 1.x with curl, 2.0 replaces `~/.local/bin/ntfy-mac` with a link into the app.
 
 ---
 
