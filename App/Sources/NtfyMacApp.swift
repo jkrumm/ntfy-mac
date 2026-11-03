@@ -131,13 +131,14 @@ struct NtfyMacApp: App {
     Window(AppWindow.history.title, id: AppWindow.history.rawValue) {
       HistoryWindow(model: delegate.historyModel, windows: delegate.windows)
     }
-    .defaultSize(width: 1000, height: 640)
+    .defaultSize(AppWindow.history.defaultSize)
     .defaultLaunchBehavior(.suppressed)
     .restorationBehavior(.disabled)
 
     Window(AppWindow.settings.title, id: AppWindow.settings.rawValue) {
       SettingsWindow(model: delegate.settingsModel)
     }
+    .defaultSize(AppWindow.settings.defaultSize)
     .defaultLaunchBehavior(.suppressed)
     .restorationBehavior(.disabled)
     .commands {

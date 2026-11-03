@@ -72,29 +72,40 @@ struct AttachmentPreview: View {
       }
       .buttonStyle(.plain)
       .help("Quick Look")
-      HStack {
-        Button {
-          quickLook = url
-        } label: {
-          Label("Quick Look", systemImage: "eye")
-        }
-        Button {
-          NSWorkspace.shared.activateFileViewerSelecting([url])
-        } label: {
-          Label("Reveal in Finder", systemImage: "folder")
-        }
-        Button {
-          Task {
-            do { try await HistoryFiles.saveCopy(of: url, named: file.name) } catch {
-              report("The attachment could not be saved: \(error.localizedDescription)")
-            }
-          }
-        } label: {
-          Label("Save As…", systemImage: "square.and.arrow.down")
-        }
+      // Whole labels while they fit, else icons with the label as help: a label never truncates.
+      ViewThatFits(in: .horizontal) {
+        fileActions(url).fixedSize()
+        fileActions(url).labelStyle(.iconOnly).fixedSize()
       }
-      .controlSize(.small)
     }
+  }
+
+  private func fileActions(_ url: URL) -> some View {
+    HStack {
+      Button {
+        quickLook = url
+      } label: {
+        Label("Quick Look", systemImage: "eye")
+      }
+      .help("Quick Look")
+      Button {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+      } label: {
+        Label("Reveal in Finder", systemImage: "folder")
+      }
+      .help("Reveal in Finder")
+      Button {
+        Task {
+          do { try await HistoryFiles.saveCopy(of: url, named: file.name) } catch {
+            report("The attachment could not be saved: \(error.localizedDescription)")
+          }
+        }
+      } label: {
+        Label("Save As…", systemImage: "square.and.arrow.down")
+      }
+      .help("Save a copy")
+    }
+    .controlSize(.small)
   }
 
   private var facts: String {

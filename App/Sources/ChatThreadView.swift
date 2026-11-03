@@ -49,7 +49,7 @@ struct ChatThreadView: View {
   private var thread: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(spacing: 6, pinnedViews: [.sectionHeaders]) {
+        LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
           if model.hasMore {
             ProgressView()
               .controlSize(.small)
@@ -70,8 +70,8 @@ struct ChatThreadView: View {
           }
           Color.clear.frame(height: 1).id(Self.bottomID)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
       }
       .id(model.selectedTopic ?? "")
       .defaultScrollAnchor(.bottom)
@@ -180,8 +180,8 @@ struct ChatHeader: View {
           .controlSize(.small)
       }
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 8)
+    .padding(.horizontal, 20)
+    .padding(.vertical, 10)
     .background(.bar)
   }
 

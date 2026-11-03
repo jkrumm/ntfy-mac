@@ -165,14 +165,15 @@ private struct MessageRowView: View {
           .fontWeight(row.isRead ? .regular : .semibold)
           .lineLimit(1)
         HStack(spacing: 4) {
-          Text(row.topic)
+          // A long topic gives way; the age stays whole.
+          Text(row.topic).lineLimit(1)
           Text("·")
-          Text(row.time, style: .relative)
-          Text("ago")
+          Text(row.time, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+            .lineLimit(1)
+            .fixedSize()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
       }
       Spacer(minLength: 4)
       if showsAcknowledge {
