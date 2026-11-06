@@ -14,6 +14,8 @@ struct AppServices: Sendable {
   let windows: WindowRouter
   /// The meeting detection, which runs only while the meeting mode is on.
   let meeting: MeetingMonitor
+  /// The entitlements the app was signed with; time-sensitive needs one.
+  let entitlements: any EntitlementProbing
 }
 
 /// Everything that runs for one resolved configuration: store, delivery, response handling and
@@ -46,6 +48,7 @@ final class AppPipeline: Sendable {
       server: settings?.origin ?? localOrigin, clock: services.clock)
     let poster = UserNotificationPoster(
       center: services.center, images: images(settings: settings),
+      entitlements: services.entitlements,
       log: { log.info("\($0, privacy: .private)") })
     let delivery = DeliveryService(
       poster: poster, history: store, inbox: store, config: services.config,

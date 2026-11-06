@@ -125,12 +125,11 @@ extension CommandSpec {
       "logs", errors: ["logs-failed"], domains: ["--last": .duration],
       examples: ["ntfy-mac logs --last 1h", "ntfy-mac logs --error --follow"]),
     CommandSpec(
-      "update",
+      "update", app: .launches, note: "Only for a copy that Homebrew does not manage.",
       errors: [
-        "update-unsupported", "update-disabled", "update-not-writable", "update-invalid",
-        "checksum-mismatch", "update-failed", "server-unreachable",
+        "app-unavailable", "app-outdated", "internal", "update-failed", "server-unreachable",
       ],
-      examples: ["ntfy-mac update --check", "ntfy-mac update"]),
+      examples: ["ntfy-mac update --check", "ntfy-mac update", "ntfy-mac update --check --json"]),
     CommandSpec(
       "uninstall", app: .optional, files: true, errors: ["cancelled"],
       examples: ["ntfy-mac uninstall --yes"]),
@@ -255,19 +254,6 @@ enum ErrorCatalog {
     Entry(code: "cancelled", exitCode: 1, meaning: "The user declined the confirmation."),
     Entry(code: "setup-cancelled", exitCode: 1, meaning: "The setup wizard was cancelled."),
     Entry(code: "logs-failed", exitCode: 1, meaning: "The log tool failed."),
-    Entry(code: "update-unsupported", exitCode: 1, meaning: "This install cannot update itself."),
-    Entry(
-      code: "update-disabled", exitCode: 1,
-      meaning: "Self-update is turned off by NTFY_MAC_NO_SELF_UPDATE=1."),
-    Entry(
-      code: "update-not-writable", exitCode: 1,
-      meaning: "The folder that holds NtfyMac.app is not writable."),
-    Entry(
-      code: "update-invalid", exitCode: 1,
-      meaning: "The downloaded release failed verification; nothing was installed."),
-    Entry(
-      code: "checksum-mismatch", exitCode: 1,
-      meaning: "The download does not match the release's SHA256SUMS; nothing was installed."),
     Entry(code: "update-failed", exitCode: 1, meaning: "The upgrade failed."),
     Entry(code: "error", exitCode: 1, meaning: "Any other failure."),
   ]

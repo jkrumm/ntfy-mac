@@ -45,7 +45,7 @@ extension ReadmeInvocation {
     // Operations
     ReadmeInvocation(args: ["logs"]),
     ReadmeInvocation(args: ["logs", "--error"]),
-    ReadmeInvocation(args: ["update"], expectedExit: .runtime),
+    ReadmeInvocation(args: ["update"]),
     ReadmeInvocation(args: ["uninstall"], interactive: (["y"], [])),
     ReadmeInvocation(args: ["version"]),
     ReadmeInvocation(args: ["help"]),

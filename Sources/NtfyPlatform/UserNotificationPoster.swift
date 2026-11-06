@@ -20,6 +20,7 @@ public actor UserNotificationPoster: NotificationPoster {
 
   private let center: any NotificationCenterClient
   private let images: any ImageFetching
+  private let timeSensitiveAllowed: Bool
   private let log: @Sendable (String) -> Void
 
   private var categories: [String: NotificationCategorySpec] = [:]
@@ -29,10 +30,12 @@ public actor UserNotificationPoster: NotificationPoster {
 
   public init(
     center: any NotificationCenterClient, images: any ImageFetching,
+    entitlements: any EntitlementProbing,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.center = center
     self.images = images
+    timeSensitiveAllowed = entitlements.holds(.timeSensitiveNotifications)
     self.log = log
   }
 
@@ -40,7 +43,8 @@ public actor UserNotificationPoster: NotificationPoster {
     var file: URL?
     if let imageURL = content.imageURL { file = await images.fetch(imageURL) }
     if content.imageURL != nil, file == nil { log("image not attached to \(content.identifier)") }
-    let spec = UserNotificationMapper.spec(for: content, attachment: file)
+    let spec = UserNotificationMapper.spec(
+      for: content, attachment: file, timeSensitiveAllowed: timeSensitiveAllowed)
 
     await enterGate()
     defer { leaveGate() }

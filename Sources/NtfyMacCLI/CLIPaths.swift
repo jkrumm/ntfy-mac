@@ -51,6 +51,10 @@ struct CLIPaths: Sendable, Hashable {
   var dataDirectory: URL {
     applicationSupport.appending(path: StoreLocation.directoryName, directoryHint: .isDirectory)
   }
+  /// The Team ID the app recorded on its first Developer-ID-signed run.
+  var teamPinFile: URL {
+    FileTeamPinStore.defaultURL(applicationSupport: applicationSupport)
+  }
   var socket: URL { SocketPath.default(applicationSupport: applicationSupport) }
   var databaseURL: URL { StoreLocation.databaseURL(applicationSupport: applicationSupport) }
 

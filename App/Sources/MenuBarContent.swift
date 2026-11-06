@@ -8,6 +8,7 @@ struct MenuBarContent: View {
   let model: AppModel
   let windows: WindowRouter
   let coordinator: WindowCoordinator
+  let updates: UpdateMenuModel
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
@@ -90,6 +91,26 @@ struct MenuBarContent: View {
     }
   }
 
+  @ViewBuilder private var updateRow: some View {
+    switch updates.state {
+    case .hidden:
+      EmptyView()
+    case .blocked(let reason):
+      Label(reason, systemImage: "arrow.triangle.2.circlepath")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    case .ready:
+      MenuRow("Check for Updates…", systemImage: "arrow.triangle.2.circlepath") { updates.check() }
+    case .available(let version):
+      MenuRow("Update available: \(version)", systemImage: "arrow.down.circle.fill") {
+        updates.check()
+      }
+    }
+  }
+
   private var actions: some View {
     VStack(alignment: .leading, spacing: 2) {
       statusRows
@@ -106,6 +127,7 @@ struct MenuBarContent: View {
       MenuPauseRow(model: model)
       MenuRow("Open History", systemImage: "clock") { coordinator.show(.history) }
       MenuRow("Settings…", systemImage: "gearshape") { coordinator.show(.settings) }
+      updateRow
       MenuRow("Quit ntfy-mac", systemImage: "power") { NSApp.terminate(nil) }
     }
   }

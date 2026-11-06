@@ -24,7 +24,10 @@ actor AppController: PipelineSource {
   private var permissionTask: Task<Void, Never>?
   private var ipc: IPCServer?
 
-  init(router: ResponseRouter, windows: WindowRouter) {
+  private let updates: any UpdateControlling
+
+  init(router: ResponseRouter, windows: WindowRouter, updates: any UpdateControlling) {
+    self.updates = updates
     services = AppServices(
       config: FileConfigStore(),
       center: LiveNotificationCenter(log: { Log.logger(.delivery).info("\($0, privacy: .private)") }
@@ -32,7 +35,8 @@ actor AppController: PipelineSource {
       router: router, clock: SystemClock(), windows: windows,
       meeting: MeetingMonitor(
         source: SystemMeetingSignalSource(), clock: SystemClock(),
-        log: { Log.logger(.meeting).info("\($0, privacy: .private)") }))
+        log: { Log.logger(.meeting).info("\($0, privacy: .private)") }),
+      entitlements: ProcessEntitlements())
   }
 
   private var isActive: Bool { lifecycle == .starting || lifecycle == .running }
@@ -93,6 +97,7 @@ actor AppController: PipelineSource {
       pipeline: { await self.runningPipeline()?.handles }, config: services.config,
       permissions: UserNotificationPermissionProvider(center: services.center),
       clock: services.clock, loginItem: SMAppServiceLoginItem(), meeting: services.meeting,
+      updates: updates,
       log: { log.error("\($0, privacy: .public)") })
     let server = IPCServer(
       path: SocketPath.default(applicationSupport: AppPipeline.applicationSupport()),

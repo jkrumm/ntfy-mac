@@ -1,10 +1,9 @@
 import Foundation
 import NtfyCore
 
-/// The newest published release: its tag and its assets' download URLs by file name.
+/// The newest published release.
 struct LatestRelease: Sendable, Equatable {
   var tag: String
-  var assets: [String: URL] = [:]
 
   /// The tag without its `v` (`2.1.0`).
   var version: String { tag.hasPrefix("v") ? String(tag.dropFirst()) : tag }
@@ -15,24 +14,10 @@ protocol ReleaseLookup: Sendable {
   func latest() async throws(NtfyError) -> LatestRelease
 }
 
-private struct ReleaseAsset: Decodable {
-  let name: String
-  let url: URL
-
-  private enum CodingKeys: String, CodingKey {
-    case name
-    case url = "browser_download_url"
-  }
-}
-
 private struct Release: Decodable {
   let tagName: String?
-  let assets: [ReleaseAsset]?
 
-  private enum CodingKeys: String, CodingKey {
-    case tagName = "tag_name"
-    case assets
-  }
+  private enum CodingKeys: String, CodingKey { case tagName = "tag_name" }
 }
 
 struct GitHubReleases: ReleaseLookup {
@@ -58,9 +43,7 @@ struct GitHubReleases: ReleaseLookup {
     else {
       throw .invalidResponse("the latest release has no tag")
     }
-    let assets = (release.assets ?? []).map { ($0.name, $0.url) }
-    return LatestRelease(
-      tag: tag, assets: Dictionary(assets, uniquingKeysWith: { first, _ in first }))
+    return LatestRelease(tag: tag)
   }
 }
 

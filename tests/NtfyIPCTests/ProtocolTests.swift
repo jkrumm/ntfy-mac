@@ -27,6 +27,8 @@ import Testing
       Request(id: "9", command: .loginItem, loginItem: LoginItemPayload(action: .enable)),
       Request(id: "10", command: .delete, delete: DeletePayload(topic: "t", id: "m")),
       Request(id: "11", command: .delete, delete: DeletePayload(topic: "t")),
+      Request(id: "12", command: .update, update: UpdatePayload(check: true)),
+      Request(id: "13", command: .update, update: UpdatePayload(check: false)),
     ]
     #expect(Set(requests.map(\.command)) == Set(Command.allCases))
     for request in requests { #expect(try roundTrip(request) == request) }
@@ -42,7 +44,10 @@ import Testing
       result: ResultPayload(
         status: status, notify: NotifyResult(posted: true), permission: permission,
         ackAll: AckAllResult(acknowledged: 3), loginItem: LoginItemResult(state: "enabled"),
-        delete: DeleteResult(deleted: 2))
+        delete: DeleteResult(deleted: 2),
+        update: UpdateStatusPayload(
+          channel: "direct", currentVersion: "2.0.0", latestVersion: "2.1.0",
+          updateAvailable: true, reason: "team-mismatch"))
     )
     #expect(try roundTrip(success) == success)
     let failed = Response.failure(id: "2", code: .permissionDenied, message: "no")
@@ -65,6 +70,13 @@ import Testing
     let request = try NDJSON.decode(Request.self, from: line)
     #expect(request.delete == nil)
     #expect(request.ack == MessageTarget(topic: "t", id: "m"))
+  }
+
+  @Test func anUpdateStatusNeedsNoLatestVersionOrReason() throws {
+    let line = Data(
+      #"{"channel":"direct","currentVersion":"2.0.0","updateAvailable":false}"#.utf8)
+    let status = try JSONDecoder().decode(UpdateStatusPayload.self, from: line)
+    #expect(status == UpdateStatusPayload(channel: "direct", currentVersion: "2.0.0"))
   }
 
   @Test func notifyNeedsOnlyABody() throws {

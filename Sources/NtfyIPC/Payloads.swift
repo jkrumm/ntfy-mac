@@ -55,6 +55,35 @@ public struct DeleteResult: Codable, Sendable, Hashable {
   public init(deleted: Int) { self.deleted = deleted }
 }
 
+public struct UpdatePayload: Codable, Sendable, Hashable {
+  /// Only look for an update, without any window; false starts the interactive update flow.
+  public let check: Bool
+
+  public init(check: Bool) { self.check = check }
+}
+
+/// Mirrors `NtfyCore.UpdateStatus`; the raw strings are the stable names.
+public struct UpdateStatusPayload: Codable, Sendable, Hashable {
+  /// `homebrew` or `direct`.
+  public let channel: String
+  public let currentVersion: String
+  public let latestVersion: String?
+  public let updateAvailable: Bool
+  /// Why updating is not possible: `homebrew`, `unsigned`, `disabled` or `team-mismatch`.
+  public let reason: String?
+
+  public init(
+    channel: String, currentVersion: String, latestVersion: String? = nil,
+    updateAvailable: Bool = false, reason: String? = nil
+  ) {
+    self.channel = channel
+    self.currentVersion = currentVersion
+    self.latestVersion = latestVersion
+    self.updateAvailable = updateAvailable
+    self.reason = reason
+  }
+}
+
 public struct LoginItemPayload: Codable, Sendable, Hashable {
   public enum Action: String, Codable, Sendable {
     /// Only read the state.
@@ -194,10 +223,12 @@ public struct ResultPayload: Codable, Sendable, Hashable {
   public let ackAll: AckAllResult?
   public let loginItem: LoginItemResult?
   public let delete: DeleteResult?
+  public let update: UpdateStatusPayload?
 
   public init(
     status: StatusResult? = nil, notify: NotifyResult? = nil, permission: PermissionSummary? = nil,
-    ackAll: AckAllResult? = nil, loginItem: LoginItemResult? = nil, delete: DeleteResult? = nil
+    ackAll: AckAllResult? = nil, loginItem: LoginItemResult? = nil, delete: DeleteResult? = nil,
+    update: UpdateStatusPayload? = nil
   ) {
     self.status = status
     self.notify = notify
@@ -205,5 +236,6 @@ public struct ResultPayload: Codable, Sendable, Hashable {
     self.ackAll = ackAll
     self.loginItem = loginItem
     self.delete = delete
+    self.update = update
   }
 }

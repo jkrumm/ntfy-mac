@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import NtfyCore
 
 struct DoctorCommand: CLICommand {
   static let configuration = CommandConfiguration(
@@ -15,7 +16,7 @@ struct DoctorCommand: CLICommand {
   func execute(_ environment: CLIEnvironment, _ out: Output) async throws {
     let checks = await DoctorChecks(environment: environment).run(sendTest: sendTest)
     let report = DoctorReport(
-      installMethod: InstallMethod.detect(executablePath: environment.executablePath),
+      installChannel: InstallChannel.detect(executablePath: environment.executablePath),
       checks: checks)
     out.result(report, text: report.text())
     if report.exit != .success { throw ExitRequest(exit: report.exit) }

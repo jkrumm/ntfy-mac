@@ -7,6 +7,8 @@ import Testing
 @Suite struct OperationsCommandTests {
   // MARK: update
 
+  private let brewPath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
+
   @Test func aBrewInstallRunsBrewUpgrade() async {
     var rig = CLIRig()
     rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
@@ -29,6 +31,7 @@ import Testing
 
   @Test func checkReportsANewerRelease() async throws {
     var rig = CLIRig()
+    rig.executablePath = brewPath
     rig.releases = FakeReleases(tag: "v9.0.0")
     let result = await rig.run("update", "--check", "--json")
     #expect(result.exit == .success)
@@ -39,12 +42,14 @@ import Testing
 
   @Test func checkReportsUpToDate() async {
     var rig = CLIRig()
+    rig.executablePath = brewPath
     rig.releases = FakeReleases(tag: "v\(Version.current)")
     #expect(await rig.run("update", "--check").stdout.contains("Up to date"))
   }
 
   @Test func checkFailsWithSevenWhenGitHubIsUnreachable() async {
     var rig = CLIRig()
+    rig.executablePath = brewPath
     rig.releases = FakeReleases(failure: .serverUnreachable)
     #expect(await rig.run("update", "--check").exit == .serverUnreachable)
   }

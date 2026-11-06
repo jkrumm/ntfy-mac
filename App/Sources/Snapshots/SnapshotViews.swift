@@ -15,10 +15,13 @@
       switch target {
       case .popover(let scenario):
         AnyView(
-          MenuBarContent(model: world.app, windows: world.windows, coordinator: world.coordinator)
-            .environment(\.snapshotHoverID, scenario == .hover ? hoveredRow : nil)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)))
+          MenuBarContent(
+            model: world.app, windows: world.windows, coordinator: world.coordinator,
+            updates: UpdateMenuModel()
+          )
+          .environment(\.snapshotHoverID, scenario == .hover ? hoveredRow : nil)
+          .background(Color(nsColor: .windowBackgroundColor))
+          .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)))
       case .history(let scenario):
         AnyView(
           HistoryWindow(model: world.history, windows: world.windows)

@@ -7,9 +7,10 @@ import Testing
 
 @Suite struct UserNotificationPosterTests {
   private func poster(
-    _ center: FakeNotificationCenter, images: StubImageFetcher = StubImageFetcher()
+    _ center: FakeNotificationCenter, images: StubImageFetcher = StubImageFetcher(),
+    entitlements: FixedEntitlements = FixedEntitlements([.timeSensitiveNotifications])
   ) -> UserNotificationPoster {
-    UserNotificationPoster(center: center, images: images)
+    UserNotificationPoster(center: center, images: images, entitlements: entitlements)
   }
 
   /// Polls in real time: yielding a fixed number of times proves nothing on a busy pool.
@@ -34,6 +35,22 @@ import Testing
     #expect(calls == [.remove(["alerts/abc12345"]), .setCategories, .add("alerts/abc12345")])
     let registered = await center.registered
     #expect(registered.map(\.identifier) == ["ntfy:alerts/abc12345"])
+  }
+
+  @Test func timeSensitiveIsKeptOnlyWithTheEntitlement() async throws {
+    let urgent = NotificationFixtures.content(NotificationFixtures.message(priority: .max))
+    let granted = FakeNotificationCenter()
+    try await poster(granted).post(urgent)
+    #expect(await granted.added.first?.interruption == .timeSensitive)
+
+    let missing = FakeNotificationCenter()
+    try await poster(missing, entitlements: FixedEntitlements()).post(urgent)
+    #expect(await missing.added.first?.interruption == .active)
+
+    let plain = FakeNotificationCenter()
+    try await poster(plain, entitlements: FixedEntitlements()).post(
+      NotificationFixtures.content(NotificationFixtures.message(priority: .low)))
+    #expect(await plain.added.first?.interruption == .active)
   }
 
   @Test func postingAgainReplacesTheDeliveredOne() async throws {

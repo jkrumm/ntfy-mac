@@ -22,12 +22,35 @@ import Testing
     let report = try result.json()
     #expect(report["ok"] as? Bool == true)
     #expect(report["version"] as? String == Version.current)
-    #expect(report["installMethod"] as? String == "app")
+    #expect(report["installChannel"] as? String == "direct")
     let status = try checks(result)
-    for name in ["config", "token", "server", "auth", "topics", "app", "permissions", "login-item"]
-    {
+    for name in [
+      "config", "token", "server", "auth", "topics", "app", "permissions", "login-item", "update",
+    ] {
       #expect(status[name] == "ok", "\(name)")
     }
+  }
+
+  @Test func theUpdateCheckSaysWhoUpdatesAndWhy() async throws {
+    let signed = SigningInfo(teamID: "TEAM000001", hardenedRuntime: true, developerID: true)
+    var rig = CLIRig()
+    #expect(try checks(await rig.run("doctor", "--json"))["update"] == "ok")
+
+    rig.signing = signed
+    let active = await rig.run("doctor").stdout
+    #expect(active.contains("Updates through the app"))
+    #expect(active.contains("Developer ID: yes, Hardened runtime: yes, Team pin: not recorded"))
+
+    rig.recordedTeam = "TEAM000002"
+    let mismatch = await rig.run("doctor", "--json")
+    #expect(try checks(mismatch)["update"] == "warn")
+    #expect(mismatch.exit == .success)
+
+    rig.recordedTeam = "TEAM000001"
+    #expect(await rig.run("doctor").stdout.contains("Team pin: matches"))
+
+    rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
+    #expect(await rig.run("doctor").stdout.contains("Updated by Homebrew"))
   }
 
   @Test func doctorIsReadOnly() async {

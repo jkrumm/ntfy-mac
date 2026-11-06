@@ -36,6 +36,9 @@ public enum Command: String, Codable, Sendable, CaseIterable {
   /// Deletes one message, or every message of a topic, from the history (`Request.delete`).
   /// Added after the first v1 release: an older app answers `bad-request`.
   case delete
+  /// Checks for an update, or starts the update flow (`Request.update`). Added after the first
+  /// v1 release: an older app answers `bad-request`.
+  case update
 }
 
 public struct Request: Versioned, Hashable {
@@ -54,12 +57,14 @@ public struct Request: Versioned, Hashable {
   public let loginItem: LoginItemPayload?
   /// Payload of `Command.delete`.
   public let delete: DeletePayload?
+  /// Payload of `Command.update`.
+  public let update: UpdatePayload?
 
   public init(
     id: String, command: Command, notify: NotifyPayload? = nil, ack: MessageTarget? = nil,
     remind: RemindPayload? = nil, ackAll: AckAllPayload? = nil,
     loginItem: LoginItemPayload? = nil, delete: DeletePayload? = nil,
-    protocolVersion: Int = IPC.protocolVersion
+    update: UpdatePayload? = nil, protocolVersion: Int = IPC.protocolVersion
   ) {
     self.protocolVersion = protocolVersion
     self.id = id
@@ -70,6 +75,7 @@ public struct Request: Versioned, Hashable {
     self.ackAll = ackAll
     self.loginItem = loginItem
     self.delete = delete
+    self.update = update
   }
 }
 

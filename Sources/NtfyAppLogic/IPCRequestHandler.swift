@@ -17,12 +17,14 @@ public struct IPCRequestHandler: Sendable {
   private let clock: any NtfyCore.Clock
   private let loginItem: any LoginItemControlling
   private let meeting: (any MeetingStateProviding)?
+  private let updates: (any UpdateControlling)?
   private let log: @Sendable (String) -> Void
 
   public init(
     pipeline: @escaping PipelineProvider, config: any ConfigStore,
     permissions: any NotificationPermissionProviding, clock: any NtfyCore.Clock,
     loginItem: any LoginItemControlling, meeting: (any MeetingStateProviding)? = nil,
+    updates: (any UpdateControlling)? = nil,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.pipeline = pipeline
@@ -31,9 +33,11 @@ public struct IPCRequestHandler: Sendable {
     self.clock = clock
     self.loginItem = loginItem
     self.meeting = meeting
+    self.updates = updates
     self.log = log
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   public func handle(_ request: Request) async -> Response {
     switch request.command {
     case .ping: return .success(id: request.id)
@@ -46,6 +50,7 @@ public struct IPCRequestHandler: Sendable {
     case .delete: return await delete(request)
     case .ackAll: return await ackAll(request)
     case .loginItem: return loginItemResponse(request)
+    case .update: return await update(request)
     }
   }
 
@@ -167,6 +172,26 @@ public struct IPCRequestHandler: Sendable {
     return .success(id: request.id, result: ResultPayload(delete: DeleteResult(deleted: 1)))
   }
 
+  /// A probe or the interactive flow. When updating is not possible the answer is a success
+  /// that carries the reason; no check runs then.
+  private func update(_ request: Request) async -> Response {
+    guard let updates else { return unavailable(request, "this build has no updater") }
+    guard let payload = request.update else { return badRequest(request, "update needs check") }
+    var status = await updates.status()
+    if status.reason == nil {
+      if payload.check {
+        do throws(NtfyError) {
+          status = try await updates.probe()
+        } catch {
+          return internalError(request, "update check", error)
+        }
+      } else {
+        status = await updates.startInteractive()
+      }
+    }
+    return .success(id: request.id, result: ResultPayload(update: status.payload))
+  }
+
   /// Reads the registration, or changes it first when the request says so.
   private func loginItemResponse(_ request: Request) -> Response {
     var state = loginItem.state()
@@ -201,6 +226,14 @@ public struct IPCRequestHandler: Sendable {
   private func internalError(_ request: Request, _ what: String, _ error: NtfyError) -> Response {
     log("\(what) failed: \(String(describing: error))")
     return .failure(id: request.id, code: .internalError, message: "\(what) failed")
+  }
+}
+
+extension UpdateStatus {
+  fileprivate var payload: UpdateStatusPayload {
+    UpdateStatusPayload(
+      channel: channel.rawValue, currentVersion: currentVersion, latestVersion: latestVersion,
+      updateAvailable: updateAvailable, reason: reason?.rawValue)
   }
 }
 

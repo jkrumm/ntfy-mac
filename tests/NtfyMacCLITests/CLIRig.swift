@@ -88,6 +88,9 @@ actor FakeApp: AppControlling {
       case .notify: ResultPayload(notify: NotifyResult(posted: true))
       case .ackAll: ResultPayload(ackAll: AckAllResult(acknowledged: 0))
       case .delete: ResultPayload(delete: DeleteResult(deleted: request.delete?.id == nil ? 0 : 1))
+      case .update:
+        ResultPayload(
+          update: UpdateStatusPayload(channel: "direct", currentVersion: Version.current))
       case .loginItem:
         ResultPayload(
           loginItem: LoginItemResult(
@@ -150,12 +153,11 @@ struct FakeHistory: HistoryOpening {
 
 struct FakeReleases: ReleaseLookup {
   var tag = "v2.0.0"
-  var assets: [String: URL] = [:]
   var failure: NtfyError?
 
   func latest() async throws(NtfyError) -> LatestRelease {
     if let failure { throw failure }
-    return LatestRelease(tag: tag, assets: assets)
+    return LatestRelease(tag: tag)
   }
 }
 
@@ -202,8 +204,10 @@ struct CLIRig {
   var executablePath: String
   var variables: [String: String] = [:]
   var appCandidates: [URL] = []
-  /// Replaces the self-updater's default fakes (nothing to download, nothing running).
-  var update: SelfUpdatePorts?
+  /// What the CLI reads from its own bundle's signature (a development build by default).
+  var signing = SigningInfo.unsigned
+  /// The Team ID the app recorded, if any.
+  var recordedTeam: String?
 
   init(
     configured: Bool = true, topics: [String] = ["alerts"], topicFailure: NtfyError? = nil,
@@ -233,13 +237,6 @@ struct CLIRig {
     return paths
   }
 
-  static var defaultUpdatePorts: SelfUpdatePorts {
-    SelfUpdatePorts(
-      assets: ScriptedAssetFetcher(assets: [:]), archive: TarArchive(),
-      signature: ScriptedCodeSignature(), swapper: AtomicBundleSwapper(),
-      restarter: RecordingAppRestarter(running: false, log: UpdateEventLog()))
-  }
-
   var environment: CLIEnvironment {
     let source = topics
     let input = stdin
@@ -250,7 +247,7 @@ struct CLIRig {
       topicSource: { _, _, _ in source }, publisher: { _, _, _ in publisher },
       history: FakeHistory(store: store, absent: historyAbsent), clock: clock,
       runUntilInterrupted: { try await $0() }, processes: processes, releases: releases,
-      update: update ?? Self.defaultUpdatePorts,
+      signing: FixedSigning(signing), teamPins: InMemoryTeamPinStore(recordedTeam),
       legacy: LegacyInstallCleanup(
         layout: LegacyInstallLayout(
           home: scratch.url, uid: 501, stateDirectory: paths.stateDirectory,

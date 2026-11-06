@@ -20,6 +20,7 @@ struct DoctorChecks {
     checks.append(await historyCheck())
     checks.append(await legacyCheck())
     checks.append(duplicateCheck())
+    checks.append(updateCheck())
     if case .success(let config) = loaded { checks.append(overridesCheck(config)) }
     if sendTest { checks.append(await testNotification(appIsUp: app.first?.status != .fail)) }
     return checks

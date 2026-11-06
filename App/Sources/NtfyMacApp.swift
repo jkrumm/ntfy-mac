@@ -22,13 +22,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let settingsModel: SettingsModel
   let onboardingModel: OnboardingModel
   let coordinator: WindowCoordinator
+  let updater: SparkleUpdater
 
   override init() {
     let router = router
     let windows = windows
     responder = NotificationResponder(
       handler: { await router.handle($0) }, onSummary: { await windows.showHistory() })
-    let controller = AppController(router: router, windows: windows)
+    let updater = SparkleUpdater(
+      channel: InstallChannel.detect(executablePath: Bundle.main.executablePath ?? ""),
+      disabled: ProcessInfo.processInfo.environment["NTFY_MAC_NO_SELF_UPDATE"] == "1",
+      signing: BundleSigningInspector(bundle: Bundle.main.bundleURL),
+      pins: FileTeamPinStore(
+        url: FileTeamPinStore.defaultURL(applicationSupport: AppPipeline.applicationSupport())),
+      log: { Log.logger(.interface).info("\($0, privacy: .public)") })
+    self.updater = updater
+    let controller = AppController(router: router, windows: windows, updates: updater)
     self.controller = controller
     let services = controller.services
     model = AppModel(
@@ -74,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // notification response is delivered.
     UNUserNotificationCenter.current().delegate = responder
     model.start()
+    updater.start()
     let controller = controller
     Task {
       await controller.start()
@@ -121,7 +131,8 @@ struct NtfyMacApp: App {
   var body: some Scene {
     MenuBarExtra {
       MenuBarContent(
-        model: delegate.model, windows: delegate.windows, coordinator: delegate.coordinator)
+        model: delegate.model, windows: delegate.windows, coordinator: delegate.coordinator,
+        updates: delegate.updater.menu)
     } label: {
       MenuBarLabel(
         model: delegate.model, windows: delegate.windows, coordinator: delegate.coordinator)

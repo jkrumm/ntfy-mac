@@ -35,17 +35,17 @@ struct DoctorCheck: Encodable, Sendable {
 
 struct DoctorReport: Encodable, Sendable {
   let version: String
-  let installMethod: InstallMethod
+  let installChannel: InstallChannel
   let healthy: Bool
   private enum CodingKeys: String, CodingKey {
-    case version, installMethod, checks
+    case version, installChannel, checks
     case healthy = "ok"
   }
   let checks: [DoctorCheck]
 
-  init(installMethod: InstallMethod, checks: [DoctorCheck]) {
+  init(installChannel: InstallChannel, checks: [DoctorCheck]) {
     version = Version.current
-    self.installMethod = installMethod
+    self.installChannel = installChannel
     self.checks = checks
     healthy = !checks.contains { $0.status == .fail }
   }

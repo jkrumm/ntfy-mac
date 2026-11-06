@@ -14,14 +14,19 @@ public enum UserNotificationMapper {
 
   // MARK: Content to spec
 
-  public static func spec(for content: NotificationContent, attachment: URL?)
-    -> UserNotificationSpec
-  {
+  /// - Parameter timeSensitiveAllowed: Without the time-sensitive entitlement the system does
+  ///   not honour the level, so it degrades to `.active` here.
+  public static func spec(
+    for content: NotificationContent, attachment: URL?, timeSensitiveAllowed: Bool = true
+  ) -> UserNotificationSpec {
+    let interruption =
+      content.interruption == .timeSensitive && !timeSensitiveAllowed
+      ? InterruptionLevel.active : content.interruption
     let category = content.buttons.isEmpty ? nil : category(for: content)
     return UserNotificationSpec(
       identifier: content.identifier, title: content.title, subtitle: content.subtitle,
       body: content.body, threadID: content.threadID, sound: content.sound,
-      interruption: content.interruption, relevance: content.relevance,
+      interruption: interruption, relevance: content.relevance,
       userInfo: userInfo(for: content.messageRef), category: category, attachment: attachment)
   }
 

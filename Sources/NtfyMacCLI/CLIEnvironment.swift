@@ -42,7 +42,8 @@ struct CLIEnvironment: Sendable {
   var runUntilInterrupted: InterruptibleRunner
   var processes: any ProcessRunning
   var releases: any ReleaseLookup
-  var update: SelfUpdatePorts
+  var signing: any SigningInspecting
+  var teamPins: any TeamPinStoring
   var legacy: LegacyInstallCleanup
   /// Where a copy of `NtfyMac.app` may live; the `duplicate-install` check looks at these.
   var appCandidates: [URL]
