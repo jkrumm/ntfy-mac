@@ -17,7 +17,9 @@ cd ntfy-mac
 make check            # the gate: format lint, SwiftLint, shellcheck, build, docs check, tests, installer test, app build
 make format           # write swift format changes
 make app              # build and ad-hoc sign NtfyMac.app into .build/xcode/Build/Products/Release
-make install-macbook  # copy the signed app to ~/Applications on the MacBook (ssh host iumac), never launches it
+SIGN_IDENTITY=developer-id NOTARIZE=1 make app   # Developer ID, notarized and stapled (needs the team credentials)
+make verify-signature APP=path MODE=--release    # check an app: signature, team, Hardened Runtime, ticket, Gatekeeper
+make install-macbook  # (also with SIGN_IDENTITY=developer-id NOTARIZE=1) copy the signed app to ~/Applications on the MacBook (ssh host iumac), never launches it
 make analyze          # Periphery dead-code scan
 make docs             # regenerate docs/cli.md, docs/settings.md and llms.txt from the CLI schema
 ```
@@ -30,11 +32,13 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org). The 
 
 ```bash
 scripts/stamp-version.sh 2.0.0    # writes the version into Version.swift and App/project.yml (do not commit)
-make package VERSION=2.0.0        # make app, then dist/ntfy-mac-2.0.0-arm64.tar.gz and dist/SHA256SUMS
+SIGN_IDENTITY=developer-id NOTARIZE=1 make package VERSION=2.0.0   # make app, then the files in dist/
 make installer-check              # install.sh against a fake release in temp dirs
 ```
 
-`make package` refuses a build whose CLI reports another version, so stamp first. The tarball holds `NtfyMac.app/` and `LICENSE`; the `LICENSE` sibling stops Homebrew from stripping a lone top-level `.app`. All signing goes through `scripts/sign.sh`; set `SIGN_IDENTITY` to switch from ad-hoc to a real identity.
+`make package` refuses a build whose CLI reports another version, so stamp first. The tarball holds `NtfyMac.app/` and `LICENSE`; the `LICENSE` sibling stops Homebrew from stripping a lone top-level `.app`. `dist/` holds the tarball, `NtfyMac-<version>.zip` (the app alone, the Sparkle enclosure), `appcast.xml` and `SHA256SUMS`. `make package` refuses an app that is not Developer ID signed, notarized and stapled, and checks that the staple ticket survives both archives; `ALLOW_ADHOC=1` is for local packaging tests only and writes no appcast.
+
+All signing goes through `scripts/sign.sh`. The default is ad-hoc (`make check`, `make app`, snapshots, CI). `SIGN_IDENTITY=developer-id` signs with the team's Developer ID Application certificate, Hardened Runtime and a secure timestamp, and re-signs Sparkle's helpers inside out; `NOTARIZE=1` adds the Apple submission and the staple. If Apple does not answer within `NOTARY_TIMEOUT` (default 40m), the script prints the submission id: `RESUME_NOTARY_ID=<id> SIGN_IDENTITY=developer-id NOTARIZE=1 scripts/sign.sh <app>` waits on it without re-signing. `scripts/verify-signature.sh` runs at the end of every signing run and can be called alone. On the mini the credentials come from `secrets-run` (`op://mini/apple-developer`); elsewhere from `APPLE_TEAM_ID`, `ASC_KEY_P8`, `ASC_KEY_ID` and `ASC_ISSUER_ID`. The appcast is signed with the repo's Sparkle EdDSA key (`SPARKLE_ED_PRIVATE_KEY`, or `~/.local/state/apple-developer/sparkle-ntfy-mac-ed25519.key` on the mini); `scripts/tools.sh sparkle` pins the Sparkle tools.
 
 `packaging/ntfy-mac.rb.in` is the Homebrew formula template; `scripts/render-formula.sh <version> <sha256>` fills it in.
 
@@ -44,8 +48,8 @@ Releases run from the **Release** workflow (Actions, Run workflow). It is manual
 
 1. `make check` runs as a gate.
 2. semantic-release reads the commits since the last tag and picks the version. Releasable types are `feat` (minor), `fix` and `perf` (patch); a `BREAKING CHANGE:` footer or `!` makes a major.
-3. The exec plugin stamps the version, then builds, signs and packages `dist/`.
-4. The GitHub plugin creates a draft release, uploads the tarball and `SHA256SUMS`, then publishes it, so the assets exist before the release is visible. `CHANGELOG.md` is committed back as `chore(release): <version>`.
+3. The exec plugin stamps the version, then builds, signs with the Developer ID, notarizes, staples and packages `dist/`. The workflow fails before this step when a signing secret is missing: `APPLE_TEAM_ID`, `APPLE_DEVELOPER_ID_P12_BASE64`, `APPLE_DEVELOPER_ID_P12_PASSWORD`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `SPARKLE_ED_PRIVATE_KEY`.
+4. The GitHub plugin creates a draft release, uploads the tarball, the zip, `appcast.xml` and `SHA256SUMS`, then publishes it, so the assets exist before the release is visible. `CHANGELOG.md` is committed back as `chore(release): <version>`.
 5. The `tap` job downloads the published tarball, verifies it against `SHA256SUMS`, renders `Formula/ntfy-mac.rb` in `jkrumm/homebrew-tap`, runs `brew style` and pushes `chore(ntfy-mac): update to v<version>`.
 
 `CHANGELOG.md` is written by semantic-release; do not edit it. Do not tag or publish by hand.

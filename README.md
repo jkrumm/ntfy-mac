@@ -58,7 +58,7 @@ curl -fsSL https://raw.githubusercontent.com/jkrumm/ntfy-mac/master/install.sh |
 ntfy-mac setup
 ```
 
-The script downloads `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS` from the GitHub release, verifies the checksum before it extracts anything, and installs `NtfyMac.app` into `~/Applications` with `ntfy-mac` linked into `~/.local/bin`. It stops and installs nothing if the check fails. Rerun it to update. `NTFY_MAC_VERSION=2.0.0` pins a version; `NTFY_MAC_APP_DIR`, `NTFY_MAC_BIN_DIR` and `NTFY_MAC_NO_LAUNCH=1` change where it installs and whether it opens the app.
+The script downloads `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS` from the GitHub release, verifies the checksum before it extracts anything, checks that the app is Developer ID signed, notarized and stapled, and installs `NtfyMac.app` into `~/Applications` with `ntfy-mac` linked into `~/.local/bin`. It stops and installs nothing if a check fails. Rerun it to update. `NTFY_MAC_VERSION=2.0.0` pins a version; `NTFY_MAC_APP_DIR`, `NTFY_MAC_BIN_DIR` and `NTFY_MAC_NO_LAUNCH=1` change where it installs and whether it opens the app.
 
 ### Manual
 
@@ -73,7 +73,7 @@ ntfy-mac migrate    # only when coming from 1.x
 open ~/Applications/NtfyMac.app
 ```
 
-The app is ad-hoc signed, not notarized. If macOS refuses to open a copy that a browser downloaded, run `xattr -dr com.apple.quarantine ~/Applications/NtfyMac.app` once.
+The app is signed with a Developer ID, notarized by Apple and stapled, so macOS opens it without a warning. `spctl --assess --type execute ~/Applications/NtfyMac.app` shows what Gatekeeper makes of it.
 
 ### One install per Mac
 
@@ -97,9 +97,8 @@ Nothing to reconfigure. Install 2.0 over the old version (any of the methods abo
 
 **Auto-discovery** — Picks up your subscribed topics automatically. Re-checks every 30 minutes — no restart needed when you add or remove topics.
 
-**Updates** — `brew upgrade ntfy-mac` for Homebrew installs. Curl and manual installs run `ntfy-mac update`, which verifies the release checksum before it swaps the app in. `ntfy-mac update --check` only looks.
+**Updates** — `brew upgrade ntfy-mac` for Homebrew installs. Curl and manual installs update themselves through the app (Sparkle, EdDSA-signed releases); `ntfy-mac update` asks the app to do it, `ntfy-mac update --check` only looks.
 
-"Verified" has a narrow meaning. The SHA-256 comes from the same GitHub release as the download, and the updater also checks the bundle identifier, the version and the ad-hoc code signature. That catches corrupted, truncated and tampered downloads. It does not protect against a compromised release: whoever can publish one can publish a matching checksum. A pinned signing key arrives with Developer ID in Wave 7.
 
 **Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
 
@@ -139,7 +138,7 @@ ntfy-mac setup --url https://ntfy.example.com --token tk_...
 | `ntfy-mac notify`      | Send a local notification through the app (no server needed).     |
 | `ntfy-mac sounds`      | Preview the notification sounds.                                  |
 | `ntfy-mac logs`        | Show the app's log from the unified log.                          |
-| `ntfy-mac update`      | Update ntfy-mac (Homebrew or verified download) or check for a newer release. |
+| `ntfy-mac update`      | Update ntfy-mac (Homebrew, or through the app) or check for a newer release. |
 | `ntfy-mac uninstall`   | Remove ntfy-mac's config, history, state and token.               |
 | `ntfy-mac version`     | Print the version.                                                |
 | `ntfy-mac start`       | Start the ntfy-mac app if it is not running.                      |
@@ -281,7 +280,7 @@ ntfy-mac ack --all --topic alerts             # clear what you have handled
 
 ```bash
 brew upgrade ntfy-mac         # Homebrew installs
-ntfy-mac update               # curl and manual installs: verified download, swap, restart
+ntfy-mac update               # curl and manual installs: the app opens its update prompt
 ntfy-mac update --check       # look for a newer release without installing it
 ntfy-mac uninstall            # removes config, history, state and the token
 ```

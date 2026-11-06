@@ -2,11 +2,11 @@
 # Read by the router (route.py) and by the reviewer. Globs are repo-relative.
 none:        [docs/waves/**, docs/cli.md, docs/settings.md, llms.txt, CHANGELOG.md, Package.resolved]
 sensitive:   [Sources/NtfyCore/ConfigTokenMigration.swift, Sources/NtfyCore/LegacyInstall*.swift,
-              Sources/NtfyCore/ReleaseVerification.swift, Sources/NtfyCore/UpdatePorts.swift,
+              Sources/NtfyCore/TeamPin.swift, Sources/NtfyCore/UpdateStatus.swift,
               Sources/NtfyClient/URLSession*.swift, Sources/NtfyPlatform/KeychainSecretStore.swift,
               Sources/NtfyPlatform/FileConfigStore.swift, Sources/NtfyPlatform/LegacyInstallAdapters.swift,
-              Sources/NtfyPlatform/UpdateAdapters.swift, Sources/NtfyMacCLI/MigrateCommand.swift,
-              Sources/NtfyMacCLI/SelfUpdater.swift, Sources/NtfyMacCLI/UpdateCommand.swift,
+              Sources/NtfyPlatform/CodeSigning.swift, Sources/NtfyMacCLI/MigrateCommand.swift,
+              Sources/NtfyMacCLI/UpdateCommand.swift, App/Sources/SparkleUpdater.swift,
               Sources/NtfyIPC/**, Sources/NtfyStore/HistorySchema.swift, install.sh, packaging/**,
               scripts/sign.sh, scripts/package.sh, scripts/stamp-version.sh, scripts/render-formula.sh,
               .github/**, .releaserc.json]
@@ -19,8 +19,8 @@ A public app on other people's Macs, so a bad change cannot be rolled back on a 
 - **The token leaks.** The token belongs in the Keychain. It goes only to the configured server's origin, over https unless
   `allowInsecure` is set: no redirects, no cross-origin attachment or image fetch with it, never in a log, a CLI output or an IPC
   reply.
-- **An update bricks or weakens an install.** `SelfUpdater` stages next to the bundle, verifies, swaps and rolls back; a failure at
-  any step leaves the old app running. `install.sh` stays checksum-verified, codesign-checked and atomic. A Homebrew install stays
+- **An update bricks or weakens an install.** Sparkle (in the app only) verifies the EdDSA signature and the code signature and swaps
+  the bundle; the app refuses to start it for a Homebrew copy, an unsigned build or another Team ID than the recorded one. `install.sh` stays checksum-verified, codesign-checked and atomic. A Homebrew install stays
   owned by Homebrew.
 - **Migration eats user data.** `LegacyInstallCleanup` removes only the listed 1.x leftovers and never touches `config.json` or
   `state.json`. The AGENTS.md compatibility contract holds: config keys, env vars, every 1.x command and flag, the formula name, the

@@ -60,7 +60,7 @@ Icons and attachments are fetched with a size cap, without redirects, and the to
 | 2 (low)     | Tink  | active         | 5 s          | 0.25      |
 | 1 (min)     | Tink  | active         | 4 s          | 0.0       |
 
-The time-sensitive level needs an entitlement that an ad-hoc signed build cannot carry yet, so for now priorities 4 and 5 are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
+The time-sensitive level needs a restricted entitlement (`com.apple.developer.usernotifications.time-sensitive`, which needs a provisioning profile). The app reads its own entitlements at run time: with it, priorities 4 and 5 use the time-sensitive level; without it (an ad-hoc build) they degrade to the active level, so they are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
 
 ### Missed messages
 
@@ -86,4 +86,6 @@ On launch the app checks for 1.x leftovers and removes them: the `com.jkrumm.ntf
 
 ## Updates
 
-Release assets are `ntfy-mac-<version>-arm64.tar.gz` and `SHA256SUMS`. Everything that installs or updates (`install.sh`, the Homebrew formula, `ntfy-mac update`) checks the SHA-256 before it touches an existing install.
+Release assets are `ntfy-mac-<version>-arm64.tar.gz` (install.sh and the Homebrew formula), `NtfyMac-<version>.zip` and `appcast.xml` (Sparkle) and `SHA256SUMS`. The app is Developer ID signed, notarized and stapled; `install.sh` checks the SHA-256 and that signature state before it touches an existing install.
+
+A direct (non-Homebrew) copy updates through Sparkle inside the app. `ntfy-mac update` asks the running app over the socket: `--check` looks without a window, otherwise the app opens Sparkle's prompt. Sparkle accepts an update only with a valid EdDSA signature or the same code-signing identity, and refuses downgrades. It has no Team ID pin, so the app records the Team ID of its first Developer-ID-signed run (`team-pin` in the app support directory) and turns the updater off for a build signed by another team. A Homebrew copy, an ad-hoc development build and `NTFY_MAC_NO_SELF_UPDATE=1` leave the updater off; `ntfy-mac doctor` shows which.
