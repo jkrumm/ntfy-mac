@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [master] # most work lands here directly, so this is where CI has to run
   pull_request:
     branches: [master]
 
@@ -22,6 +24,7 @@ jobs:
         run: make check
 
   commitlint:
+    if: github.event_name == 'pull_request' # a direct push is linted by the local commit-msg hook
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
