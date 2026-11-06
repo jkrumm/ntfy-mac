@@ -19,7 +19,7 @@ final class SparkleUpdater: NSObject, UpdateControlling {
   private let eligibility: UpdateEligibility
   private var controller: SPUStandardUpdaterController?
   private var latestVersion: String?
-  private var probeWaiter: CheckedContinuation<Bool, Never>?
+  private var probeWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
 
   /// Reads the signature and the recorded Team ID, and records the Team ID of a first signed run.
   init(
@@ -91,26 +91,32 @@ final class SparkleUpdater: NSObject, UpdateControlling {
       updateAvailable: latestVersion != nil, reason: eligibility.reason)
   }
 
-  /// False when the check failed or timed out.
+  /// False when the check failed or timed out. A probe that finds Sparkle already checking joins
+  /// that check instead of reporting "nothing new" for a check that never ran.
   private func runProbe() async -> Bool {
-    guard let updater = controller?.updater, probeWaiter == nil, !updater.sessionInProgress
-    else { return true }
-    latestVersion = nil
+    guard let updater = controller?.updater else { return true }
+    // A session that already found an update waits on the user, not on the network.
+    if updater.sessionInProgress && latestVersion != nil { return true }
+    let id = UUID()
+    let busy = updater.sessionInProgress || !probeWaiters.isEmpty
+    if !busy { latestVersion = nil }
     let timeout = Task {
-      try? await Task.sleep(for: Self.probeTimeout)
-      finishProbe(succeeded: false)
+      // A cancelled sleep means the probe already ended; it must not fail anything else.
+      guard (try? await Task.sleep(for: Self.probeTimeout)) != nil else { return }
+      finishProbe(id: id, succeeded: false)
     }
     let succeeded = await withCheckedContinuation { waiter in
-      probeWaiter = waiter
-      updater.checkForUpdateInformation()
+      probeWaiters[id] = waiter
+      if !busy { updater.checkForUpdateInformation() }
     }
     timeout.cancel()
     return succeeded
   }
 
-  private func finishProbe(succeeded: Bool) {
-    probeWaiter?.resume(returning: succeeded)
-    probeWaiter = nil
+  /// Ends one probe (its timeout) or, without an id, every probe waiting on the running check.
+  private func finishProbe(id: UUID? = nil, succeeded: Bool) {
+    let ids = id.map { [$0] } ?? Array(probeWaiters.keys)
+    for key in ids { probeWaiters.removeValue(forKey: key)?.resume(returning: succeeded) }
   }
 }
 

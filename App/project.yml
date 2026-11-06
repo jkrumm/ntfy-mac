@@ -10,7 +10,8 @@ packages:
   # stay free of it). Never below 2.9.6 (a local privilege escalation fix).
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: 2.10.1
+    # Exact: scripts/tools.sh pins the matching generate_appcast and sign_update; bump both together.
+    exactVersion: 2.10.1
 settings:
   base:
     SWIFT_VERSION: "6.0"
