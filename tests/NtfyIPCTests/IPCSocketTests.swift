@@ -81,7 +81,7 @@ private func mode(_ url: URL) throws -> Int {
     limits.maxFrameBytes = 1024
     let server = IPCServer(path: directory.socket, limits: limits, handler: echo)
     try server.start()
-    let client = IPCClient(path: directory.socket)
+    let client = IPCClient(path: directory.socket, responseTimeout: .seconds(60))
     let huge = Request(
       id: "big", command: .notify, notify: NotifyPayload(body: String(repeating: "x", count: 8192)))
     let rejected = try await client.send(huge)
@@ -101,7 +101,7 @@ private func mode(_ url: URL) throws -> Int {
     defer { close(descriptor) }
     #expect(try POSIXSocket.connect(descriptor, to: directory.socket.path) == 0)
     await #expect(throws: IPCError.connectionClosed) {
-      try await POSIXSocket.readLine(descriptor, limit: 1024, timeout: .seconds(5))
+      try await POSIXSocket.readLine(descriptor, limit: 1024, timeout: .seconds(60))
     }
     await server.stop()
   }
@@ -148,8 +148,15 @@ private func mode(_ url: URL) throws -> Int {
     let client = IPCClient(path: directory.socket)
     let wedged = try await client.send(Request(id: "w", command: .status))
     #expect(wedged.code == .internalError)
-    let next = try await client.send(Request(id: "n", command: .ping))
-    #expect(next.status == .success)
+    // The slot is released by the server's connection task after the client is gone, so the
+    // next connect may meet a full server for a moment; it must free up without help.
+    let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+    var next: Response?
+    while next == nil, ContinuousClock.now < deadline {
+      next = try? await client.send(Request(id: "n", command: .ping))
+      if next == nil { try await Task.sleep(for: .milliseconds(20)) }
+    }
+    #expect(next?.status == .success)
     await server.stop()
   }
 

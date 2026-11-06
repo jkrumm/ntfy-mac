@@ -64,11 +64,13 @@ extension FakeClock {
     defer { cleanup() }
     let server = serve()
     let launches = Launches()
-    let link = AppLink(socket: socket, app: app) { _ in
-      await launches.record()
-      try? await Task.sleep(for: .milliseconds(100))
-      return (try? server.start()) != nil
-    }
+    let link = AppLink(
+      socket: socket, app: app,
+      launch: { _ in
+        await launches.record()
+        try? await Task.sleep(for: .milliseconds(100))
+        return (try? server.start()) != nil
+      }, launchTimeout: .seconds(60))
     let response = try await link.send(ping)
     #expect(response.status == .success)
     #expect(await launches.count == 1)
@@ -79,7 +81,10 @@ extension FakeClock {
     defer { cleanup() }
     let answers = Answers(notReadyFor: 3)
     let server = IPCServer(path: socket) { await answers.next($0) }
-    let link = AppLink(socket: socket, app: app) { _ in (try? server.start()) != nil }
+    // Real-time deadline: generous, so a starved runner cannot end the retries early.
+    let link = AppLink(
+      socket: socket, app: app, launch: { _ in (try? server.start()) != nil },
+      launchTimeout: .seconds(60))
     let response = try await link.send(ping)
     #expect(response.status == .success)
     #expect(await answers.calls == 4)

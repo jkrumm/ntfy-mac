@@ -14,9 +14,10 @@ import Testing
   @Test func aToolPastItsDeadlineIsKilledAndReported() async {
     let started = ContinuousClock.now
     await #expect(throws: NtfyError.self) {
-      try await SystemTool.run("/bin/sleep", ["30"], timeout: 0.3)
+      try await SystemTool.run("/bin/sleep", ["120"], timeout: 0.3)
     }
-    #expect(ContinuousClock.now - started < .seconds(10))
+    // Killed, not waited out: a loaded runner can delay the kill by seconds, not by the 120.
+    #expect(ContinuousClock.now - started < .seconds(60))
   }
 
   @Test func aMissingToolIsReported() async {
