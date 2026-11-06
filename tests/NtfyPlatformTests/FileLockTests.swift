@@ -5,6 +5,12 @@ import Testing
 
 @testable import NtfyPlatform
 
+/// A Sendable home for the mutexes: Swift 6.2 refuses to send a closure that captures a local `Mutex`.
+private final class HolderState: Sendable {
+  let order = Mutex<[String]>([])
+  let held = Mutex(false)
+}
+
 @Suite struct FileLockTests {
   /// Two stores on one file stand in for the app and the CLI: separate actors, so only the file
   /// lock can keep their read-modify-write cycles from interleaving.
@@ -63,23 +69,22 @@ import Testing
   @Test func aSecondHolderWaitsUntilTheFirstIsDone() async throws {
     let dir = TempDirectory()
     let lock = dir.file("x.lock")
-    let order = Mutex<[String]>([])
-    let held = Mutex(false)
+    let state = HolderState()
     let first = Task.detached {
       try? FileLock.withExclusive(lock) { () throws(NtfyError) in
-        held.withLock { $0 = true }
+        state.held.withLock { $0 = true }
         Thread.sleep(forTimeInterval: 0.3)
-        order.withLock { $0.append("first") }
+        state.order.withLock { $0.append("first") }
       }
     }
-    while !held.withLock({ $0 }) { try await Task.sleep(for: .milliseconds(5)) }
+    while !state.held.withLock({ $0 }) { try await Task.sleep(for: .milliseconds(5)) }
     let second = Task.detached {
       try? FileLock.withExclusive(lock) { () throws(NtfyError) in
-        order.withLock { $0.append("second") }
+        state.order.withLock { $0.append("second") }
       }
     }
     await first.value
     await second.value
-    #expect(order.withLock { $0 } == ["first", "second"])
+    #expect(state.order.withLock { $0 } == ["first", "second"])
   }
 }
