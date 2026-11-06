@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests install.sh against a fake release (file:// base URL, temp HOME and dirs, no app build, no launch).
 # The fake bundle's CLI is a script, so `migrate` is a stub that records its call. The bundle is
-# really signed (ad-hoc), so the installer's codesign check runs for real.
+# really signed (ad-hoc), so the installer's codesign check runs for real. An ad-hoc app is not a release, so
+# run_install sets the test-only NTFY_MAC_ALLOW_UNNOTARIZED unless allow_unnotarized=0 is set.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -64,7 +65,8 @@ PLIST
 run_install() {
   local c="$1" rel="$2"
   mkdir -p "$c/home"
-  HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="file://$rel" \
+  HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="${base_url:-file://$rel}" \
+    NTFY_MAC_ALLOW_UNNOTARIZED="$([[ "${allow_unnotarized:-1}" == 1 ]] && echo 1 || true)" \
     NTFY_MAC_APP_DIR="$c/apps" NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 \
     NTFY_MAC_BREW_PREFIXES="${brew_prefixes:-$c/no-brew}" \
     bash "$installer" >"$c/out" 2>&1
@@ -178,6 +180,31 @@ for mode in unsigned tampered; do
   if run_install "$c" "$tmp/$mode"; then bad "$mode bundle fails"; else ok "$mode bundle fails"; fi
   check "$mode bundle installs nothing" nothing_installed "$c"
   check "$mode failure mentions the code signature" grep -q "code signature" "$c/out"
+done
+
+# a release must be Developer ID signed and notarized: the ad-hoc fake app is refused without the test override
+c="$tmp/adhoc-case"
+if allow_unnotarized=0 run_install "$c" "$tmp/good"; then bad "ad-hoc app is refused without the override"; else ok "ad-hoc app is refused without the override"; fi
+check "ad-hoc refusal installs nothing" nothing_installed "$c"
+check "ad-hoc refusal names the Developer ID certificate" grep -q "Developer ID Application" "$c/out"
+c="$tmp/adhoc-upgrade"
+run_install "$c" "$tmp/good" || bad "setup for the ad-hoc upgrade case"
+if allow_unnotarized=0 run_install "$c" "$tmp/good"; then bad "ad-hoc refusal keeps an existing install"; else ok "ad-hoc refusal keeps an existing install"; fi
+check "ad-hoc refusal leaves the old install working" runs "$c"
+
+# the override is refused on an https base URL (and without any base URL), never silently honoured
+for url in "https://evil.example/releases" ""; do
+  c="$tmp/override-$(echo "${url:-none}" | tr -c 'A-Za-z0-9\n' _)"
+  mkdir -p "$c/home"
+  if env HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_ALLOW_UNNOTARIZED=1 ${url:+NTFY_MAC_BASE_URL="$url"} \
+    NTFY_MAC_APP_DIR="$c/apps" NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 \
+    NTFY_MAC_BREW_PREFIXES="$c/no-brew" bash "$installer" >"$c/out" 2>&1; then
+    bad "override with base URL '${url:-none}' is refused"
+  else
+    ok "override with base URL '${url:-none}' is refused"
+  fi
+  check "override refusal with base URL '${url:-none}' says why" grep -q "NTFY_MAC_ALLOW_UNNOTARIZED only works" "$c/out"
+  check "override refusal with base URL '${url:-none}' installs nothing" nothing_installed "$c"
 done
 
 # NTFY_MAC_BASE_URL is only honoured for file:// and local http://

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pinned dev tools for macOS arm64: download, verify SHA-256, cache in .tools/, print the binary path.
-# Usage: scripts/tools.sh <swiftlint|periphery|xcodegen>
+# Usage: scripts/tools.sh <swiftlint|periphery|xcodegen|sparkle>
+#        (sparkle prints bin/generate_appcast; sign_update sits in the same directory)
 #        scripts/tools.sh --self-test   (proves a checksum mismatch is rejected)
 # Bump a tool by changing its version and checksum below (checksum: `gh release view` asset digest).
 # The tool variables are read through indirect expansion (${!var}), which shellcheck cannot follow.
@@ -23,6 +24,13 @@ XCODEGEN_URL="https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN
 XCODEGEN_SHA256="4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
 XCODEGEN_BIN="xcodegen/bin/xcodegen"
 
+# Sparkle's release tools (generate_appcast, sign_update). The archive is a .tar.xz, the others are zips.
+# Digest: `gh api repos/sparkle-project/Sparkle/releases/tags/<version>` (assets[].digest).
+SPARKLE_VERSION="2.10.1"
+SPARKLE_URL="https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+SPARKLE_SHA256="1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27"
+SPARKLE_BIN="bin/generate_appcast"
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # fetch <url> <sha256> <dest-dir> <relative-binary>: leaves <dest-dir> populated or fails.
@@ -33,14 +41,17 @@ fetch() {
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
     curl --fail --silent --show-error --location --retry 3 --max-time 300 "$url" \
-      --output "$work/archive.zip"
-    actual=$(shasum -a 256 "$work/archive.zip" | cut -d' ' -f1)
+      --output "$work/archive"
+    actual=$(shasum -a 256 "$work/archive" | cut -d' ' -f1)
     if [[ "$actual" != "$sha" ]]; then
       echo "checksum mismatch: expected $sha, got $actual" >&2
       exit 1
     fi
     mkdir -p "$work/out"
-    unzip -q "$work/archive.zip" -d "$work/out"
+    case "$url" in
+      *.tar.xz) tar -xJf "$work/archive" -C "$work/out" ;;
+      *) unzip -q "$work/archive" -d "$work/out" ;;
+    esac
     chmod +x "$work/out/$rel"
     rm -rf "$dest"
     mkdir -p "$(dirname "$dest")"
@@ -66,7 +77,7 @@ self_test() {
   echo "tools.sh self-test ok"
 }
 
-tool="${1:?usage: tools.sh <swiftlint|periphery|xcodegen|--self-test>}"
+tool="${1:?usage: tools.sh <swiftlint|periphery|xcodegen|sparkle|--self-test>}"
 
 if [[ "$tool" == "--self-test" ]]; then
   (self_test)
@@ -79,7 +90,7 @@ if [[ "$(uname -s)-$(uname -m)" != "Darwin-arm64" ]]; then
 fi
 
 case "$tool" in
-  swiftlint | periphery | xcodegen) ;;
+  swiftlint | periphery | xcodegen | sparkle) ;;
   *)
     echo "unknown tool: $tool" >&2
     exit 1

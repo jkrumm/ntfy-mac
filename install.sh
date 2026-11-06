@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Installs NtfyMac.app into ~/Applications and links the CLI into ~/.local/bin.
 # The download is checked against the release's SHA256SUMS before anything is extracted, and a
-# failed check installs nothing; so does an extracted bundle with a bad code signature or a
-# symbolic link that leaves the bundle. Rerun to update.
+# failed check installs nothing; so does an extracted bundle with a bad code signature, one that is
+# not Developer ID signed with the Hardened Runtime, notarized and stapled (stapler, Gatekeeper), or
+# a symbolic link that leaves the bundle. Rerun to update.
 #
 # Environment:
 #   NTFY_MAC_VERSION    version to install (default: the latest GitHub release)
@@ -11,6 +12,8 @@
 #   NTFY_MAC_NO_LAUNCH  set to 1 to skip opening the app
 #   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download
 #                       URL; only file://, http://127.0.0.1 and http://localhost are accepted)
+#   NTFY_MAC_ALLOW_UNNOTARIZED  set to 1 to skip the Developer ID, stapler and Gatekeeper checks (tests only;
+#                       refused unless NTFY_MAC_BASE_URL is a file:// or local http:// URL)
 #   NTFY_MAC_BREW_PREFIXES  colon-separated Homebrew prefixes to look in (tests only; default
 #                       /opt/homebrew:/usr/local)
 set -euo pipefail
@@ -54,6 +57,10 @@ version="${version#v}"
 [[ "$version" =~ $SEMVER ]] || fail "not a version: $version"
 
 archive="ntfy-mac-$version-arm64.tar.gz"
+local_url='^(file://|http://(127\.0\.0\.1|localhost)([:/]|$))'
+if [[ "${NTFY_MAC_ALLOW_UNNOTARIZED:-}" == "1" && ! "${NTFY_MAC_BASE_URL:-}" =~ $local_url ]]; then
+  fail "NTFY_MAC_ALLOW_UNNOTARIZED only works with a file:// or local http:// NTFY_MAC_BASE_URL (tests); unset it to install from GitHub"
+fi
 base_url="${NTFY_MAC_BASE_URL:-https://github.com/$REPO/releases/download/v$version}"
 curl_opts=(-fsSL)
 if [[ -n "${NTFY_MAC_BASE_URL:-}" ]]; then
@@ -109,6 +116,20 @@ done < <(find "$extracted" -type l -print0)
 
 codesign --verify --deep --strict "$extracted" 2>/dev/null \
   || fail "the code signature of the extracted app does not verify; nothing was installed"
+
+# A release is Developer ID signed with the Hardened Runtime, notarized and stapled. Gatekeeper would refuse
+# anything else on first launch, so refuse it here instead of leaving a broken install.
+if [[ "${NTFY_MAC_ALLOW_UNNOTARIZED:-}" != "1" ]]; then
+  signature="$(codesign -dvv "$extracted" 2>&1)" || fail "cannot read the code signature of the extracted app; nothing was installed"
+  grep -q '^Authority=Developer ID Application:' <<<"$signature" \
+    || fail "the app in $archive is not signed with a Developer ID Application certificate; nothing was installed"
+  grep -Eq 'flags=0x[0-9a-f]+\(.*runtime' <<<"$signature" \
+    || fail "the app in $archive does not use the Hardened Runtime; nothing was installed"
+  xcrun stapler validate "$extracted" >/dev/null 2>&1 \
+    || fail "the app in $archive has no valid notarization ticket; nothing was installed"
+  spctl --assess --type execute "$extracted" >/dev/null 2>&1 \
+    || fail "Gatekeeper rejects the app in $archive; nothing was installed"
+fi
 
 # ── Install ───────────────────────────────────────────────────────────────────
 

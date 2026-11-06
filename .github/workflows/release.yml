@@ -6,6 +6,7 @@ on:
 jobs:
   release:
     runs-on: macos-26 # the app needs Xcode
+    timeout-minutes: 120 # notarization can queue for a long time
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
     permissions:
@@ -33,8 +34,49 @@ jobs:
       - name: Install shellcheck
         run: command -v shellcheck || brew install shellcheck
 
+      # semantic-release tags first, so a missing secret must stop the run before it.
+      - name: Require the signing secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for name in APPLE_TEAM_ID APPLE_DEVELOPER_ID_P12_BASE64 APPLE_DEVELOPER_ID_P12_PASSWORD \
+            ASC_KEY_P8 ASC_KEY_ID ASC_ISSUER_ID SPARKLE_ED_PRIVATE_KEY; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::missing repository secrets: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Check
         run: make check
+
+      # The Developer ID identity lives in a throwaway keychain that the cleanup step deletes.
+      - name: Import the Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="${RUNNER_TEMP}/ntfy-mac-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "::add-mask::${keychain_password}"
+          printf '%s' "${P12_BASE64}" | base64 --decode > "${RUNNER_TEMP}/developer-id.p12"
+          security create-keychain -p "${keychain_password}" "${keychain}"
+          security set-keychain-settings -lut 21600 "${keychain}"
+          security unlock-keychain -p "${keychain_password}" "${keychain}"
+          security import "${RUNNER_TEMP}/developer-id.p12" -P "${P12_PASSWORD}" -A -t cert -f pkcs12 -k "${keychain}"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${keychain_password}" "${keychain}" > /dev/null
+          rm -f "${RUNNER_TEMP}/developer-id.p12"
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "${keychain}" $(security list-keychains -d user | tr -d '"')
+          echo "SIGNING_KEYCHAIN_PATH=${keychain}" >> "$GITHUB_ENV"
 
       # The plugins in .releaserc.json run in order: exec stamps the version and builds, signs and packages
       # dist/, github creates a draft release, uploads the assets and publishes it, git commits CHANGELOG.md.
@@ -52,6 +94,20 @@ jobs:
             @semantic-release/git@11.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }} # must be PAT, not default token — github-actions[bot] has no bypass rights
+          SIGN_IDENTITY: developer-id # scripts/sign.sh: Developer ID, notarize, staple
+          NOTARIZE: "1"
+          NOTARY_TIMEOUT: 90m
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          rm -f "${RUNNER_TEMP}/developer-id.p12"
+          [[ -z "${SIGNING_KEYCHAIN_PATH:-}" ]] || security delete-keychain "${SIGNING_KEYCHAIN_PATH}" || true
 
   # Runs only after the release is published with its assets, so the formula never points at a missing file.
   tap:

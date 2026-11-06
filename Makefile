@@ -5,7 +5,7 @@ MACBOOK := iumac
 MACBOOK_APP := Applications/NtfyMac.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
+.PHONY: verify-signature check toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
 check: toolchain lint-format lint lint-sh build docs-check test installer-check app
 
@@ -84,8 +84,14 @@ snapshots:
 	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
 		HOME="$$home" CFFIXED_USER_HOME="$$home" $(SNAP_APP)/Contents/MacOS/NtfyMac --ui-snapshot "$(SNAP_DIR)"
 
+# Checks an app's signature: make verify-signature [APP=path] [MODE=--developer-id|--release].
+verify-signature:
+	scripts/verify-signature.sh $(APP) $(MODE)
+
 # Builds, signs and packages the release assets into dist/. The version must already be stamped into the
-# tree (scripts/stamp-version.sh); package.sh refuses a CLI that reports another version.
+# tree (scripts/stamp-version.sh); package.sh refuses a CLI that reports another version. It also refuses an app
+# that is not Developer ID signed, notarized and stapled: run it with SIGN_IDENTITY=developer-id NOTARIZE=1.
+# ALLOW_ADHOC=1 skips that for local packaging tests (no appcast).
 package:
 	@test -n "$(VERSION)" || { echo "usage: make package VERSION=x.y.z"; exit 1; }
 	$(MAKE) app
@@ -95,13 +101,15 @@ package:
 installer-check:
 	scripts/test-install.sh
 
-# Copies the ad-hoc-signed app to ~/Applications on the MacBook (ssh host $(MACBOOK)), quits the
-# running copy and opens the new one, so the next thing the owner sees is this build.
+# Copies the app to ~/Applications on the MacBook (ssh host $(MACBOOK)), quits the
+# running copy and opens the new one, so the next thing the owner sees is this build. The app is ad-hoc signed
+# unless SIGN_IDENTITY=developer-id NOTARIZE=1 make install-macbook builds the Developer ID signed, notarized
+# and stapled app (needs the team's credentials, see scripts/sign.sh).
 install-macbook: app
 	ssh -o BatchMode=yes $(MACBOOK) 'mkdir -p ~/Applications'
 	rsync -a --delete -e 'ssh -o BatchMode=yes' $(APP)/ $(MACBOOK):$(MACBOOK_APP)/
 	ssh -o BatchMode=yes $(MACBOOK) '$(LSREGISTER) -f ~/$(MACBOOK_APP) && \
 		codesign --verify --deep --strict ~/$(MACBOOK_APP) && \
 		echo "installed: $$HOME/$(MACBOOK_APP)" && \
-		codesign -dv ~/$(MACBOOK_APP) 2>&1 | grep -E "^(Identifier|Signature|Format|CodeDirectory)"'
+		codesign -dvv ~/$(MACBOOK_APP) 2>&1 | grep -E "^(Identifier|Signature|Format|CodeDirectory|Authority)"'
 	ssh -o BatchMode=yes $(MACBOOK) 'pkill -x NtfyMac; sleep 1; open ~/$(MACBOOK_APP) && echo "relaunched: $$HOME/$(MACBOOK_APP)"'
