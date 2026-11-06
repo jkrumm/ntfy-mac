@@ -124,6 +124,9 @@ public actor UserNotificationPoster: NotificationPoster {
 
   // MARK: Gate
 
+  /// Operations queued behind the one holding the gate; tests use it to fix their arrival order.
+  var gateQueueLength: Int { gateWaiters.count }
+
   private func enterGate() async {
     guard gateBusy else {
       gateBusy = true

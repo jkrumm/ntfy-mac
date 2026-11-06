@@ -159,18 +159,28 @@ import Testing
   }
 
   @Test func openBodyHasNoTimeout() async {
+    // The first message proves the connection came up inside the connect timeout; the stream
+    // must then outlive that timeout. Event-driven, so a slow runner only delays the check.
+    let connectTimeout = Duration.seconds(1)
     let stub = Stub(lines: [Self.line("1")], hold: true)
     let base = StubURLProtocol.register(stub)
     let stream = URLSessionMessageStream(
-      base: base, token: nil, connectTimeout: .milliseconds(50), session: StubURLProtocol.session())
+      base: base, token: nil, connectTimeout: connectTimeout, session: StubURLProtocol.session())
+    let (arrivals, signal) = AsyncStream<Void>.makeStream()
+    let started = ContinuousClock.now
     let consumer = Task { () -> [String] in
+      defer { signal.finish() }
       var ids: [String] = []
       for try await event in stream.events(topics: ["t"], since: nil) {
-        if case .message(let message) = event { ids.append(message.id) }
+        if case .message(let message) = event {
+          ids.append(message.id)
+          signal.yield()
+        }
       }
       return ids
     }
-    try? await Task.sleep(for: .milliseconds(300))
+    for await _ in arrivals { break }
+    try? await Task.sleep(until: started + connectTimeout * 1.5)
     consumer.cancel()
     #expect((try? await consumer.value) == ["1"])
   }

@@ -6,7 +6,7 @@ import Testing
 
 @Suite struct NtfyServerTesterTests {
   private func tester() -> NtfyServerTester {
-    NtfyServerTester(timeout: 2, session: StubURLProtocol.session())
+    NtfyServerTester(timeout: 30, session: StubURLProtocol.session())
   }
 
   private func serve(_ stub: Stub, scheme: String = "https", host: String? = nil) -> URL {

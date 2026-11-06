@@ -12,6 +12,15 @@ import Testing
     UserNotificationPoster(center: center, images: images)
   }
 
+  /// Polls in real time: yielding a fixed number of times proves nothing on a busy pool.
+  private func eventually(_ condition: () async -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+    while !(await condition()), ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(2))
+    }
+    return await condition()
+  }
+
   private func withButtons(id: String = "abc12345") -> NotificationContent {
     NotificationFixtures.content(
       NotificationFixtures.message(
@@ -193,12 +202,14 @@ import Testing
     await center.holdNextAdd()
 
     let postA = Task { try await poster.post(first) }
-    for _ in 0..<10_000 where !(await center.isHoldingAdd) { await Task.yield() }
-    #expect(await center.isHoldingAdd)
+    #expect(await eventually { await center.isHoldingAdd })
 
+    // Tasks do not start in creation order on a busy pool, and the gate serves in arrival
+    // order: the restore only survives the second post's pruning by running after it.
     let postB = Task { try await poster.post(second) }
+    #expect(await eventually { await poster.gateQueueLength == 1 })
     let restore = Task { await poster.restoreCategories(for: [restored]) }
-    for _ in 0..<1000 { await Task.yield() }
+    #expect(await eventually { await poster.gateQueueLength == 2 })
     // Both wait behind the first post: nothing else touched the center meanwhile.
     #expect(
       await center.calls == [.remove(["alerts/first"]), .setCategories, .add("alerts/first")])
