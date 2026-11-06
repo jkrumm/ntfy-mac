@@ -1,0 +1,12 @@
+# How the factory ships this project (software-factory docs/design.md §9).
+apiVersion: factory/v2
+name: ntfy-mac
+deploy:
+  # A push to master deploys nothing: users get the app from the manual Release workflow, which is the owner's
+  # call (AGENTS.md "Release process"). Done means pushed with CI green.
+  mode: none
+ship:
+  - { paths: ["**"], via: push }
+signals:
+  github: { label: factory } # the owner labelling a GitHub issue files it; its text stays data
+leads: 1
