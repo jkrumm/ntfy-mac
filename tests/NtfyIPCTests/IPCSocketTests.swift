@@ -81,7 +81,10 @@ private func mode(_ url: URL) throws -> Int {
     limits.maxFrameBytes = 1024
     let server = IPCServer(path: directory.socket, limits: limits, handler: echo)
     try server.start()
-    let client = IPCClient(path: directory.socket, responseTimeout: .seconds(60))
+    // The 8 KB frame needs several write turns (the socket buffer is smaller), each of which
+    // can wait for a pool thread, so the write bound (`connectTimeout`) is generous too.
+    let client = IPCClient(
+      path: directory.socket, connectTimeout: .seconds(60), responseTimeout: .seconds(60))
     let huge = Request(
       id: "big", command: .notify, notify: NotifyPayload(body: String(repeating: "x", count: 8192)))
     let rejected = try await client.send(huge)
