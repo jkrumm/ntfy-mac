@@ -8,5 +8,5 @@ deploy:
 ship:
   - { paths: ["**"], via: push }
 signals:
-  github: { label: factory } # the owner labelling a GitHub issue files it; its text stays data
+  github: { label: factory, author: jkrumm, since: 2026-11-07T06:30:00Z } # the owner labelling a GitHub issue files it; its text stays data
 leads: 1
