@@ -6,11 +6,11 @@ Working document for building awareness. Prioritized by impact vs effort.
 
 ## Unique Selling Points
 
-1. **Only native macOS client for ntfy** — the official docs say to use a PWA. The one Electron alternative (ntfy-desktop by Aetherinox) exists but isn't native. ntfy-mac is the only option that integrates with Notification Center, Focus mode, Keychain, and launchd.
+1. **Only native macOS client for ntfy** — the official docs say to use a PWA. The one Electron alternative (ntfy-desktop by Aetherinox) exists but isn't native. ntfy-mac is the only option that integrates with Notification Center, Focus mode, Keychain, and Login Items.
 
-2. **Reliable notification delivery** — SSE streaming + offline recovery + deduplication. PWA notifications silently fail when the browser restarts, tabs get suspended, or the Mac sleeps. ntfy-mac catches up on everything it missed.
+2. **Reliable notification delivery** — Streaming connection + offline recovery + deduplication. PWA notifications silently fail when the browser restarts, tabs get suspended, or the Mac sleeps. ntfy-mac catches up on everything it missed.
 
-3. **Zero maintenance** — launchd daemon starts on login, auto-reconnects, auto-discovers topics, auto-updates. Configure once, never touch again.
+3. **Zero maintenance** — menu bar app starts at login, auto-reconnects, auto-discovers topics, auto-updates. Configure once, never touch again.
 
 4. **Full ntfy feature parity** — priorities, emoji tags, images, action buttons, click URLs. Not a stripped-down wrapper.
 
@@ -27,14 +27,14 @@ Position ntfy-mac as the missing piece that makes ntfy complete on macOS — ext
 
 ### Tone by Platform
 
-| Platform                         | Voice                  | Example angle                                                             |
-| -------------------------------- | ---------------------- | ------------------------------------------------------------------------- |
-| Reddit (r/selfhosted, r/macapps) | Peer sharing a tool    | "I built this because PWA notifications kept failing on me"               |
-| Hacker News                      | Technical depth        | "Show HN: Native macOS daemon for ntfy — SSE, offline recovery, dedup"    |
-| Dev.to / Medium                  | Tutorial / comparison  | "Why I replaced ntfy's PWA with a native macOS daemon"                    |
-| Product Hunt                     | Concise, benefit-first | "Reliable ntfy notifications on macOS — native daemon, not a browser tab" |
-| GitHub PRs                       | Contributor tone       | "Adding ntfy-mac to the integrations list"                                |
-| Lemmy (discuss.ntfy.sh)          | Community member       | "Built a native macOS client — feedback welcome"                          |
+| Platform                         | Voice                  | Example angle                                                                    |
+| -------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
+| Reddit (r/selfhosted, r/macapps) | Peer sharing a tool    | "I built this because PWA notifications kept failing on me"                      |
+| Hacker News                      | Technical depth        | "Show HN: Native macOS client for ntfy — NDJSON stream, offline recovery, dedup" |
+| Dev.to / Medium                  | Tutorial / comparison  | "Why I replaced ntfy's PWA with a native macOS app"                              |
+| Product Hunt                     | Concise, benefit-first | "Reliable ntfy notifications on macOS — a native app, not a browser tab"         |
+| GitHub PRs                       | Contributor tone       | "Adding ntfy-mac to the integrations list"                                       |
+| Lemmy (discuss.ntfy.sh)          | Community member       | "Built a native macOS client — feedback welcome"                                 |
 
 ---
 
@@ -59,9 +59,9 @@ ntfy-mac's position: the native macOS client that ntfy should have shipped. Comp
 
 - [ ] **PR to ntfy integrations.md** — Add ntfy-mac to [github.com/binwiederhier/ntfy/integrations.md](https://github.com/binwiederhier/ntfy). This is the single highest-leverage action. Every ntfy user looking for clients sees this list. Follow the existing format, keep the description to one line.
 
-- [ ] **Post to r/selfhosted** — The primary community for ntfy users. Title should be first-person, problem-focused: "I built a native macOS daemon for ntfy because PWA notifications kept failing". Engage in comments authentically. Don't link-dump and leave.
+- [ ] **Post to r/selfhosted** — The primary community for ntfy users. Title should be first-person, problem-focused: "I built a native macOS client for ntfy because PWA notifications kept failing". Engage in comments authentically. Don't link-dump and leave.
 
-- [ ] **Post to r/macapps** — Focus on the native macOS angle. These users care about macOS integration quality, Homebrew install, launchd, Notification Center. Less about ntfy internals, more about the Mac experience.
+- [ ] **Post to r/macapps** — Focus on the native macOS angle. These users care about macOS integration quality, Homebrew install, Login Items, Notification Center. Less about ntfy internals, more about the Mac experience.
 
 - [ ] **Post to r/commandline** — Focus on CLI UX: `doctor` command, local notify for scripts/cron, `sounds` preview. This audience appreciates well-designed CLI tools.
 
@@ -69,7 +69,7 @@ ntfy-mac's position: the native macOS client that ntfy should have shipped. Comp
 
 ### Tier 2 — High Impact, Medium Effort (this month)
 
-- [ ] **Show HN post** — Post Tuesday or Wednesday around 9am ET. Title: "Show HN: ntfy-mac – Native macOS notification daemon for ntfy". Include technical details in the comment — SSE architecture, offline recovery strategy, dedup approach. HN rewards solid engineering over feature lists. Be ready to answer questions for the first 2-3 hours.
+- [ ] **Show HN post** — Post Tuesday or Wednesday around 9am ET. Title: "Show HN: ntfy-mac – Native macOS client for ntfy". Include technical details in the comment — NDJSON stream and reconnect state machine, offline recovery strategy, dedup approach. HN rewards solid engineering over feature lists. Be ready to answer questions for the first 2-3 hours.
 
 - [ ] **awesome-selfhosted PR** — Add to [github.com/awesome-selfhosted/awesome-selfhosted](https://github.com/awesome-selfhosted/awesome-selfhosted) under Communication > Notification Providers or a relevant subcategory.
 
@@ -106,7 +106,7 @@ ntfy-mac's position: the native macOS client that ntfy should have shipped. Comp
 ### Reddit r/selfhosted
 
 ```text
-Title: I built a native macOS daemon for ntfy because PWA notifications kept failing
+Title: I built a native macOS client for ntfy because PWA notifications kept failing
 
 I run ntfy for homelab alerts (Uptime Kuma, Grafana, cron jobs) and the
 recommended desktop approach — keeping a browser tab open for PWA
@@ -114,10 +114,10 @@ notifications — was unreliable. Notifications stopped when the browser
 restarted, arrived late when tabs were suspended, and there was no way to
 recover messages missed while the Mac was asleep.
 
-So I built ntfy-mac. It's a native macOS daemon that:
+So I built ntfy-mac. It's a native menu bar app that:
 
-- Connects via SSE — real-time, no polling
-- Runs as a launchd service — survives reboots, no browser needed
+- Streams over NDJSON from ntfy's /json endpoint — real-time, no polling
+- Starts at login (SMAppService) — survives reboots, no browser needed
 - Recovers missed messages after reconnect (sleep, network change, etc.)
 - Deduplicates — reconnect doesn't mean seeing everything twice
 - Maps priorities to macOS interruption levels — urgent breaks through
@@ -140,25 +140,22 @@ Happy to answer questions about the setup or how it works under the hood.
 ### Show HN
 
 ```text
-Title: Show HN: ntfy-mac – Native macOS notification daemon for ntfy
+Title: Show HN: ntfy-mac – Native macOS client for ntfy
 
-ntfy-mac connects to your ntfy server via SSE and delivers messages
-through macOS Notification Center as a background daemon.
+ntfy-mac connects to your ntfy server over the NDJSON stream and delivers
+messages through macOS Notification Center from a menu bar app.
 
 I built it because the recommended desktop approach (PWA in a browser tab)
 was unreliable on macOS — notifications stopped on browser restart, missed
 messages during sleep, no Focus mode integration.
 
 How it works:
-- Bun/TypeScript compiled to single ARM64 binary
-- Swift helper for UNUserNotificationCenter delivery
-- SSE streaming with exponential backoff (5s → 5min)
-- Network detection via scutil --nwi (suppresses false reconnect alerts)
+- Swift app, UNUserNotificationCenter delivery, no Bun
+- NDJSON stream from /json with a reconnect state machine, backoff capped at 5 min
 - Missed message recovery: polls server for gap on reconnect
-- Dedup via persisted message IDs (48h TTL, 1000 entry cap)
+- Dedup by a unique (server, topic, id) index in SQLite
 - Priority → macOS interruption level mapping (urgent breaks through DND)
-- Auto-discovers subscribed topics every 30min
-- Launchd daemon with PID lock for single-instance
+- Menu bar app that starts at login (SMAppService)
 
 Install: brew install jkrumm/tap/ntfy-mac
 
@@ -168,7 +165,7 @@ https://github.com/jkrumm/ntfy-mac
 ### Dev.to Article Outline
 
 ```text
-Title: Why I replaced ntfy's PWA with a native macOS daemon
+Title: Why I replaced ntfy's PWA with a native macOS app
 
 1. The problem
    - ntfy is great for push notifications from homelab/infra
@@ -182,10 +179,10 @@ Title: Why I replaced ntfy's PWA with a native macOS daemon
    - osascript hacks — fragile, no persistence
 
 3. What I built
-   - Architecture: SSE → Bun daemon → Swift notification helper
-   - Why SSE over WebSocket (ntfy uses SSE natively, simpler reconnect)
+   - Architecture: NDJSON stream → reconnect state machine → SQLite history → UserNotifications
+   - Why the /json NDJSON stream (plain HTTP, simple reconnect handling)
    - Offline recovery: on reconnect, poll since=<last_seen_id>
-   - Dedup: persist message IDs, 48h TTL, 1000 cap
+   - Dedup: unique (server, topic, id) index, inserts ignore duplicates
    - Priority mapping to macOS interruption levels
 
 4. Results
