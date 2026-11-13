@@ -15,6 +15,7 @@ cd ntfy-mac
 
 ```bash
 make check            # the gate: format lint, SwiftLint, shellcheck, build, docs check, tests, installer test, app build
+make check-fast       # the same without the app build and the installer test (no xcodebuild)
 make format           # write swift format changes
 make app              # build and ad-hoc sign NtfyMac.app into .build/xcode/Build/Products/Release
 SIGN_IDENTITY=developer-id NOTARIZE=1 make app   # Developer ID, notarized and stapled (needs the team credentials)
@@ -24,7 +25,7 @@ make analyze          # Periphery dead-code scan
 make docs             # regenerate docs/cli.md, docs/settings.md and llms.txt from the CLI schema
 ```
 
-`make check` is the single gate and CI runs the same target. Never edit the generated docs by hand. A new command or setting needs a `CommandSpec` or `SettingsCatalog` entry first; `AGENTS.md` has the layout and the rules.
+`make check` is the full gate and CI runs it; `make check-fast` is the quick local tier. Never edit the generated docs by hand. A new command or setting needs a `CommandSpec` or `SettingsCatalog` entry first; `AGENTS.md` has the layout and the rules.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org). The `commit-msg` hook (lefthook, `scripts/check-commit-msg.sh`) checks the header and the 100-character line limit; CI runs commitlint with the conventional preset.
 
