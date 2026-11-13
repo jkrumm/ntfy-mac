@@ -1,9 +1,6 @@
 APP := .build/xcode/Build/Products/Release/NtfyMac.app
 SWIFT_FILES := Sources tests App/Sources Package.swift
 TOOLS := scripts/tools.sh
-MACBOOK := iumac
-MACBOOK_APP := Applications/NtfyMac.app
-LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 .PHONY: verify-signature check check-fast toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
@@ -105,15 +102,10 @@ package:
 installer-check:
 	scripts/test-install.sh
 
-# Copies the app to ~/Applications on the MacBook (ssh host $(MACBOOK)), quits the
-# running copy and opens the new one, so the next thing the owner sees is this build. The app is ad-hoc signed
-# unless SIGN_IDENTITY=developer-id NOTARIZE=1 make install-macbook builds the Developer ID signed, notarized
-# and stapled app (needs the team's credentials, see scripts/sign.sh).
+# Installs the app into ~/Applications on the MacBook by pulling: the MacBook rsyncs the bundle from the mini, checks
+# the signature, quits the running copy and opens the new one. The mini's iumac key runs a fixed verb list only, so
+# the one MacBook-side command goes through ask-human.sh (one approval dialog, scripts/install-macbook.sh). The app
+# is ad-hoc signed unless SIGN_IDENTITY=developer-id NOTARIZE=1 make install-macbook builds the Developer ID
+# signed, notarized and stapled app (needs the team's credentials, see scripts/sign.sh).
 install-macbook: app
-	ssh -o BatchMode=yes $(MACBOOK) 'mkdir -p ~/Applications'
-	rsync -a --delete -e 'ssh -o BatchMode=yes' $(APP)/ $(MACBOOK):$(MACBOOK_APP)/
-	ssh -o BatchMode=yes $(MACBOOK) '$(LSREGISTER) -f ~/$(MACBOOK_APP) && \
-		codesign --verify --deep --strict ~/$(MACBOOK_APP) && \
-		echo "installed: $$HOME/$(MACBOOK_APP)" && \
-		codesign -dvv ~/$(MACBOOK_APP) 2>&1 | grep -E "^(Identifier|Signature|Format|CodeDirectory|Authority)"'
-	ssh -o BatchMode=yes $(MACBOOK) 'pkill -x NtfyMac; sleep 1; open ~/$(MACBOOK_APP) && echo "relaunched: $$HOME/$(MACBOOK_APP)"'
+	scripts/install-macbook.sh $(APP)

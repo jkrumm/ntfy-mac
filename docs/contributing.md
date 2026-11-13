@@ -20,7 +20,7 @@ make format           # write swift format changes
 make app              # build and ad-hoc sign NtfyMac.app into .build/xcode/Build/Products/Release
 SIGN_IDENTITY=developer-id NOTARIZE=1 make app   # Developer ID, notarized and stapled (needs the team credentials)
 make verify-signature APP=path MODE=--release    # check an app: signature, team, Hardened Runtime, ticket, Gatekeeper
-make install-macbook  # (also with SIGN_IDENTITY=developer-id NOTARIZE=1) copy the signed app to ~/Applications on the MacBook (ssh host iumac), never launches it
+make install-macbook  # (also with SIGN_IDENTITY=developer-id NOTARIZE=1) the MacBook pulls the app into ~/Applications (one ask-human approval dialog), then relaunches it
 make analyze          # Periphery dead-code scan
 make docs             # regenerate docs/cli.md, docs/settings.md and llms.txt from the CLI schema
 ```
