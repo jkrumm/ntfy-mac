@@ -74,12 +74,15 @@ enum RetryAfter {
 }
 
 /// Redirects are terminal: following one would send the token to whatever host answered.
+/// The completion-handler form answers on the URL loading queue; the async form would wait for a
+/// cooperative-pool thread, so a starved pool let the request timeout fire before the refusal.
 final class RedirectRefuser: NSObject, URLSessionTaskDelegate {
   func urlSession(
     _ session: URLSession, task: URLSessionTask,
-    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
-  ) async -> URLRequest? {
-    nil
+    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+    completionHandler: @escaping @Sendable (URLRequest?) -> Void
+  ) {
+    completionHandler(nil)
   }
 }
 

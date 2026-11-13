@@ -12,12 +12,12 @@ import Testing
 
   private func publisher(
     _ stub: Stub, scheme: String = "https", host: String? = nil, token: String = "tk_secret",
-    allowInsecure: Bool = false
+    allowInsecure: Bool = false, timeout: TimeInterval = 5
   ) -> (NtfyPublisher, URL) {
     let base = StubURLProtocol.register(stub, scheme: scheme, host: host)
     return (
       NtfyPublisher(
-        base: base, token: token, allowInsecure: allowInsecure, timeout: 5,
+        base: base, token: token, allowInsecure: allowInsecure, timeout: timeout,
         session: StubURLProtocol.session()), base
     )
   }
@@ -85,7 +85,8 @@ import Testing
 
   @Test func redirectsAreNotFollowed() async throws {
     let target = try #require(URL(string: "https://elsewhere.test/"))
-    let (publisher, _) = publisher(Stub(redirectTo: target))
+    // Generous timeout: a loaded hosted runner stalls the whole parallel run for 7-10 s.
+    let (publisher, _) = publisher(Stub(redirectTo: target), timeout: 60)
     await #expect(throws: NtfyError.redirected) { try await publisher.publish(request) }
     #expect(StubURLProtocol.requests(for: target).isEmpty)
   }
