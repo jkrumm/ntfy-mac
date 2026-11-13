@@ -17,7 +17,7 @@ struct HistoryFilterBar: View {
         Spacer(minLength: 0)
       }
       HStack(spacing: 6) {
-        Text(verbatim: model.selectedTopic ?? "All messages")
+        Text(verbatim: model.scopeTitle)
           .font(.caption.weight(.semibold))
           .lineLimit(1)
           .truncationMode(.middle)

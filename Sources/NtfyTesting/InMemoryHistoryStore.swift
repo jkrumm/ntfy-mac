@@ -223,6 +223,11 @@ extension HistoryQuery {
   fileprivate func accepts(_ stored: StoredMessage) -> Bool {
     if let topic, stored.message.topic != topic { return false }
     if unreadOnly, stored.readAt != nil { return false }
+    if let unacknowledgedFrom,
+      stored.ackedAt != nil || stored.message.priority < unacknowledgedFrom
+    {
+      return false
+    }
     if let minPriority, stored.message.priority < minPriority { return false }
     if let since, stored.message.time < since { return false }
     if let until, stored.message.time > until { return false }

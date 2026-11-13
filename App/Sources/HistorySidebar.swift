@@ -1,10 +1,12 @@
 import NtfyAppLogic
 import SwiftUI
 
-/// The topics: "All messages" and one compact row per topic, newest activity first.
+/// The views: "All messages", the messages that wait for an acknowledgement, and one compact row
+/// per topic, newest activity first.
 struct HistorySidebar: View {
   private enum Item: Hashable {
     case all
+    case needsAcknowledgement
     case topic(String)
   }
 
@@ -16,6 +18,11 @@ struct HistorySidebar: View {
       row("All messages", symbol: "tray.full", unread: model.totalUnread, urgent: false)
         .tag(Item.all)
         .contextMenu { menu(.all, unread: model.totalUnread) }
+      row(
+        "Unacknowledged", symbol: "checkmark.circle", unread: model.pendingCount,
+        urgent: false, badge: "to acknowledge"
+      )
+      .tag(Item.needsAcknowledgement)
       if !model.topics.isEmpty {
         Section("Topics") {
           ForEach(model.topics, id: \.topic) { summary in
@@ -45,7 +52,9 @@ struct HistorySidebar: View {
   }
 
   /// Symbol and name on the left; an urgent marker and the unread count on the right.
-  private func row(_ title: String, symbol: String, unread: Int, urgent: Bool) -> some View {
+  private func row(
+    _ title: String, symbol: String, unread: Int, urgent: Bool, badge: String = "unread"
+  ) -> some View {
     HStack(spacing: 6) {
       Image(systemName: symbol)
         .font(.caption)
@@ -71,7 +80,7 @@ struct HistorySidebar: View {
           .foregroundStyle(.white)
           .padding(.horizontal, 5)
           .background(Color.accentColor, in: Capsule())
-          .accessibilityLabel("\(unread) unread")
+          .accessibilityLabel("\(unread) \(badge)")
       }
     }
     .contentShape(Rectangle())
@@ -89,13 +98,24 @@ struct HistorySidebar: View {
 
   private var selection: Binding<Item?> {
     Binding(
-      get: { model.selectedTopic.map(Item.topic) ?? .all },
+      get: {
+        switch model.scope {
+        case .all: .all
+        case .needsAcknowledgement: .needsAcknowledgement
+        case .topic(let topic): .topic(topic)
+        }
+      },
       set: { item in
-        guard let item else { return }
-        model.selectedTopic = name(item)
+        switch item {
+        case .all: model.show(.all)
+        case .needsAcknowledgement: model.show(.needsAcknowledgement)
+        case .topic(let topic): model.show(.topic(topic))
+        case nil: break
+        }
       })
   }
 
+  /// The topic of a row; nil for the views that span topics.
   private func name(_ item: Item) -> String? {
     if case .topic(let name) = item { name } else { nil }
   }

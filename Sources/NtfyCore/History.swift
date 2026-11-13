@@ -27,6 +27,9 @@ public struct StoredMessage: Sendable, Hashable {
 public struct HistoryQuery: Sendable, Hashable {
   public var topic: String?
   public var unreadOnly: Bool
+  /// Only messages not yet acknowledged whose priority is at least this one: the messages that
+  /// still wait for an acknowledgement. nil does not look at acknowledgement.
+  public var unacknowledgedFrom: Priority?
   /// Free text over title and body; each word matches as a prefix.
   public var text: String?
   public var minPriority: Priority?
@@ -39,10 +42,11 @@ public struct HistoryQuery: Sendable, Hashable {
   public init(
     topic: String? = nil, unreadOnly: Bool = false, text: String? = nil,
     minPriority: Priority? = nil, since: Date? = nil, until: Date? = nil, limit: Int = 100,
-    offset: Int = 0
+    offset: Int = 0, unacknowledgedFrom: Priority? = nil
   ) {
     self.topic = topic
     self.unreadOnly = unreadOnly
+    self.unacknowledgedFrom = unacknowledgedFrom
     self.text = text
     self.minPriority = minPriority
     self.since = since
