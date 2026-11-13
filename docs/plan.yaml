@@ -1,0 +1,156 @@
+version: 1
+rows:
+  - key: check-fast
+    kind: chore
+    title: Add a fast check tier so leads stop running xcodebuild on the mini
+    facts:
+      why: |-
+        `make check` is the only gate and always ends in a Release `xcodebuild` of the app plus the installer check. Every lead runs it on the one mini, next to Iris and the other repos. Iris solved this with a fast tier for leads and the full gate on hosted CI; this repo is public, so hosted macOS minutes cost nothing.
+      what: |-
+        `Makefile`, `project.yaml`, `.github/workflows/ci.yml`, `AGENTS.md` (section "Gate"). No source or test changes.
+      change: |-
+        1. Add `make check-fast`: `toolchain`, `lint-format`, `lint`, `lint-sh`, `build`, `docs-check`, `test`. No `app`, no `installer-check`, no `snapshots`, nothing that calls `xcodebuild`. `make check` stays the full gate and must still contain every step it has today.
+        2. In `project.yaml` add `checks: { fast: make check-fast, full: make check, ci: true }`. The reference is `../iris/project.yaml` and Iris's AGENTS.md row for `make check-fast`; read how the factory uses the three keys with `factory project --help` before writing them, do not guess a key.
+        3. In `.github/workflows/ci.yml` cache the SwiftPM build and checkouts (`.build`, `.tools` if it holds the pinned tools) with `actions/cache`, keyed on the Xcode version and the hash of `Package.resolved` and `App/project.yml`. Verify the current `actions/cache` major with `/research` before pinning it. The job keeps running `make check` on `macos-26`.
+        4. Update the "Gate" section of `AGENTS.md` in the same commit: which tier a lead runs, which tier CI runs.
+      acceptance: |-
+        `make check-fast` passes on the mini and its output contains no `xcodebuild` line; `make check` still runs `app` and `installer-check`; the CI run on the pushed commit is green and a second run reports a cache hit; `factory project show ntfy-mac --format plain` shows the checks tiers.
+
+  - key: macbook-developer-id
+    title: Make install-macbook work through the MacBook approval dialog and run the Wave 7 MacBook checklist
+    facts:
+      why: |-
+        The MacBook still runs an ad-hoc 2.0.0 build from 2026-11-03 without Sparkle. `make install-macbook` cannot fix that any more: it pushes with `ssh iumac '<command>'` and `rsync … iumac:`, and the mini's key for `iumac` now runs only a fixed verb list (`dotfiles/scripts/iumac-gate.sh`; rsync pushes and arbitrary commands are refused, by design). The Wave 7 MacBook checklist in `docs/waves/PLAN.md` ("MacBook checklist") is blocked on it, and the first release is blocked on the checklist.
+      what: |-
+        `Makefile` (target `install-macbook`), a new script under `scripts/` if the recipe needs one, `AGENTS.md` ("Gate", the `install-macbook` sentence), `docs/waves/PLAN.md` (Wave 7 record). No app source changes unless the checklist finds a defect; a defect is fixed in this Issue only when it is small, else reported as its own Issue.
+      change: |-
+        1. Rework `install-macbook` so the MacBook pulls instead of the mini pushing. The only allowed path for MacBook-side commands is `~/SourceRoot/dotfiles/scripts/ask-human.sh ask '<what>' --key <key> --cmd '<command>'`: it shows the exact command in a native dialog on the MacBook and runs it on the owner's click; the result is the `.res` file under `~/.local/state/human-queue/<id>.res` (`output_tail`, `exit`). The MacBook can reach the mini over ssh (`mini`), so the command rsyncs the built bundle from the mini into `~/Applications/NtfyMac.app`, runs `lsregister -f`, `codesign --verify --deep --strict`, prints identifier, authority and version, quits the running copy and opens the new one. Keep it one dialog per install. Do not widen the iumac gate and do not touch dotfiles.
+        2. Run it once with `SIGN_IDENTITY=developer-id NOTARIZE=1` on current master (credentials come from `scripts/apple-credentials.sh` via `secrets-run`; never print the team id).
+        3. Run the checklist. Items a command can prove go through one more `ask-human` dialog and are recorded with their output: `spctl --assess --type execute --verbose ~/Applications/NtfyMac.app` says Notarized Developer ID; `ntfy-mac doctor` shows the update check with channel, Developer ID signed and the pin recorded; `ntfy-mac update --check` prints the status or the unavailable reason without opening a window. Items only eyes can prove (no Gatekeeper dialog on open, no new notification permission prompt, the menu shows "Check for Updates…") go to the owner as one ask with the three yes/no lines.
+        4. Record the result in `docs/waves/PLAN.md` under Wave 7, replacing the "Unverified" entries that are now proven.
+      acceptance: |-
+        `make install-macbook` on the mini ends with the MacBook result showing the current version, `Authority=Developer ID Application` and a relaunched app; `spctl` on the MacBook reports Notarized Developer ID; the doctor and `update --check` outputs are recorded in `docs/waves/PLAN.md`; the three visual items are answered by the owner and recorded; `make check` passes.
+
+  - key: release-2-0-0
+    after: [macbook-developer-id]
+    title: Set the release secrets and publish 2.0.0 through the Release workflow
+    facts:
+      why: |-
+        The Swift rewrite has been finished since Wave 6 and nothing is published: the latest release is v1.11.0 from April. The owner asked for the release on 2026-11-13. The Release workflow (`.github/workflows/release.yml`) was rebuilt for Developer ID, notarization and the Sparkle appcast and has never run in that shape; seven repository secrets it checks before tagging do not exist (`gh secret list` shows only `HOMEBREW_TAP_TOKEN`, `HYPERDX_API_KEY_PROD`, `RELEASE_TOKEN`).
+      what: |-
+        Repository secrets of `jkrumm/ntfy-mac`, one commit with a `BREAKING CHANGE:` footer, the Release workflow run, `jkrumm/homebrew-tap` `Formula/ntfy-mac.rb` (written by the workflow's `tap` job), `docs/waves/PLAN.md` and `AGENTS.md` "Release process" where the run proves them wrong.
+      change: |-
+        1. Set the secrets with `gh secret set <NAME>` reading from stdin; no value in argv, a log or a file in the repo. `APPLE_TEAM_ID`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID` come from `secrets-run read op://mini/apple-developer/<field>` (fields `team-id`, `asc-key-p8`, `asc-key-id`, `asc-issuer-id`, see `scripts/apple-credentials.sh`). `SPARKLE_ED_PRIVATE_KEY` is the content of the key file AGENTS.md names for this app (ntfy-mac has its own key pair; do not use Iris's). `APPLE_DEVELOPER_ID_P12_BASE64` and `APPLE_DEVELOPER_ID_P12_PASSWORD`: export the Developer ID Application identity from the mini's signing keychain (`unlock_signing_keychain` in `scripts/apple-credentials.sh` names it and its password file) with `security export -t identities -f pkcs12` into a 0600 temp file under `$TMPDIR` with a fresh random password, base64 it into the secret, delete the file. If the export prompts or fails headless, read `~/SourceRoot/dotfiles/docs/apple-signing.md` (a `.p12` backup is described there) and as the last resort ask the owner through `ask-human.sh`.
+        2. Add the breaking marker: one commit whose footer is `BREAKING CHANGE:` followed by what changes for a 1.x user (Swift menu bar app replaces the bash daemon, Homebrew service replaced by a login item, token moves to the Keychain). It must touch something real, for example the README upgrade notes; without it semantic-release cuts 1.12.0.
+        3. Wait for CI green on master, then `gh workflow run Release` and watch it to the end (notarization can queue; the job allows 120 minutes). Follow "Release recovery" in AGENTS.md if it fails after tagging.
+        4. Verify the published release: assets `ntfy-mac-2.0.0-arm64.tar.gz`, `NtfyMac-2.0.0.zip`, `appcast.xml`, `SHA256SUMS`; `https://github.com/jkrumm/ntfy-mac/releases/latest/download/appcast.xml` serves the appcast with an `sparkle:edSignature`; the downloaded app passes `scripts/verify-signature.sh --release`; the tap formula is at 2.0.0; `install.sh` from the real release installs into a temp HOME.
+        5. Record the run in `docs/waves/PLAN.md` and correct AGENTS.md where the documented process differed from what happened.
+      scope: |-
+        Do not answer or close GitHub issue 12; the owner replies there. Do not change the updater or the signing design.
+      acceptance: |-
+        `gh release view v2.0.0` shows a published, non-draft release with the four assets; the appcast URL returns 200 with a signed item for 2.0.0; `verify-signature.sh --release` passes on the downloaded zip; `jkrumm/homebrew-tap` `Formula/ntfy-mac.rb` names 2.0.0; `gh secret list` shows the seven new names.
+
+  - key: sparkle-live-proof
+    after: [release-2-0-0]
+    title: Prove a real Sparkle update on the MacBook from one published version to the next
+    facts:
+      why: |-
+        Sparkle is in the app since 2026-11-06 but has never updated from a real appcast. `docs/waves/PLAN.md` lists it as unverified, together with the scheduled-update menu row and `ntfy-mac update --check` against a live feed. Iris found that a quarantined copy runs translocated and never updates silently, so the installed copy must carry no quarantine flag.
+      what: |-
+        The MacBook install, one further release, `docs/waves/PLAN.md`. Source changes only for a defect the proof finds.
+      change: |-
+        1. Put the published 2.0.0 on the MacBook from the release with `install.sh` (through `ask-human.sh ask --cmd`, as `make install-macbook` does since the earlier row) and confirm `xattr` shows no `com.apple.quarantine`.
+        2. Publish the next version through the Release workflow. It needs a releasable commit (`fix:` or `feat:`); take a real one from master, or a real small fix. Never an empty or fake commit.
+        3. On the MacBook: `ntfy-mac update --check` reports the new version without opening a window; `ntfy-mac update` opens Sparkle's prompt. The prompt and the relaunch need the owner's eyes and click: ask once, name the machine and the three things to confirm (prompt shown, app relaunched, version in the menu). Then read the installed version and signature back through `ask-human.sh`.
+        4. Record the proof, or the defect, in `docs/waves/PLAN.md` Wave 7 and tick what is now verified.
+      acceptance: |-
+        The MacBook's installed version equals the second published version after the Sparkle update, its signature is still Developer ID with the same team, config and history survived, and `docs/waves/PLAN.md` records the outputs and the owner's three confirmations.
+
+  - key: time-sensitive
+    after: [sparkle-live-proof]
+    title: Ship the time-sensitive notification entitlement with a Developer ID profile
+    facts:
+      why: |-
+        `timeSensitive` is downgraded to `active` at runtime because the entitlement is absent, so high-priority ntfy messages do not break through Focus. `docs/waves/PLAN.md` ("Time-sensitive entitlement") holds the earlier decision to skip it and the reason: it is a portal capability the App Store Connect API cannot set, plus a Developer ID provisioning profile embedded in the bundle; an app that claims the entitlement without a profile is killed at launch.
+      what: |-
+        `scripts/sign.sh`, `scripts/verify-signature.sh`, the entitlements file under `App/`, `AGENTS.md`, `docs/waves/PLAN.md`. The profile itself stays out of the repo.
+      change: |-
+        1. Ask the owner once, through the factory's ask, for the portal step: Identifiers > `ntfy-mac` > Time Sensitive Notifications. Name the exact clicks. If the portal does not offer the capability for a macOS Developer ID app, close the Issue as not possible and record that.
+        2. Create the Developer ID provisioning profile for the App ID (the API can create profiles once the capability is on), keep it next to the other credentials outside the repo, and add it to the Release workflow as a secret.
+        3. `sign.sh` embeds the profile and adds the entitlement only when the profile is present; an ad-hoc build stays without both. `verify-signature.sh --release` checks the entitlement and the embedded profile.
+        4. Prove on the MacBook (`make install-macbook` with Developer ID) that the app launches and `doctor` reports time-sensitive as available, before any release carries it.
+      acceptance: |-
+        A Developer ID build on the MacBook launches, `ntfy-mac doctor` reports the time-sensitive entitlement present, an ad-hoc `make check` build still launches without it, and the outcome is recorded in `docs/waves/PLAN.md`.
+
+  - key: app-group-ownership
+    after: [sparkle-live-proof]
+    checkpoint: spec
+    seat: { tier: opus, effort: high }
+    title: Move shared state into a Team-ID app group with one owner at a time and a visible install channel
+    facts:
+      why: |-
+        Wave 7's goal is that Homebrew, the direct download and the Mac App Store build coexist without one destroying the other. That needs one shared state and one owner of the menu bar and login item. The design decisions are in `docs/waves/PLAN.md` Wave 7 ("Shared state in a Team-ID app group", "Ownership", "Keychain"); read them first, they are settled unless the Spec shows one cannot hold.
+      what: |-
+        Config, history DB, IPC socket, instance lock and a new owner record; the CLI; `doctor` and the UI's channel display; the migration from today's paths (`~/.config/ntfy-mac/config.json` and the current data dir). Entitlements and `scripts/sign.sh` for the group.
+      change: |-
+        Build the unchecked Wave 7 item "Shared app group state + ownership/hand-off + channel display, with the migration from the direct build's current paths". The Spec answers at most three open choices, each with a default: how the `~/.config/ntfy-mac/config.json` contract survives (PLAN.md proposes migrate once and keep reading the old path when no group exists), how the token is shared across the two bundle ids (shared keychain access group with a profile, or enter once per channel; decide with `/research`), and the socket path under the group container within the 104-byte `sun_path` limit. The team id never enters a tracked file.
+      acceptance: |-
+        An upgrade from the published direct build keeps config, history, token and the notification permission; a second copy launched while one runs hands off and quits; `ntfy-mac doctor` and the UI name the install channel and who updates it; `make check` passes and the MacBook proof is recorded in `docs/waves/PLAN.md`.
+
+  - key: cask-migration
+    after: [sparkle-live-proof]
+    title: Move the Homebrew install from the formula to a notarized cask without breaking a 2.0 formula install
+    facts:
+      why: |-
+        The tap ships a formula because an ad-hoc build cannot be a cask (casks must pass Gatekeeper and brew quarantines cask downloads). With a notarized release the cask is possible and is the right shape for a GUI app; `auto_updates true` keeps brew and Sparkle from fighting. Decision and constraints are in `docs/waves/PLAN.md` Wave 7 ("Homebrew").
+      what: |-
+        `packaging/`, `scripts/render-formula.sh` or its cask successor, the `tap` job in `.github/workflows/release.yml`, `jkrumm/homebrew-tap` (`Casks/ntfy-mac.rb`, `tap_migrations.json`, removal of the formula), the app's brew guard (a Homebrew-managed copy never self-updates today; with `auto_updates true` that rule changes for the cask), README install section.
+      change: |-
+        Research the formula-to-cask token migration with `/research` first (Homebrew docs for `tap_migrations.json` and renames inside one tap; never from memory). Then render a cask (`app` artifact, `binary` stanza for the bundled CLI, `auto_updates true`) from the release job, and test the migration from a real 2.0 formula install: `brew upgrade` must end with the cask installed, the app in place, config, history and the notification permission intact.
+      acceptance: |-
+        On a machine with the 2.0 formula installed, `brew update && brew upgrade` ends on the cask with data and permission intact; a fresh `brew install --cask jkrumm/tap/ntfy-mac` opens without a Gatekeeper dialog; `brew audit --cask` and `brew style` pass; the result is recorded in `docs/waves/PLAN.md`.
+
+  - key: app-store-target
+    after: [app-group-ownership]
+    checkpoint: spec
+    seat: { tier: opus, effort: high }
+    title: Add the Mac App Store build and prepare App Review, without submitting
+    facts:
+      why: |-
+        The third channel of Wave 7. Constraints are in `docs/waves/PLAN.md` Wave 7 ("Two bundle IDs, one team", "App Store specifics"): bundle id `com.jkrumm.ntfy-mac.mas`, sandboxed, no updater (Sparkle compiled out), no direct-download links, a sandboxed CLI helper with only the sandbox and inherit entitlements, no self-install into PATH, socket in the group container.
+      what: |-
+        `App/project.yml` (a second target or configuration), entitlements, `scripts/sign.sh`, the portal records (App ID, App Store Connect record; read the `apple-signing` skill and `~/SourceRoot/dotfiles/docs/apple-signing.md` first), privacy manifest, review notes under `docs/`.
+      change: |-
+        Build the App Store variant on top of the shared app group, upload a build to App Store Connect for internal TestFlight, and write the App Review package (demo server and topic, ATS and local-network strings, privacy manifest). Check the name "ntfy" with `/research` (trademark, the ntfy maintainer's stance) before creating the store record and put the finding in the Spec.
+      scope: |-
+        Stop before "Submit for Review": submitting, pricing and the store listing text are the owner's decision. Ask once when the build is in TestFlight.
+      acceptance: |-
+        A sandboxed build with the `.mas` bundle id is processed in App Store Connect, runs from TestFlight on the MacBook next to the direct build with the hand-off working, contains no Sparkle code, and the review package is in the repo.
+
+  - key: clean-machine-matrix
+    after: [cask-migration, app-store-target]
+    title: Run the clean-machine install matrix across the three channels
+    facts:
+      why: |-
+        The last unchecked Wave 7 item: each channel alone and both together, on macOS 15 and 26 with TCC reset, must show no unexpected prompt, open the right copy, hand off, and keep data and permission across an upgrade in each channel.
+      what: |-
+        A scripted matrix under `scripts/` or `tests/` where a script can prove a cell, `docs/waves/PLAN.md` for the record. Source changes only as separate Issues for defects.
+      change: |-
+        Decide how to get clean machines first (a macOS VM on the mini is the likely way; verify the tooling with `/research`, and run it inside the Apple slot so it does not compete with builds). The mini is on macOS 26; macOS 15 needs a VM image. Cells a script cannot judge (a permission prompt) are batched into one owner checklist. Record every cell with its evidence.
+      acceptance: |-
+        `docs/waves/PLAN.md` holds the filled matrix (channel x macOS x alone/together x install/upgrade) with evidence per cell, every failed cell has its own Issue, and Wave 7 is marked closed or names exactly what is left.
+
+  - key: apple-signing-upstream
+    repo: dotfiles
+    kind: docs
+    after: [sparkle-live-proof]
+    title: Upstream ntfy-mac's Developer ID, notarization and Sparkle findings into the Apple signing reference
+    facts:
+      why: |-
+        `docs/apple-signing.md` (behind the global `apple-signing` skill) was written from Iris. ntfy-mac is the second Mac app on the same team and learned things the reference does not hold, so the next app would rediscover them. The owner asked for this on 2026-11-13.
+      what: |-
+        `docs/apple-signing.md` and `skills/apple-signing/SKILL.md` in dotfiles only. Sources to read, all in `~/SourceRoot/ntfy-mac`: `docs/waves/PLAN.md` (Wave 1 spike results, Wave 6 "Updater", Wave 7 and its records), `AGENTS.md` ("Release process", the signing rows), `scripts/sign.sh`, `scripts/verify-signature.sh`, `scripts/apple-credentials.sh`, `scripts/appcast.sh`, `.github/workflows/release.yml`.
+      change: |-
+        Add what holds for every app and is not there yet; candidates to check against the current text: a release on a hosted GitHub runner instead of the mini (the certificate as a `.p12` secret, a temporary keychain, which secrets, the pre-tag secret check), the appcast as a GitHub release asset, Sparkle has no Team ID pin and how ntfy-mac pins the team instead, a SwiftPM package plus an xcodegen app with a bundled CLI signed inside out, the notification permission is keyed by bundle id and survives a new signature and path, formula versus cask (an ad-hoc build cannot be a cask; `auto_updates true`), the time-sensitive entitlement needs a portal capability and an embedded Developer ID profile, quarantine and Sparkle as proven live on ntfy-mac, the `PEM` normalisation for a 1Password concealed field. Keep per-repo recipes in the repo and link them; no team id, key or host name in the file. Run the result through `/prose`.
+      acceptance: |-
+        Each candidate above is either in `docs/apple-signing.md` with the repo path that proves it, or listed in the Issue's close note as already covered or not general; the skill's description still matches the reference; dotfiles' own check passes.
