@@ -201,10 +201,10 @@ public final class HistoryModel {
   private func reload() async {
     guard let inbox = handles?.inbox else { return }
     do throws(NtfyError) {
-      let query = currentQuery(limit: loadedLimit)
       let stored = try await config.load()
       let policy = AcknowledgePolicy(config: stored)
       acknowledgePolicy = policy
+      let query = currentQuery(limit: loadedLimit)
       let summaries = try await inbox.topics()
       let waiting = try await inbox.unacknowledged(minPriority: policy.minPriority)
       let count = try await inbox.count(query)
