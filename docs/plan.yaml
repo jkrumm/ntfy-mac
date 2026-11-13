@@ -82,21 +82,6 @@ rows:
       acceptance: |-
         A Developer ID build on the MacBook launches, `ntfy-mac doctor` reports the time-sensitive entitlement present, an ad-hoc `make check` build still launches without it, and the outcome is recorded in `docs/waves/PLAN.md`.
 
-  - key: app-group-ownership
-    after: [sparkle-live-proof]
-    checkpoint: spec
-    seat: { tier: opus, effort: high }
-    title: Move shared state into a Team-ID app group with one owner at a time and a visible install channel
-    facts:
-      why: |-
-        Wave 7's goal is that Homebrew, the direct download and the Mac App Store build coexist without one destroying the other. That needs one shared state and one owner of the menu bar and login item. The design decisions are in `docs/waves/PLAN.md` Wave 7 ("Shared state in a Team-ID app group", "Ownership", "Keychain"); read them first, they are settled unless the Spec shows one cannot hold.
-      what: |-
-        Config, history DB, IPC socket, instance lock and a new owner record; the CLI; `doctor` and the UI's channel display; the migration from today's paths (`~/.config/ntfy-mac/config.json` and the current data dir). Entitlements and `scripts/sign.sh` for the group.
-      change: |-
-        Build the unchecked Wave 7 item "Shared app group state + ownership/hand-off + channel display, with the migration from the direct build's current paths". The Spec answers at most three open choices, each with a default: how the `~/.config/ntfy-mac/config.json` contract survives (PLAN.md proposes migrate once and keep reading the old path when no group exists), how the token is shared across the two bundle ids (shared keychain access group with a profile, or enter once per channel; decide with `/research`), and the socket path under the group container within the 104-byte `sun_path` limit. The team id never enters a tracked file.
-      acceptance: |-
-        An upgrade from the published direct build keeps config, history, token and the notification permission; a second copy launched while one runs hands off and quits; `ntfy-mac doctor` and the UI name the install channel and who updates it; `make check` passes and the MacBook proof is recorded in `docs/waves/PLAN.md`.
-
   - key: cask-migration
     after: [sparkle-live-proof]
     title: Move the Homebrew install from the formula to a notarized cask without breaking a 2.0 formula install
@@ -110,35 +95,18 @@ rows:
       acceptance: |-
         On a machine with the 2.0 formula installed, `brew update && brew upgrade` ends on the cask with data and permission intact; a fresh `brew install --cask jkrumm/tap/ntfy-mac` opens without a Gatekeeper dialog; `brew audit --cask` and `brew style` pass; the result is recorded in `docs/waves/PLAN.md`.
 
-  - key: app-store-target
-    after: [app-group-ownership]
-    checkpoint: spec
-    seat: { tier: opus, effort: high }
-    title: Add the Mac App Store build and prepare App Review, without submitting
-    facts:
-      why: |-
-        The third channel of Wave 7. Constraints are in `docs/waves/PLAN.md` Wave 7 ("Two bundle IDs, one team", "App Store specifics"): bundle id `com.jkrumm.ntfy-mac.mas`, sandboxed, no updater (Sparkle compiled out), no direct-download links, a sandboxed CLI helper with only the sandbox and inherit entitlements, no self-install into PATH, socket in the group container.
-      what: |-
-        `App/project.yml` (a second target or configuration), entitlements, `scripts/sign.sh`, the portal records (App ID, App Store Connect record; read the `apple-signing` skill and `~/SourceRoot/dotfiles/docs/apple-signing.md` first), privacy manifest, review notes under `docs/`.
-      change: |-
-        Build the App Store variant on top of the shared app group, upload a build to App Store Connect for internal TestFlight, and write the App Review package (demo server and topic, ATS and local-network strings, privacy manifest). Check the name "ntfy" with `/research` (trademark, the ntfy maintainer's stance) before creating the store record and put the finding in the Spec.
-      scope: |-
-        Stop before "Submit for Review": submitting, pricing and the store listing text are the owner's decision. Ask once when the build is in TestFlight.
-      acceptance: |-
-        A sandboxed build with the `.mas` bundle id is processed in App Store Connect, runs from TestFlight on the MacBook next to the direct build with the hand-off working, contains no Sparkle code, and the review package is in the repo.
-
   - key: clean-machine-matrix
-    after: [cask-migration, app-store-target]
-    title: Run the clean-machine install matrix across the three channels
+    after: [cask-migration]
+    title: Run the clean-machine install matrix for the direct and Homebrew channels
     facts:
       why: |-
-        The last unchecked Wave 7 item: each channel alone and both together, on macOS 15 and 26 with TCC reset, must show no unexpected prompt, open the right copy, hand off, and keep data and permission across an upgrade in each channel.
+        The clean-machine item of Wave 7, without the Mac App Store channel (the owner postponed the App Store build and the shared app group on 2026-11-13; they are not part of this Issue): the direct download and the Homebrew cask, each alone and both together, on macOS 15 and 26 with TCC reset, must show no unexpected prompt, open the right copy, hand off, and keep data and permission across an upgrade in each channel.
       what: |-
         A scripted matrix under `scripts/` or `tests/` where a script can prove a cell, `docs/waves/PLAN.md` for the record. Source changes only as separate Issues for defects.
       change: |-
         Decide how to get clean machines first (a macOS VM on the mini is the likely way; verify the tooling with `/research`, and run it inside the Apple slot so it does not compete with builds). The mini is on macOS 26; macOS 15 needs a VM image. Cells a script cannot judge (a permission prompt) are batched into one owner checklist. Record every cell with its evidence.
       acceptance: |-
-        `docs/waves/PLAN.md` holds the filled matrix (channel x macOS x alone/together x install/upgrade) with evidence per cell, every failed cell has its own Issue, and Wave 7 is marked closed or names exactly what is left.
+        `docs/waves/PLAN.md` holds the filled matrix (channel x macOS x alone/together x install/upgrade) with evidence per cell, every failed cell has its own Issue, and Wave 7 names the postponed App Store and app group items as what is left.
 
   - key: apple-signing-upstream
     repo: dotfiles
