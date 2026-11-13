@@ -44,9 +44,6 @@ struct HistoryDetail: View {
         }
         .foregroundStyle(detail.priority.tint)
         Text(detail.time.formatted(date: .abbreviated, time: .standard))
-        if detail.isAcknowledged {
-          Label("Acknowledged", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        }
         if let remindAt = detail.remindAt {
           Label(
             "Reminder \(remindAt.formatted(date: .abbreviated, time: .shortened))",
