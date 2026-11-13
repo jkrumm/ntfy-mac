@@ -163,8 +163,17 @@ echo "Linked $BIN_DIR/ntfy-mac"
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 if [[ "${NTFY_MAC_NO_LAUNCH:-}" != "1" ]]; then
+  # `open` on a running app only fronts the old copy, so an update would keep running the old version.
+  if pgrep -x NtfyMac >/dev/null; then
+    echo "Restarting the running ntfy-mac to load $version..."
+    pkill -x NtfyMac || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      pgrep -x NtfyMac >/dev/null || break
+      sleep 0.5
+    done
+    pgrep -x NtfyMac >/dev/null && echo "ntfy-mac install: warning: the old ntfy-mac is still running; quit it from the menu bar to load $version." >&2
+  fi
   open "$target"
-  echo "If ntfy-mac was already running, quit it from the menu bar and open it again to load $version."
 fi
 
 echo ""
