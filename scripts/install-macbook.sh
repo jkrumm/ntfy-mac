@@ -21,11 +21,15 @@ dest='~/Applications/NtfyMac.app'
 lsregister='/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 
 # Runs on the MacBook. Output stays short: the result keeps only the last 2000 characters.
-cmd="set -e; mkdir -p ~/Applications; rsync -a --delete -e 'ssh -o BatchMode=yes' ${mini_host}:'${app}'/ ${dest}/"
+# PROBE_CMD (optional) runs on the MacBook once before the copy and once after the relaunch, to compare state.
+probe=""
+[[ -n "${PROBE_CMD:-}" ]] && probe="echo '--- probe'; ${PROBE_CMD}; "
+cmd="set -e; ${probe}mkdir -p ~/Applications; rsync -a --delete -e 'ssh -o BatchMode=yes' ${mini_host}:'${app}'/ ${dest}/"
 cmd+="; ${lsregister} -f ${dest}; codesign --verify --deep --strict ${dest} && echo 'codesign: valid'"
 cmd+="; codesign -dvv ${dest} 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier)' | sed -E 's/^TeamIdentifier=.*/TeamIdentifier=<set>/; s/ \\\\([A-Z0-9]{10}\\\\)\$/ (<team>)/'"
 cmd+="; echo \"version: \$(defaults read \$HOME/Applications/NtfyMac.app/Contents/Info CFBundleShortVersionString) build \$(defaults read \$HOME/Applications/NtfyMac.app/Contents/Info CFBundleVersion)\""
 cmd+="; pkill -x NtfyMac || true; sleep 1; open ${dest} && echo 'relaunched: ${dest}'"
+[[ -n "$probe" ]] && cmd+="; sleep 4; ${probe}"
 
 set +e
 id="$("$ask_human" ask "Install NtfyMac.app from ${mini_host} into ~/Applications and relaunch it" \
