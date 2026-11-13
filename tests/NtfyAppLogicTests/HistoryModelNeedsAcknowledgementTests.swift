@@ -84,6 +84,21 @@ import Testing
     rig.model.stop()
   }
 
+  @Test func aChangedThresholdAppliesToTheListOnTheNextRefresh() async {
+    let rig = HistoryModelRig(pipeline: PipelineFixture(config: Config(reAlertMinPriority: 5)))
+    await rig.add("high", age: 1, priority: .high)
+    await rig.add("urgent", priority: .max)
+    await rig.start()
+    rig.model.show(.needsAcknowledgement)
+    await rig.model.refresh()
+    #expect(rig.model.rows.map(\.key.id) == ["urgent"])
+    await rig.pipeline.config.update { $0.reAlertMinPriority = 4 }
+    await rig.model.refresh()
+    #expect(rig.model.rows.map(\.key.id) == ["urgent", "high"])
+    #expect(rig.model.pendingCount == 2)
+    rig.model.stop()
+  }
+
   @Test func theViewIsAScopeNotANarrowingAndResetLeavesIt() async {
     let rig = await rig()
     rig.model.show(.needsAcknowledgement)
