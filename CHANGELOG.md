@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/jkrumm/ntfy-mac/compare/v2.0.0...v2.0.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **install:** restart a running app so an update loads the new version ([c3a0ee9](https://github.com/jkrumm/ntfy-mac/commit/c3a0ee9d4affbdecbfa9ac3c233e3b71070f06fb))
+
 # [2.0.0](https://github.com/jkrumm/ntfy-mac/compare/v1.11.0...v2.0.0) (2026-11-13)
 
 
