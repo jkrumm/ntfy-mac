@@ -38,6 +38,10 @@ struct HistoryList: View {
       } actions: {
         Button("Clear") { model.clearNarrowing() }
       }
+    } else if model.needsAcknowledgementOnly {
+      ContentUnavailableView(
+        "Nothing to acknowledge", systemImage: "checkmark.circle",
+        description: Text("Messages that wait for an acknowledgement show up here."))
     } else {
       ContentUnavailableView(
         "No messages yet", systemImage: "tray",

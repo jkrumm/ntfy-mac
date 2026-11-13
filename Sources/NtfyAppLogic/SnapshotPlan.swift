@@ -18,6 +18,12 @@ public enum HistoryScenario: String, Sendable, CaseIterable {
   case all
   /// Priority, date and unread filters are on.
   case filtered
+  /// The "Needs acknowledgement" view with the urgent message selected.
+  case needsAcknowledgement
+  /// The same view with nothing left to acknowledge.
+  case nothingToAcknowledge
+  /// The `selected` message after it was acknowledged: every element sits where it did there.
+  case acknowledged
   /// A message with a very long title and body is selected.
   case long
   /// The filters hide every message.
@@ -103,12 +109,16 @@ public enum SnapshotPlan {
     SnapshotSpec(.popover($0), width: popoverWidth, height: nil)
   }
 
-  /// The log with a selection and without, and the filtered one, at both sizes; the other states
-  /// at the default size.
+  /// The log with a selection and without, the filtered one and the acknowledgement view, at both
+  /// sizes; the other states at the default size.
   private static let histories: [SnapshotSpec] = {
     let window = AppWindow.history
-    let both: [HistoryScenario] = [.selected, .all, .filtered]
-    let defaultOnly: [HistoryScenario] = [.long, .noMatch, .empty, .newMessage, .sending, .failed]
+    let both: [HistoryScenario] = [
+      .selected, .acknowledged, .all, .filtered, .needsAcknowledgement,
+    ]
+    let defaultOnly: [HistoryScenario] = [
+      .nothingToAcknowledge, .long, .noMatch, .empty, .newMessage, .sending, .failed,
+    ]
     return both.flatMap { scenario in
       [window.defaultSize, window.minimumSize].map { SnapshotSpec(.history(scenario), size: $0) }
     } + defaultOnly.map { SnapshotSpec(.history($0), size: window.defaultSize) }

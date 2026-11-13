@@ -69,6 +69,10 @@ extension HistoryQuery {
     var select = HistorySelect(server: server)
     if let topic { select.and("m.topic = ?", topic) }
     if unreadOnly { select.and("m.read_at IS NULL") }
+    if let unacknowledgedFrom {
+      select.and("m.acked_at IS NULL")
+      select.and("m.priority >= ?", unacknowledgedFrom.rawValue)
+    }
     if let minPriority { select.and("m.priority >= ?", minPriority.rawValue) }
     if let since { select.and("m.time >= ?", since) }
     if let until { select.and("m.time <= ?", until) }

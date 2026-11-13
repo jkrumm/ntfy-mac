@@ -70,6 +70,21 @@
         model.selectedTopic = "alerts"
         await model.select(MessageKey(topic: "alerts", id: "al-1"))
         await loadAttachment(of: MessageKey(topic: "alerts", id: "al-1"), model: model)
+      case .acknowledged:
+        let key = MessageKey(topic: "alerts", id: "al-1")
+        model.selectedTopic = "alerts"
+        await model.select(key)
+        await model.acknowledge(key)
+        await loadAttachment(of: key, model: model)
+      case .needsAcknowledgement:
+        model.show(.needsAcknowledgement)
+        await model.select(MessageKey(topic: "alerts", id: "al-1"))
+        await loadAttachment(of: MessageKey(topic: "alerts", id: "al-1"), model: model)
+      case .nothingToAcknowledge:
+        await model.acknowledge(MessageKey(topic: "alerts", id: "al-1"))
+        await model.acknowledge(MessageKey(topic: "alerts", id: "al-2"))
+        model.show(.needsAcknowledgement)
+        await model.refresh()
       case .all, .empty:
         break
       case .filtered:

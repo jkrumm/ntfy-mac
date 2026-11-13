@@ -22,6 +22,9 @@ public final class HistoryModel {
   public private(set) var topics: [TopicSummary] = []
   /// Topics with an unacknowledged message that needs one, for the sidebar's marker.
   public private(set) var urgentTopics: Set<String> = []
+  /// How many messages still wait for an acknowledgement, across all topics; the sidebar badge.
+  /// The same rule as `canAcknowledge` and `AppModel.unacknowledgedCount`.
+  public private(set) var pendingCount = 0
   /// The messages matching the filters, as far as loaded (`loadMore()` extends it).
   public private(set) var rows: [MessageRow] = []
   /// `rows` grouped by calendar day, newest first.
@@ -62,6 +65,12 @@ public final class HistoryModel {
   public var unreadOnly = false {
     didSet { if unreadOnly != oldValue { filtersChanged() } }
   }
+  /// Only the messages that wait for an acknowledgement (see `canAcknowledge`), in every topic.
+  /// A view of its own like the selected topic, so `isNarrowing` and `clearNarrowing()` leave it;
+  /// use `show(_:)` to move between the views.
+  public var needsAcknowledgementOnly = false {
+    didSet { if needsAcknowledgementOnly != oldValue { filtersChanged() } }
+  }
 
   // MARK: Composer
 
@@ -88,8 +97,8 @@ public final class HistoryModel {
   public var totalMessages: Int { topics.reduce(0) { $0 + $1.total } }
   /// Any filter narrows the list (a topic counts).
   public var isFiltering: Bool {
-    selectedTopic != nil || !trimmedSearch.isEmpty || minPriority != nil || dateFilter != .all
-      || unreadOnly
+    selectedTopic != nil || needsAcknowledgementOnly || !trimmedSearch.isEmpty
+      || minPriority != nil || dateFilter != .all || unreadOnly
   }
 
   // MARK: Collaborators
@@ -195,9 +204,9 @@ public final class HistoryModel {
       let query = currentQuery(limit: loadedLimit)
       let stored = try await config.load()
       let policy = AcknowledgePolicy(config: stored)
+      acknowledgePolicy = policy
       let summaries = try await inbox.topics()
-      let urgent = Set(
-        try await inbox.unacknowledged(minPriority: policy.minPriority).map(\.message.topic))
+      let waiting = try await inbox.unacknowledged(minPriority: policy.minPriority)
       let count = try await inbox.count(query)
       let entries = try await inbox.entries(query)
       var shown: MessageDetail?
@@ -206,10 +215,10 @@ public final class HistoryModel {
           MessageDetail($0, now: clock.now())
         }
       }
-      acknowledgePolicy = policy
       configuredTopics = stored.extraTopics
       topics = summaries
-      urgentTopics = urgent
+      urgentTopics = Set(waiting.map(\.message.topic))
+      pendingCount = waiting.count
       resultCount = count
       rows = entries.map(MessageRow.init)
       days = HistoryGrouping.days(of: rows, calendar: calendar)
@@ -231,7 +240,8 @@ public final class HistoryModel {
       topic: selectedTopic, unreadOnly: unreadOnly,
       text: trimmedSearch.isEmpty ? nil : trimmedSearch,
       minPriority: minPriority, since: dateFilter.start(from: clock.now(), calendar: calendar),
-      until: until, limit: limit, offset: offset)
+      until: until, limit: limit, offset: offset,
+      unacknowledgedFrom: needsAcknowledgementOnly ? acknowledgePolicy.minPriority : nil)
   }
 
   /// Back to the first page, re-read.
@@ -261,6 +271,7 @@ public final class HistoryModel {
     minPriority = nil
     dateFilter = .all
     unreadOnly = false
+    needsAcknowledgementOnly = false
     selectedTopic = nil
   }
 

@@ -31,6 +31,31 @@ import Testing
   }
 
   @Test(arguments: Backend.allCases)
+  func unacknowledgedFromListsWhatStillWaitsAndComposesWithTheOtherFilters(_ backend: Backend)
+    async throws
+  {
+    let rig = try HistoryRig(backend)
+    try await rig.store.append(rig.message("1", topic: "a", at: 0, body: "disk", priority: .max))
+    try await rig.store.append(rig.message("2", topic: "b", at: 10, body: "disk", priority: .high))
+    try await rig.store.append(rig.message("3", topic: "a", at: 20, priority: .max))
+    try await rig.store.append(rig.message("4", topic: "a", at: 30, priority: .default))
+    try await rig.store.acknowledge(topic: "a", id: "3")
+
+    func ids(_ query: HistoryQuery) async throws -> [String] {
+      try await rig.store.entries(query).map(\.message.id)
+    }
+    #expect(try await ids(HistoryQuery(unacknowledgedFrom: .high)) == ["2", "1"])
+    #expect(try await ids(HistoryQuery(unacknowledgedFrom: .max)) == ["1"])
+    #expect(try await ids(HistoryQuery(unacknowledgedFrom: .default)) == ["4", "2", "1"])
+    #expect(try await ids(HistoryQuery(minPriority: .max, unacknowledgedFrom: .high)) == ["1"])
+    #expect(try await ids(HistoryQuery(text: "disk", unacknowledgedFrom: .high)) == ["2", "1"])
+    #expect(try await rig.store.count(HistoryQuery(limit: 1, unacknowledgedFrom: .high)) == 2)
+    // The same rule as `unacknowledged(minPriority:)`.
+    let waiting = try await rig.store.unacknowledged(minPriority: .high).map(\.message.id)
+    #expect(Set(waiting) == Set(try await ids(HistoryQuery(unacknowledgedFrom: .high))))
+  }
+
+  @Test(arguments: Backend.allCases)
   func topicsSummariseVisibleMessagesNewestFirst(_ backend: Backend) async throws {
     let rig = try HistoryRig(backend)
     #expect(try await rig.store.topics().isEmpty)
