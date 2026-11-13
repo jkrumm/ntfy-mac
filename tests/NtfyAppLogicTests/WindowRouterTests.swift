@@ -36,4 +36,25 @@ import Testing
     #expect(router.takeSelection() == key)
     #expect(router.takeSelection() == nil)
   }
+
+  @Test func reopenWithAVisibleWindowOpensNothingNew() {
+    let router = WindowRouter()
+    #expect(router.reopen(hasVisibleWindows: true))
+    #expect(router.request == nil)
+  }
+
+  @Test func reopenWithoutAWindowRoutesToHistory() {
+    let router = WindowRouter()
+    #expect(!router.reopen(hasVisibleWindows: false))
+    #expect(router.request?.window == .history)
+  }
+
+  @Test func noReopenPathRoutesToSettings() {
+    for visible in [true, false] {
+      #expect(WindowRouter.reopenDestination(hasVisibleWindows: visible) != .settings)
+      let router = WindowRouter()
+      _ = router.reopen(hasVisibleWindows: visible)
+      #expect(router.request?.window != .settings)
+    }
+  }
 }
