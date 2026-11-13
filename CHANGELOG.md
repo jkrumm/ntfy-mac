@@ -1,3 +1,93 @@
+# [2.0.0](https://github.com/jkrumm/ntfy-mac/compare/v1.11.0...v2.0.0) (2026-11-13)
+
+
+* chore(legacy)!: remove the 1.x Bun daemon and Swift helper ([5b262c6](https://github.com/jkrumm/ntfy-mac/commit/5b262c6079b707e0135a569801b44873f2f0ff1d))
+
+
+### Bug Fixes
+
+* **app:** keep the History detail pane at full height when it is empty ([bc72dc8](https://github.com/jkrumm/ntfy-mac/commit/bc72dc89b8e3edba0ad78f2f0b059b698fa64261))
+* **app:** remove the Homebrew 7 service sh.brew.ntfy-mac during migration ([d251927](https://github.com/jkrumm/ntfy-mac/commit/d251927279e90ef01355cb511cd8e11ad7cc5eb6))
+* **app:** review fixes for login item, safe save-as, server save order, export and settings ordering ([38e6f7a](https://github.com/jkrumm/ntfy-mac/commit/38e6f7ae615b7d290b993184d79d123886ca3e6b))
+* **app:** serialize poster categories, keep pipeline on config errors, guard lifecycle ([b88762c](https://github.com/jkrumm/ntfy-mac/commit/b88762cf43b35454a98938fd6340390a1b87f233))
+* **app:** size snapshot windows by their content area ([3de7030](https://github.com/jkrumm/ntfy-mac/commit/3de7030741babca7ea23b021ee6c1fc2a69766d0))
+* **client:** check HTTP status, refuse redirects, skip bad lines, validate topics ([80c0850](https://github.com/jkrumm/ntfy-mac/commit/80c0850cadc0b7a4f0724aa109e0061ae9dce68c))
+* **client:** refuse redirects without a cooperative-pool hop ([7f5098f](https://github.com/jkrumm/ntfy-mac/commit/7f5098f54f065be8a5ea4aea29296f55bee841c9))
+* **client:** resume a cancelled attachment download exactly once, tidy rollback and staging ([97841bb](https://github.com/jkrumm/ntfy-mac/commit/97841bb4ee7ec9156033bc7657e98e5e61fce28f))
+* **cli:** fail closed on unreadable archive listings and harden migration and swap ([26619d5](https://github.com/jkrumm/ntfy-mac/commit/26619d56a1fc33524e337deb9d36cb15f5a7164e))
+* **core:** keep reminders until shown, page boot reconcile, check resolved hosts ([763bea6](https://github.com/jkrumm/ntfy-mac/commit/763bea6228d0813c4b0358b1be34c46d9f02ab61))
+* **history:** keep the detail actions in place when acknowledging ([d3e1386](https://github.com/jkrumm/ntfy-mac/commit/d3e1386af1751ba48bc3c7bf4e646d070ea030cc))
+* **history:** read the acknowledge threshold before building the list query ([219a2fd](https://github.com/jkrumm/ntfy-mac/commit/219a2fd2048db900caf9aa831a92c99ba30737fb))
+* **installer:** migrate before relinking, restrict the test base URL, verify the bundle ([24dd6fb](https://github.com/jkrumm/ntfy-mac/commit/24dd6fb77c6e407e12e61bbbe6877bf9e1f5fb73))
+* **ipc:** serve local notify without a server, validate payloads, harden the socket server ([312e86d](https://github.com/jkrumm/ntfy-mac/commit/312e86d585f0de953aa6418fb51998fef43d97ac))
+* **meeting:** close the hold race, timed presenting default, unknown audio reads and boot reading ([81e4b35](https://github.com/jkrumm/ntfy-mac/commit/81e4b356db98347ba7e90caa49244adac4f7d0a6))
+* **update:** join a running Sparkle check and pin the framework version ([91fc8bf](https://github.com/jkrumm/ntfy-mac/commit/91fc8bff620cd5e8ac369d92342d8509aa94ae07))
+* **window:** reopening the running app fronts the open window or opens History ([b285d50](https://github.com/jkrumm/ntfy-mac/commit/b285d50889905c5c6358ce9a46da524d54d236b5))
+
+
+### Features
+
+* **app-logic:** chat thread model with conversations, day groups, read-on-scroll and composer ([e02aabe](https://github.com/jkrumm/ntfy-mac/commit/e02aabe3d1507c83a186597ce5446bd16bff9a8f))
+* **app:** add MenuRow with a native hover highlight for popover rows ([0f954bb](https://github.com/jkrumm/ntfy-mac/commit/0f954bba6fbaacd5468e8983441dccafcd9628fb))
+* **app:** chat-style history window with per-topic conversations and a composer ([7d59b3b](https://github.com/jkrumm/ntfy-mac/commit/7d59b3b5d43fdbbb5a2091ef641b4fbc25690610))
+* **app:** clean up 1.x install artifacts on first run and add ntfy-mac migrate ([3c2f568](https://github.com/jkrumm/ntfy-mac/commit/3c2f5689634e388b86c4913d47efa1e61df54a43))
+* **app:** compact three-column history log with always-visible filters ([571d19e](https://github.com/jkrumm/ntfy-mac/commit/571d19e9bef11b4a49157a75e185a6b39b641b5e))
+* **app:** detect meetings in the app and add the Meetings settings ([b3a4f20](https://github.com/jkrumm/ntfy-mac/commit/b3a4f208eae8540640fb2ab0a88895cef62b39c6))
+* **app:** history window with search, filters, markdown, attachments and export ([21d0ab5](https://github.com/jkrumm/ntfy-mac/commit/21d0ab58dfa74e6dbaceddc7c21470818074c2c2))
+* **app:** move the Meetings explanations into section footers ([4c8b906](https://github.com/jkrumm/ntfy-mac/commit/4c8b90685155b740155fe9018c1dc87333081fe4))
+* **app:** observable app model, menu bar extra and window coordination ([a982c0d](https://github.com/jkrumm/ntfy-mac/commit/a982c0dabd4c9a68ee8f3dd9d6501f4b0d92e566))
+* **app:** offer Acknowledge only on messages that need it ([feea5d0](https://github.com/jkrumm/ntfy-mac/commit/feea5d0d9fbe222317ac5a937e86104f447cc3e0))
+* **app:** offscreen UI snapshots of every window and the popover ([03c72bc](https://github.com/jkrumm/ntfy-mac/commit/03c72bc7d8df909740719fc35c1f752dfb260c05))
+* **app:** one group per topic in Settings ([2910e89](https://github.com/jkrumm/ntfy-mac/commit/2910e8935470f59e6242ba0f535a09a70f451ed1))
+* **app:** rebuild the popover actions on MenuRow with an inline pause row ([34ca516](https://github.com/jkrumm/ntfy-mac/commit/34ca5165b6f7167ce4e3bbdaf6b275a12fea2c8b))
+* **app:** roomier History and Settings windows, no truncated labels ([5bb564d](https://github.com/jkrumm/ntfy-mac/commit/5bb564dec8a567c48efb74bd513150eed7856314))
+* **app:** say which priorities re-alert, and lay the section out as labelled rows ([d023533](https://github.com/jkrumm/ntfy-mac/commit/d023533c5d86e09deddcfcebe4b48c704f96905d))
+* **app:** settings window, onboarding and the settings parity tests ([2fa9bcf](https://github.com/jkrumm/ntfy-mac/commit/2fa9bcfed0ba561ae46973feab69fcef300bb848))
+* **app:** show meeting state and a presenting toggle in the menu popover ([86c0586](https://github.com/jkrumm/ntfy-mac/commit/86c05867d8139a35591a67eca9046702fba04d55))
+* **app:** sounds and dismiss time as one table ([bcbd5ea](https://github.com/jkrumm/ntfy-mac/commit/bcbd5ea49aacd666c557c70b5d48be8f889e89e5))
+* **app:** user notification adapters and app composition root ([111d390](https://github.com/jkrumm/ntfy-mac/commit/111d3905bdd2a300c9c2c1007dc38563118c794a))
+* **cli:** add config meeting, present and the meeting in status ([ecc8272](https://github.com/jkrumm/ntfy-mac/commit/ecc8272235bc7c24a880617c360cef64cc174530))
+* **cli:** config get/set/reset, topic and quiet-hours commands, settings catalog ([adc5605](https://github.com/jkrumm/ntfy-mac/commit/adc5605250f0295808b2ff54fcb25d48ef91aab5))
+* **client:** stream events, catch-up poller, account topics, https-only tokens ([7f5e5be](https://github.com/jkrumm/ntfy-mac/commit/7f5e5bee15ca93380cf71742d4b94d027a1faf7e))
+* **cli:** output layer, exit codes and the full 1.x command port ([0dcd112](https://github.com/jkrumm/ntfy-mac/commit/0dcd11219ffd94b984a4586b573255694305f432))
+* **cli:** status, history, tail, wait, publish, pause, login-item and schema commands ([148ddb5](https://github.com/jkrumm/ntfy-mac/commit/148ddb5583f00224f916cdca5dba426d54861ab6))
+* **cli:** verify and install updates for direct installs ([c6a4748](https://github.com/jkrumm/ntfy-mac/commit/c6a47489189795ab30daa3ff19edd179acb9360e))
+* **cli:** warn about duplicate installs and refuse a curl install over Homebrew ([0f6c4c6](https://github.com/jkrumm/ntfy-mac/commit/0f6c4c6989b59d24ebc6f7a703463a2af034de5c))
+* **core:** add meeting detection policy, monitor and config group ([35150c7](https://github.com/jkrumm/ntfy-mac/commit/35150c7e98fd7d11eae0fa286e665785984ea59c))
+* **core:** config file compatibility, Keychain token migration, state cursor ([59277d1](https://github.com/jkrumm/ntfy-mac/commit/59277d111e26861671dbe157f3f95962f6043666))
+* **core:** delivery policy, priority profiles, tag emoji map and link safety ([d8ee948](https://github.com/jkrumm/ntfy-mac/commit/d8ee94856f073fedb8e2a58a0a3344462cd4d317))
+* **core:** delivery service with paced queue, re-alert, auto-dismiss and boot reconcile ([4b17da5](https://github.com/jkrumm/ntfy-mac/commit/4b17da541e020242153594ce2988b3cbee7aeb4f))
+* **core:** hold notifications while a meeting is detected ([aa6f052](https://github.com/jkrumm/ntfy-mac/commit/aa6f052cc0cb8a9f1089b5432c661d2576aa2f03))
+* **core:** notification response handling, safe image and http-action fetchers, permission state ([df36f32](https://github.com/jkrumm/ntfy-mac/commit/df36f3250d070b7ac5410d0de8302541839c948d))
+* **core:** per-topic mute, minimum priority and emoji, and quiet hours with digest ([475997f](https://github.com/jkrumm/ntfy-mac/commit/475997ffcea4048afe340fea8437cec1905526f5))
+* **core:** reconnect state machine, missed-message policy, stream supervisor ([066400e](https://github.com/jkrumm/ntfy-mac/commit/066400e8126da3dd45fa16feee4e2f24bb0093c7))
+* **core:** scaffold Swift package, app target and make check gate ([86d7500](https://github.com/jkrumm/ntfy-mac/commit/86d7500b54b2b82cd82eb3c96b6841f72781ab6c))
+* **history:** add an Unacknowledged view with a count badge ([26e1bb6](https://github.com/jkrumm/ntfy-mac/commit/26e1bb67fb380de802e5869228561bf289d645e4))
+* **history:** topic overview, delete, attachments, export and the history model ([80c57a6](https://github.com/jkrumm/ntfy-mac/commit/80c57a6d0eadc07bf523cc87ff9d841fb4ddb03a))
+* **install:** make install-macbook pull through the MacBook approval dialog ([742d480](https://github.com/jkrumm/ntfy-mac/commit/742d4809f23191e02efeeb9845de1801b1ebdb48))
+* **ipc:** report the meeting state in status ([972aa2e](https://github.com/jkrumm/ntfy-mac/commit/972aa2ec11b318218dd7a0b11154d095769f0135))
+* **ipc:** socket transport, app-side IPC handler and persisted pause ([44f0a76](https://github.com/jkrumm/ntfy-mac/commit/44f0a7642c4e32ca30aec8d389f0e3e2f887a4e4))
+* **platform:** read meeting signals from CoreAudio and CoreMediaIO ([c56d840](https://github.com/jkrumm/ntfy-mac/commit/c56d840970242ee9397675f4d875adf6fb6b296f))
+* release the Swift menu bar app as 2.0.0 ([510a9d9](https://github.com/jkrumm/ntfy-mac/commit/510a9d99e9d00a034a550ae0d58ed9b8358c8fb6))
+* **release:** sign with Developer ID, notarize and publish an appcast ([91bd739](https://github.com/jkrumm/ntfy-mac/commit/91bd7399a500ddb233ba6e994180182c87f92356))
+* **store:** sqlite history store with fts5, ack state, retention and read-only access ([64726e3](https://github.com/jkrumm/ntfy-mac/commit/64726e33fd1a9ac8274e125e17a8abbccad2f9b1))
+* **update:** update the direct channel through Sparkle ([2ad9e85](https://github.com/jkrumm/ntfy-mac/commit/2ad9e8545e3e99a5e259e0bb85d495ae94d65250))
+
+
+### BREAKING CHANGES
+
+* ntfy-mac 2.0 is a native Swift menu bar app and replaces the 1.x bash
+daemon. The Homebrew service and LaunchAgent are replaced by a login item (`brew services`
+no longer runs anything), the token moves from `config.json` into the Keychain on first
+launch, and notification permission must be allowed once more because the bundle id changed.
+See "Upgrading from 1.x" in the README.
+* ntfy-mac 2.0 is a native Swift app. The Bun daemon, the
+ntfy-notify helper app and the TypeScript tooling are gone. The first
+launch of 2.0 migrates a 1.x install: it moves the token to the
+Keychain, keeps config.json and state.json, and removes the old
+LaunchAgent, brew service and helper app. Notification permission has to
+be granted once again because the helper's bundle id changes.
+
 # [1.11.0](https://github.com/jkrumm/ntfy-mac/compare/v1.10.1...v1.11.0) (2026-04-01)
 
 
