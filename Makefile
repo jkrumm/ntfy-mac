@@ -5,9 +5,13 @@ MACBOOK := iumac
 MACBOOK_APP := Applications/NtfyMac.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: verify-signature check toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
+.PHONY: verify-signature check check-fast toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
 check: toolchain lint-format lint lint-sh build docs-check test installer-check app
+
+# The lead's tier (project.yaml `checks.fast`): everything `check` runs except the Release xcodebuild (`app`) and the
+# installer test. CI runs the full `check` on the PR head.
+check-fast: toolchain lint-format lint lint-sh build docs-check test
 
 # Runs once, as the first step of `check`. Fails closed: an unparseable version is an error.
 # The other targets skip it: Package.swift's tools version already rejects a Swift older than 6.2.

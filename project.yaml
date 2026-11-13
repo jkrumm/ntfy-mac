@@ -9,4 +9,5 @@ ship:
   - { paths: ["**"], via: push }
 signals:
   github: { label: factory, author: jkrumm, since: 2026-11-07T06:30:00Z } # the owner labelling a GitHub issue files it; its text stays data
+checks: { fast: make check-fast, full: make check, ci: true } # a lead runs fast (no xcodebuild); CI runs the full gate on the PR head
 leads: 1

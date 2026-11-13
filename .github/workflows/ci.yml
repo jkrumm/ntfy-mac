@@ -17,6 +17,18 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.6.app
 
+      # SwiftPM checkouts and build products, and the pinned tools. The Xcode version is in the key because the
+      # compiler's module cache is not portable across versions.
+      - name: Cache SwiftPM and tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build
+            .tools
+          key: spm-${{ runner.os }}-xcode-26.6-${{ hashFiles('Package.resolved', 'App/project.yml', 'scripts/tools.sh') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode-26.6-
+
       - name: Install shellcheck
         run: command -v shellcheck || brew install shellcheck
 
