@@ -99,11 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     windows.showOnboarding()
   }
 
-  /// A second `open` of the running app arrives as a reopen: show Settings.
+  /// A second `open` of the running app, or a Dock icon click, arrives as a reopen: front the
+  /// visible window, or open History when there is none.
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
   {
-    windows.showSettings()
-    return false
+    windows.reopen(hasVisibleWindows: flag)
   }
 
   func applicationDidBecomeActive(_ notification: Notification) {

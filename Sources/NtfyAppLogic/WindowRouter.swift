@@ -35,6 +35,20 @@ public final class WindowRouter {
 
   public func showOnboarding() { post(.onboarding) }
 
+  /// The window a reopen of the running app (Dock icon, Spotlight, Finder, Launchpad) asks for:
+  /// none while one is already visible (it only comes to the front), History otherwise. Settings
+  /// is never a reopen destination.
+  public nonisolated static func reopenDestination(hasVisibleWindows: Bool) -> AppWindow? {
+    hasVisibleWindows ? nil : .history
+  }
+
+  /// Handles a reopen; returns whether AppKit should do its default (front the visible windows).
+  public func reopen(hasVisibleWindows: Bool) -> Bool {
+    guard Self.reopenDestination(hasVisibleWindows: hasVisibleWindows) != nil else { return true }
+    showHistory()
+    return false
+  }
+
   /// Marks `request` as handled; a newer request stays.
   public func consume(_ handled: Request) {
     if request == handled { request = nil }
