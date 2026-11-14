@@ -382,6 +382,54 @@ cell_cask_upgrade() {
   check_no_prompt "upgrade"
 }
 
+cell_cask_sparkle_then_brew() {
+  step "brew install --cask $OLD, seed, then replace the bundle by $NEW the way Sparkle does"
+  cask_install "$OLD" && ok "brew-install" "$OLD" || { bad "brew-install" "failed"; return; }
+  approve_download "$CASK_APP"
+  seed "$CASK_APP"
+  stop_app
+  local zip stage
+  stage="$(mktemp -d)"
+  zip="$stage/NtfyMac-$NEW.zip"
+  curl -fsSL -o "$zip" "https://github.com/jkrumm/ntfy-mac/releases/download/v$NEW/NtfyMac-$NEW.zip" || { bad "download-new" "$NEW zip"; return; }
+  ditto -x -k "$zip" "$stage/x"
+  # Sparkle swaps the bundle (App Management refuses edits inside an installed one): move the old one away, put the new one in its place.
+  mv "$CASK_APP" "$stage/old.app" && mv "$stage/x/NtfyMac.app" "$CASK_APP" || { bad "bundle-replaced" "could not swap the bundle"; return; }
+  [[ "$(bundle_version "$CASK_APP")" == "$NEW" ]] && codesign --verify --deep --strict "$CASK_APP" 2>/dev/null && ok "bundle-replaced" "$CASK_APP is $NEW, signature valid (no quarantine flag: a Sparkle download carries none)" || { bad "bundle-replaced" "version $(bundle_version "$CASK_APP")"; return; }
+  open "$CASK_APP"
+  wait_for 30 app_running || bad "relaunch" "the replaced app does not start"
+  sleep 5
+  local cli
+  cli="$(cli_of "$CASK_APP")"
+  data_state "after the Sparkle-style update" "$cli"
+  local b_hist
+  b_hist="$(state_value x "$cli" 'history total')"
+  echo "brew list --cask --versions ntfy-mac: [$(brew list --cask --versions ntfy-mac 2>&1)]"
+  step "tap still at $OLD (what brew installed): is anything outdated?"
+  echo "brew outdated --cask: [$(brew outdated --cask 2>&1 | tr '\n' ' ')]"
+  echo "brew upgrade --cask: $(brew upgrade --cask 2>&1 | grep -E "^(==>|Warning|Error|🍺)" | tr '\n' ';')"
+  step "the tap moves to $NEW; the app already is $NEW"
+  replica_tap "$NEW"
+  brew update-reset >/dev/null 2>&1 || true
+  echo "brew outdated --cask: [$(brew outdated --cask 2>&1 | tr '\n' ' ')]"
+  echo "brew outdated --cask --verbose: [$(brew outdated --cask --verbose 2>&1 | tr '\n' ' ')]"
+  echo "app before brew upgrade: version $(bundle_version "$CASK_APP"), running: $(running_apps | head -1)"
+  echo "brew upgrade --cask (no name, what a user runs): $(brew upgrade --cask 2>&1 | grep -E "^(==>|Warning|Error|🍺)" | tr '\n' ';')"
+  echo "brew list --cask --versions ntfy-mac: [$(brew list --cask --versions ntfy-mac 2>&1)]"
+  echo "brew outdated --cask afterwards: [$(brew outdated --cask 2>&1 | tr '\n' ' ')]"
+  echo "second brew upgrade --cask: $(brew upgrade --cask 2>&1 | grep -E "^(==>|Warning|Error|🍺)" | tr '\n' ';')"
+  [[ "$(bundle_version "$CASK_APP")" == "$NEW" ]] && ok "version-after-brew" "$NEW" || bad "version-after-brew" "$(bundle_version "$CASK_APP")"
+  codesign --verify --deep --strict "$CASK_APP" 2>/dev/null && ok "codesign-valid" "after brew" || bad "codesign-valid" "after brew"
+  note "app-after-brew-upgrade" "running: $(running_apps | head -1)"
+  approve_download "$CASK_APP"
+  open "$CASK_APP"
+  wait_for 30 app_running || bad "relaunch" "app does not start after brew"
+  sleep 6
+  [[ "$(state_value x "$(cli_of "$CASK_APP")" 'history total')" -ge "$b_hist" ]] && ok "history-kept" "$b_hist rows" || bad "history-kept" "history lost"
+  [[ "$(state_value x "$(cli_of "$CASK_APP")" 'keychain token item')" == "present" ]] && ok "token-kept" "Keychain item present" || bad "token-kept" "gone"
+  check_no_prompt "sparkle-then-brew"
+}
+
 cell_together_direct_then_cask() {
   step "direct install $NEW first, then brew install --cask"
   NTFY_MAC_VERSION="$NEW" bash "$DIR/install.sh" 2>&1 | tail -2
@@ -467,6 +515,7 @@ case "$CELL" in
   cask-first-launch) cell_cask_first_launch ;;
   cask-fresh) cell_cask_fresh ;;
   cask-upgrade) cell_cask_upgrade ;;
+  cask-sparkle-then-brew) cell_cask_sparkle_then_brew ;;
   together-direct-then-cask) cell_together_direct_then_cask ;;
   together-cask-then-direct) cell_together_cask_then_direct ;;
   *)

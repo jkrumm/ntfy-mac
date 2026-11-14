@@ -48,7 +48,7 @@ brew install --cask jkrumm/tap/ntfy-mac
 ntfy-mac setup
 ```
 
-A cask: the notarized app goes to `/Applications` and `ntfy-mac` is linked onto your PATH. The app updates itself (Sparkle); `brew upgrade` leaves it alone because the cask declares `auto_updates`, and `brew upgrade --cask --greedy ntfy-mac` forces it.
+A cask: the notarized app goes to `/Applications` and `ntfy-mac` is linked onto your PATH. The app updates itself (Sparkle). `brew upgrade` also updates a copy that is older than the tap, and leaves a copy alone that Sparkle has already brought to the tap's version. Either route keeps your config, history and token.
 
 **Already installed with `brew install jkrumm/tap/ntfy-mac` (the 2.0 formula)?** Run `brew update`. The tap moved `ntfy-mac` from a formula to the cask, and Homebrew installs the cask for you and unlinks the formula. Then remove the old copy:
 
