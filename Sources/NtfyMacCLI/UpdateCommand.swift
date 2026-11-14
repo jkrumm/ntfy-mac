@@ -6,14 +6,15 @@ import NtfyIPC
 struct UpdateCommand: CLICommand {
   static let configuration = CommandConfiguration(
     commandName: "update",
-    abstract: "Update ntfy-mac to the latest release (Homebrew, or the app's own updater).",
+    abstract: "Update ntfy-mac to the latest release (the app's own updater).",
     discussion: """
-      A Homebrew copy runs brew upgrade jkrumm/tap/ntfy-mac. Any other copy asks the running
-      app (started if needed) to update itself: --check only looks, without any window; without
-      it the app opens its own update prompt and the command returns at once. A development
-      build, one signed by another team than the first signed install, and NTFY_MAC_NO_SELF_UPDATE=1
-      all leave updating off; the command then says why and exits 0. An app from before this
-      command exists answers with the error code app-outdated.
+      A copy of the old Homebrew formula runs brew update, which moves it to the cask. Any other
+      copy (a Homebrew cask included) asks the running app (started if needed) to update itself:
+      --check only looks, without any window; without it the app opens its own update prompt and
+      the command returns at once. A development build, one signed by another team than the first
+      signed install, and NTFY_MAC_NO_SELF_UPDATE=1 all leave updating off; the command then says
+      why and exits 0. An app from before this command exists answers with the error code
+      app-outdated.
       """)
 
   @Flag(name: .long, help: "Only report whether a newer release exists; install nothing.")
@@ -56,17 +57,19 @@ struct UpdateCommand: CLICommand {
   }
 
   private func upgradeHomebrew(_ environment: CLIEnvironment, _ out: Output) async throws {
-    out.note("Upgrading via Homebrew...")
+    out.note("Updating Homebrew (it moves the old formula to the cask)...")
     let status = try await environment.processes.run(
-      "/usr/bin/env", ["brew", "upgrade", "jkrumm/tap/ntfy-mac"], output: .stderr)
+      "/usr/bin/env", ["brew", "update"], output: .stderr)
     guard status == 0 else {
-      throw CLIFailure.runtime("update-failed", "brew upgrade failed (exit status \(status)).")
+      throw CLIFailure.runtime("update-failed", "brew update failed (exit status \(status)).")
     }
     out.result(
       Report(
         channel: InstallChannel.homebrew.rawValue, current: Version.current, latest: nil,
         updateAvailable: false, reason: nil, started: false),
-      text: "Done. Quit and reopen the ntfy-mac app to run the new version.")
+      text: "Done. If brew asked you to trust the cask, run the two commands it printed. "
+        + "Then remove this old copy with: brew uninstall --formula ntfy-mac, and open the app again."
+    )
   }
 
   // MARK: Direct
@@ -124,7 +127,8 @@ struct UpdateCommand: CLICommand {
   private static func explanation(of reason: UpdateUnavailableReason) -> String {
     switch reason {
     case .homebrew:
-      "This copy is managed by Homebrew. Update it with: brew upgrade jkrumm/tap/ntfy-mac"
+      "This is the old Homebrew formula copy. Run: brew update (it moves ntfy-mac to the cask), "
+        + "then: brew uninstall --formula ntfy-mac"
     case .unsigned:
       "This build is not signed with a Developer ID (a development build), so it cannot "
         + "update itself. Install a release."

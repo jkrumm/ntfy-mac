@@ -42,7 +42,7 @@ import Testing
   }
 
   @Test(arguments: [
-    ("unsigned", "Developer ID"), ("homebrew", "brew upgrade"),
+    ("unsigned", "Developer ID"), ("homebrew", "brew update"),
     ("disabled", "NTFY_MAC_NO_SELF_UPDATE"), ("team-mismatch", "different team"),
   ])
   func aReasonIsExplainedWithExitZero(reason: String, words: String) async throws {

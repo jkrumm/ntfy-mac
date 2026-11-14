@@ -125,7 +125,7 @@ extension CommandSpec {
       "logs", errors: ["logs-failed"], domains: ["--last": .duration],
       examples: ["ntfy-mac logs --last 1h", "ntfy-mac logs --error --follow"]),
     CommandSpec(
-      "update", app: .launches, note: "Only for a copy that Homebrew does not manage.",
+      "update", app: .launches, note: "An old Homebrew formula copy runs brew update instead.",
       errors: [
         "app-unavailable", "app-outdated", "internal", "update-failed", "server-unreachable",
       ],

@@ -44,12 +44,19 @@ Requires an Apple Silicon Mac on macOS 15 or later and a running [ntfy](https://
 ### Homebrew (recommended)
 
 ```bash
-brew install jkrumm/tap/ntfy-mac
-ln -sfn "$(brew --prefix ntfy-mac)/NtfyMac.app" ~/Applications/NtfyMac.app   # for Spotlight and Login Items
+brew install --cask jkrumm/tap/ntfy-mac
 ntfy-mac setup
 ```
 
-Homebrew owns this copy: `brew upgrade ntfy-mac` updates it, and notification permission survives the upgrade.
+A cask: the notarized app goes to `/Applications` and `ntfy-mac` is linked onto your PATH. The app updates itself (Sparkle); `brew upgrade` leaves it alone because the cask declares `auto_updates`, and `brew upgrade --cask --greedy ntfy-mac` forces it.
+
+**Already installed with `brew install jkrumm/tap/ntfy-mac` (the 2.0 formula)?** Run `brew update`. The tap moved `ntfy-mac` from a formula to the cask, and Homebrew installs the cask for you and unlinks the formula. Then remove the old copy:
+
+```bash
+brew uninstall --formula ntfy-mac    # quit the old app first; config, history and notification permission stay
+```
+
+If `brew update` says it is "not automatically installing ... because the migration target is not trusted", run the two commands it prints (`brew trust --cask jkrumm/tap/ntfy-mac`, `brew install --cask jkrumm/tap/ntfy-mac`), then the uninstall above. Open the new app once afterwards: the one in `/Applications` replaces the Cellar copy and the `~/Applications` link from the formula's caveats, which the cask removes.
 
 ### curl
 
@@ -99,7 +106,7 @@ Nothing to reconfigure. Install 2.0 over the old version (any of the methods abo
 
 **Auto-discovery** — Picks up your subscribed topics automatically. Re-checks every 30 minutes — no restart needed when you add or remove topics.
 
-**Updates** — `brew upgrade ntfy-mac` for Homebrew installs. Curl and manual installs update themselves through the app (Sparkle, EdDSA-signed releases); `ntfy-mac update` asks the app to do it, `ntfy-mac update --check` only looks.
+**Updates** — The app updates itself (Sparkle, EdDSA-signed releases), also the Homebrew cask copy; `ntfy-mac update` asks the app to do it, `ntfy-mac update --check` only looks.
 
 
 **Diagnostics** — `ntfy-mac doctor` checks config, server, auth, the app, notification permissions, the login item, and the history in one read-only command. `--send-test` posts a test notification.
@@ -281,13 +288,12 @@ ntfy-mac ack --all --topic alerts             # clear what you have handled
 ## Update & uninstall
 
 ```bash
-brew upgrade ntfy-mac         # Homebrew installs
-ntfy-mac update               # curl and manual installs: the app opens its update prompt
+ntfy-mac update               # the app opens its update prompt (Homebrew cask, curl and manual installs)
 ntfy-mac update --check       # look for a newer release without installing it
 ntfy-mac uninstall            # removes config, history, state and the token
 ```
 
-`ntfy-mac uninstall` leaves the app itself. Remove it with `brew uninstall jkrumm/tap/ntfy-mac`, or delete `NtfyMac.app` and the `~/.local/bin/ntfy-mac` link for a curl or manual install.
+`ntfy-mac uninstall` leaves the app itself. Remove it with `brew uninstall --cask ntfy-mac`, or delete `NtfyMac.app` and the `~/.local/bin/ntfy-mac` link for a curl or manual install.
 
 ---
 

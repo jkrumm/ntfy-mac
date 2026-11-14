@@ -50,7 +50,7 @@ import Testing
     #expect(await rig.run("doctor").stdout.contains("Team pin: matches"))
 
     rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
-    #expect(await rig.run("doctor").stdout.contains("Updated by Homebrew"))
+    #expect(await rig.run("doctor").stdout.contains("Old Homebrew formula copy"))
   }
 
   @Test func doctorIsReadOnly() async {

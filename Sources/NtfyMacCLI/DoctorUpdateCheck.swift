@@ -22,7 +22,9 @@ extension DoctorChecks {
       return DoctorCheck("update", .passed, "Updates through the app (Sparkle)", detail: detail)
     case .homebrew?:
       return DoctorCheck(
-        "update", .passed, "Updated by Homebrew: brew upgrade jkrumm/tap/ntfy-mac", detail: detail)
+        "update", .passed,
+        "Old Homebrew formula copy: run brew update, then brew uninstall --formula ntfy-mac",
+        detail: detail)
     case .disabled?:
       return DoctorCheck(
         "update", .passed, "Self-update is off (NTFY_MAC_NO_SELF_UPDATE=1)", detail: detail)

@@ -59,7 +59,7 @@ struct Uninstaller {
     }
     return Report(
       removed: removed, failed: failed,
-      removeApp: ["brew uninstall jkrumm/tap/ntfy-mac", "or delete NtfyMac.app"])
+      removeApp: ["brew uninstall --cask ntfy-mac", "or delete NtfyMac.app"])
   }
 
   /// Unregisters the login item through the app, which alone can. Best effort: with the app

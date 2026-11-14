@@ -35,7 +35,7 @@ import Testing
     #expect(!FileManager.default.fileExists(atPath: paths.configDirectory.path))
     #expect(await rig.secrets.token() == nil)
     let removeApp = try #require(try result.json()["removeApp"] as? [String])
-    #expect(removeApp.contains("brew uninstall jkrumm/tap/ntfy-mac"))
+    #expect(removeApp.contains("brew uninstall --cask ntfy-mac"))
   }
 
   @Test func theTerminalPromptCanDecline() async throws {

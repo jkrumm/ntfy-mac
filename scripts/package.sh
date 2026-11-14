@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Packages the signed, notarized and stapled app into dist/:
 #   ntfy-mac-<version>-arm64.tar.gz  NtfyMac.app/ and LICENSE at the root (the sibling file keeps Homebrew from
-#                                    stripping the lone top-level .app); install.sh and the formula use it
+#                                    stripping the lone top-level .app); install.sh uses it
 #   NtfyMac-<version>.zip            the app alone, the Sparkle enclosure
 #   appcast.xml                      the Sparkle feed item for the zip (scripts/appcast.sh)
 #   SHA256SUMS                       every file above

@@ -81,7 +81,7 @@ Everything the History window does to a message has a command. A test fails when
 | [`ntfy-mac notify`](#ntfy-mac-notify) | Send a local notification through the app (no server needed). |
 | [`ntfy-mac sounds`](#ntfy-mac-sounds) | Preview the notification sounds. |
 | [`ntfy-mac logs`](#ntfy-mac-logs) | Show the app's log from the unified log. |
-| [`ntfy-mac update`](#ntfy-mac-update) | Update ntfy-mac to the latest release (Homebrew, or the app's own updater). |
+| [`ntfy-mac update`](#ntfy-mac-update) | Update ntfy-mac to the latest release (the app's own updater). |
 | [`ntfy-mac uninstall`](#ntfy-mac-uninstall) | Remove ntfy-mac's config, history, state and token. |
 | [`ntfy-mac version`](#ntfy-mac-version) | Print the version. |
 | [`ntfy-mac start`](#ntfy-mac-start) | Start the ntfy-mac app if it is not running. |
@@ -742,13 +742,13 @@ ntfy-mac logs --error --follow
 
 ## `ntfy-mac update`
 
-Update ntfy-mac to the latest release (Homebrew, or the app's own updater).
+Update ntfy-mac to the latest release (the app's own updater).
 
 ```
 ntfy-mac update [--check]
 ```
 
-A Homebrew copy runs brew upgrade jkrumm/tap/ntfy-mac. Any other copy asks the running app (started if needed) to update itself: --check only looks, without any window; without it the app opens its own update prompt and the command returns at once. A development build, one signed by another team than the first signed install, and NTFY_MAC_NO_SELF_UPDATE=1 all leave updating off; the command then says why and exits 0. An app from before this command exists answers with the error code app-outdated.
+A copy of the old Homebrew formula runs brew update, which moves it to the cask. Any other copy (a Homebrew cask included) asks the running app (started if needed) to update itself: --check only looks, without any window; without it the app opens its own update prompt and the command returns at once. A development build, one signed by another team than the first signed install, and NTFY_MAC_NO_SELF_UPDATE=1 all leave updating off; the command then says why and exits 0. An app from before this command exists answers with the error code app-outdated.
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
@@ -758,7 +758,7 @@ A Homebrew copy runs brew upgrade jkrumm/tap/ntfy-mac. Any other copy asks the r
 **Needs**
 
 - Starts the app when it is down.
-- Only for a copy that Homebrew does not manage.
+- An old Homebrew formula copy runs brew update instead.
 
 **Error codes:** `usage`, `app-outdated`, `app-unavailable`, `internal`, `server-unreachable`, `update-failed`. See [Error codes](#error-codes).
 

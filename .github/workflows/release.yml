@@ -109,11 +109,13 @@ jobs:
           rm -f "${RUNNER_TEMP}/developer-id.p12"
           [[ -z "${SIGNING_KEYCHAIN_PATH:-}" ]] || security delete-keychain "${SIGNING_KEYCHAIN_PATH}" || true
 
-  # Runs only after the release is published with its assets, so the formula never points at a missing file.
+  # Runs only after the release is published with its assets, so the cask never points at a missing file.
+  # The tap ships a cask (the app is notarized, so brew's quarantine passes Gatekeeper). `tap_migrations.json`
+  # moves an installed 2.0 formula to it: `brew update` unlinks the keg and installs the cask.
   tap:
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
-    runs-on: macos-26 # brew style needs Homebrew
+    runs-on: macos-26 # brew style and audit need Homebrew
     permissions:
       contents: read
 
@@ -129,21 +131,29 @@ jobs:
           ref: v${{ needs.release.outputs.new_release_version }}
           path: source
 
-      - name: Download and verify the release tarball
+      - name: Download and verify the release zip
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.new_release_version }}
         run: |
           gh release download "v${VERSION}" --repo jkrumm/ntfy-mac \
-            --pattern "ntfy-mac-${VERSION}-arm64.tar.gz" --pattern SHA256SUMS --dir dist
+            --pattern "NtfyMac-${VERSION}.zip" --pattern SHA256SUMS --dir dist
           (cd dist && shasum -a 256 -c --ignore-missing --strict SHA256SUMS)
-          sha256="$(shasum -a 256 "dist/ntfy-mac-${VERSION}-arm64.tar.gz" | cut -d' ' -f1)"
+          sha256="$(shasum -a 256 "dist/NtfyMac-${VERSION}.zip" | cut -d' ' -f1)"
           echo "SHA256=${sha256}" >> "$GITHUB_ENV"
 
-      - name: Render the formula
+      - name: Render the cask and keep the formula migration
         env:
           VERSION: ${{ needs.release.outputs.new_release_version }}
-        run: source/scripts/render-formula.sh "${VERSION}" "${SHA256}" > tap/Formula/ntfy-mac.rb
+        run: |
+          mkdir -p tap/Casks
+          source/scripts/render-cask.sh "${VERSION}" "${SHA256}" > tap/Casks/ntfy-mac.rb
+          git -C tap rm -q --ignore-unmatch Formula/ntfy-mac.rb
+          # Never drop the other entries of the file; the value is the tap itself, so brew moves the formula to the cask.
+          migrations=tap/tap_migrations.json
+          [[ -f "${migrations}" ]] || echo '{}' > "${migrations}"
+          jq --indent 2 '. + {"ntfy-mac": "jkrumm/tap"}' "${migrations}" > "${migrations}.new"
+          mv "${migrations}.new" "${migrations}"
 
       - name: Commit
         env:
@@ -152,15 +162,16 @@ jobs:
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ntfy-mac.rb
-          git diff --cached --quiet && { echo "formula already up to date"; exit 0; }
+          git add Casks/ntfy-mac.rb tap_migrations.json
+          git diff --cached --quiet && { echo "cask already up to date"; exit 0; }
           git commit -m "chore(ntfy-mac): update to v${VERSION}"
 
-      # Taps the local checkout (with the new commit) so brew style applies the tap rules.
-      - name: Style
+      # Taps the local checkout (with the new commit) so brew style and audit apply the tap rules.
+      - name: Style and audit
         run: |
           brew tap jkrumm/tap "${GITHUB_WORKSPACE}/tap"
           brew style jkrumm/tap/ntfy-mac
+          brew audit --cask --online --strict jkrumm/tap/ntfy-mac
 
       - name: Push
         run: git -C tap push

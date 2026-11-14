@@ -60,7 +60,7 @@ import Testing
     #expect(detail.contains("\(direct.path) (direct) <- running"))
     #expect(detail.contains("(Homebrew)"))
     #expect(detail.contains("runs from \(direct.path)"))
-    #expect(detail.contains("brew uninstall ntfy-mac"))
+    #expect(detail.contains("brew uninstall --formula ntfy-mac"))
     #expect(detail.contains("~/.local/bin/ntfy-mac"))
   }
 

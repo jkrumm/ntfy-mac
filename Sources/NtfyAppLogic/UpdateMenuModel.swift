@@ -28,7 +28,7 @@ public final class UpdateMenuModel {
   public static func state(for reason: UpdateUnavailableReason) -> State {
     switch reason {
     case .unsigned: .hidden
-    case .homebrew: .blocked("Updates come from Homebrew: brew upgrade jkrumm/tap/ntfy-mac")
+    case .homebrew: .blocked("Old Homebrew formula copy: run brew update to move to the cask")
     case .disabled: .blocked("Updates are turned off (NTFY_MAC_NO_SELF_UPDATE)")
     case .teamMismatch: .blocked("Updates are off: this build is signed by another team")
     }

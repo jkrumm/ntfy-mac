@@ -9,7 +9,7 @@ import Testing
 
   private let brewPath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
 
-  @Test func aBrewInstallRunsBrewUpgrade() async {
+  @Test func aFormulaCopyRunsBrewUpdate() async {
     var rig = CLIRig()
     rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
     let result = await rig.run("update")
@@ -17,16 +17,16 @@ import Testing
     let runs = await rig.processes.runs
     #expect(
       runs == [
-        .init(executable: "/usr/bin/env", arguments: ["brew", "upgrade", "jkrumm/tap/ntfy-mac"])
+        .init(executable: "/usr/bin/env", arguments: ["brew", "update"])
       ])
   }
 
-  @Test func aFailedBrewUpgradeIsAnError() async {
+  @Test func aFailedBrewUpdateIsAnError() async {
     var rig = CLIRig(processes: FakeProcesses(status: 1))
     rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/bin/ntfy-mac"
     let result = await rig.run("update")
     #expect(result.exit == .runtime)
-    #expect(result.stderr.contains("brew upgrade failed"))
+    #expect(result.stderr.contains("brew update failed"))
   }
 
   @Test func checkReportsANewerRelease() async throws {

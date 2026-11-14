@@ -8,7 +8,7 @@ sensitive:   [Sources/NtfyCore/ConfigTokenMigration.swift, Sources/NtfyCore/Lega
               Sources/NtfyPlatform/CodeSigning.swift, Sources/NtfyMacCLI/MigrateCommand.swift,
               Sources/NtfyMacCLI/UpdateCommand.swift, App/Sources/SparkleUpdater.swift,
               Sources/NtfyIPC/**, Sources/NtfyStore/HistorySchema.swift, install.sh, packaging/**,
-              scripts/sign.sh, scripts/package.sh, scripts/stamp-version.sh, scripts/render-formula.sh,
+              scripts/sign.sh, scripts/package.sh, scripts/stamp-version.sh, scripts/render-cask.sh,
               .github/**, .releaserc.json]
 nits: 3
 ---

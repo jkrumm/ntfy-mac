@@ -41,7 +41,7 @@ make installer-check              # install.sh against a fake release in temp di
 
 All signing goes through `scripts/sign.sh`. The default is ad-hoc (`make check`, `make app`, snapshots, CI). `SIGN_IDENTITY=developer-id` signs with the team's Developer ID Application certificate, Hardened Runtime and a secure timestamp, and re-signs Sparkle's helpers inside out; `NOTARIZE=1` adds the Apple submission and the staple. If Apple does not answer within `NOTARY_TIMEOUT` (default 40m), the script prints the submission id: `RESUME_NOTARY_ID=<id> SIGN_IDENTITY=developer-id NOTARIZE=1 scripts/sign.sh <app>` waits on it without re-signing. `scripts/verify-signature.sh` runs at the end of every signing run and can be called alone. On the mini the credentials come from `secrets-run` (`op://mini/apple-developer`); elsewhere from `APPLE_TEAM_ID`, `ASC_KEY_P8`, `ASC_KEY_ID` and `ASC_ISSUER_ID`. The appcast is signed with the repo's Sparkle EdDSA key (`SPARKLE_ED_PRIVATE_KEY`, or `~/.local/state/apple-developer/sparkle-ntfy-mac-ed25519.key` on the mini); `scripts/tools.sh sparkle` pins the Sparkle tools.
 
-`packaging/ntfy-mac.rb.in` is the Homebrew formula template; `scripts/render-formula.sh <version> <sha256>` fills it in.
+`packaging/ntfy-mac.cask.rb.in` is the Homebrew cask template; `scripts/render-cask.sh <version> <sha256-of-the-zip>` fills it in.
 
 ## Release process
 
@@ -51,6 +51,6 @@ Releases run from the **Release** workflow (Actions, Run workflow). It is manual
 2. semantic-release reads the commits since the last tag and picks the version. Releasable types are `feat` (minor), `fix` and `perf` (patch); a `BREAKING CHANGE:` footer or `!` makes a major.
 3. The exec plugin stamps the version, then builds, signs with the Developer ID, notarizes, staples and packages `dist/`. The workflow fails before this step when a signing secret is missing: `APPLE_TEAM_ID`, `APPLE_DEVELOPER_ID_P12_BASE64`, `APPLE_DEVELOPER_ID_P12_PASSWORD`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `SPARKLE_ED_PRIVATE_KEY`.
 4. The GitHub plugin creates a draft release, uploads the tarball, the zip, `appcast.xml` and `SHA256SUMS`, then publishes it, so the assets exist before the release is visible. `CHANGELOG.md` is committed back as `chore(release): <version>`.
-5. The `tap` job downloads the published tarball, verifies it against `SHA256SUMS`, renders `Formula/ntfy-mac.rb` in `jkrumm/homebrew-tap`, runs `brew style` and pushes `chore(ntfy-mac): update to v<version>`.
+5. The `tap` job downloads the published zip, verifies it against `SHA256SUMS`, renders `Casks/ntfy-mac.rb` in `jkrumm/homebrew-tap`, removes the old formula, keeps the `ntfy-mac` entry in `tap_migrations.json`, runs `brew style` and `brew audit --cask --online --strict` and pushes `chore(ntfy-mac): update to v<version>`.
 
 `CHANGELOG.md` is written by semantic-release; do not edit it. Do not tag or publish by hand.
