@@ -33,11 +33,11 @@ base_of() {
   case "$1" in
     install-no-clt) echo "" ;;
     direct-fresh | direct-upgrade | direct-sparkle) echo "-clt" ;;
-    cask-first-launch | cask-fresh | cask-upgrade | together-direct-then-cask | together-cask-then-direct) echo "-brew" ;;
+    cask-first-launch | cask-fresh | cask-upgrade | cask-sparkle-then-brew | together-direct-then-cask | together-cask-then-direct) echo "-brew" ;;
     *) return 1 ;;
   esac
 }
-CELLS=(install-no-clt direct-fresh direct-upgrade direct-sparkle cask-first-launch cask-fresh cask-upgrade together-direct-then-cask together-cask-then-direct)
+CELLS=(install-no-clt direct-fresh direct-upgrade direct-sparkle cask-first-launch cask-fresh cask-upgrade cask-sparkle-then-brew together-direct-then-cask together-cask-then-direct)
 
 # The mini panicked at 94% disk (2026-11-13): one macOS at a time, every clone deleted when its cell ends, and no
 # new VM below CM_MIN_FREE_GIB free on the Data volume.

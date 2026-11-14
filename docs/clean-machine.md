@@ -5,7 +5,7 @@ Proves the install channels on a Mac that has never seen ntfy-mac: the curl inst
 ```sh
 scripts/clean-machine/matrix.sh cells             # the cells and the base each one needs
 scripts/clean-machine/matrix.sh run all           # both macOS versions, every cell (about an hour)
-scripts/clean-machine/matrix.sh run 26 direct-upgrade cask-upgrade
+scripts/clean-machine/matrix.sh run 26 direct-upgrade cask-upgrade cask-sparkle-then-brew
 CM_OLD=2.0.1 CM_NEW=2.1.0 scripts/clean-machine/matrix.sh run all   # after a new release
 ```
 
