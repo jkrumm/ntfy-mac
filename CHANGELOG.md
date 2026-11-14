@@ -1,3 +1,21 @@
+# [2.1.0](https://github.com/jkrumm/ntfy-mac/compare/v2.0.1...v2.1.0) (2026-11-14)
+
+
+### Bug Fixes
+
+* **app:** keep trying the instance lock while the old copy is still visible ([719eb59](https://github.com/jkrumm/ntfy-mac/commit/719eb59ed03731b2e968d16fea878e6733a3cbb1))
+* **clean-machine:** drop half-built bases, scope the run cleanup and pin the installed version ([e40dcd9](https://github.com/jkrumm/ntfy-mac/commit/e40dcd98bc6609b68c138e69f31b3efa2094b920))
+* **install:** check the notarization ticket without xcrun ([cd5913d](https://github.com/jkrumm/ntfy-mac/commit/cd5913db7508831fd4ee5c903a1677dd6e2e65e9))
+* **install:** refuse a Homebrew cask copy and name the cask remedies ([f0f302b](https://github.com/jkrumm/ntfy-mac/commit/f0f302b1753ad19d7c7c19d6b1a27fb62d92d893))
+* **signing:** refuse a notarized build with no provisioning profile before submitting ([8fc9986](https://github.com/jkrumm/ntfy-mac/commit/8fc99863c3c49863dd893779713eb2b0b02430a0))
+
+
+### Features
+
+* **app:** run one NtfyMac per user with an instance lock ([1adbd61](https://github.com/jkrumm/ntfy-mac/commit/1adbd61254086f558d47ec93f867bc6ee15d645a))
+* **brew:** ship the Homebrew install as a notarized cask ([5e88210](https://github.com/jkrumm/ntfy-mac/commit/5e8821047edcf2884d3945fa27421fe33111ebba))
+* **signing:** ship the time-sensitive entitlement with a Developer ID profile ([02c8697](https://github.com/jkrumm/ntfy-mac/commit/02c8697747e2b61b956db565df5aace1676b53bb))
+
 ## [2.0.1](https://github.com/jkrumm/ntfy-mac/compare/v2.0.0...v2.0.1) (2026-11-13)
 
 
