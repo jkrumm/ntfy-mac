@@ -62,6 +62,8 @@ load_profile "$work"
 entitlements="$root/App/NtfyMac.entitlements"
 if [[ -n "$PROFILE_FILE" ]]; then
   profile_ok "$PROFILE_FILE" || fail "unusable provisioning profile (regenerate it, see docs/contributing.md)"
+elif [[ "$notarize" == 1 ]]; then
+  fail "no provisioning profile (APPLE_DEVELOPER_ID_PROFILE_BASE64, NTFY_MAC_PROFILE): a notarized build carries the time-sensitive entitlement"
 else
   echo "sign: no provisioning profile (APPLE_DEVELOPER_ID_PROFILE_BASE64, NTFY_MAC_PROFILE): signing without the time-sensitive entitlement" >&2
 fi
