@@ -40,13 +40,14 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
           APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_DEVELOPER_ID_PROFILE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_PROFILE_BASE64 }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           missing=()
-          for name in APPLE_TEAM_ID APPLE_DEVELOPER_ID_P12_BASE64 APPLE_DEVELOPER_ID_P12_PASSWORD \
+          for name in APPLE_TEAM_ID APPLE_DEVELOPER_ID_P12_BASE64 APPLE_DEVELOPER_ID_P12_PASSWORD APPLE_DEVELOPER_ID_PROFILE_BASE64 \
             ASC_KEY_P8 ASC_KEY_ID ASC_ISSUER_ID SPARKLE_ED_PRIVATE_KEY; do
             [[ -n "${!name:-}" ]] || missing+=("$name")
           done
@@ -98,6 +99,7 @@ jobs:
           NOTARIZE: "1"
           NOTARY_TIMEOUT: 90m
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DEVELOPER_ID_PROFILE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_PROFILE_BASE64 }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

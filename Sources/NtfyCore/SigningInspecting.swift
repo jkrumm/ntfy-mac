@@ -4,11 +4,17 @@ public struct SigningInfo: Sendable, Hashable {
   public let hardenedRuntime: Bool
   /// Signed by a Developer ID Application certificate (not ad hoc, not a development identity).
   public let developerID: Bool
+  /// The restricted entitlements the signature carries (a Developer ID build with a provisioning profile).
+  public let entitlements: Set<Entitlement>
 
-  public init(teamID: String? = nil, hardenedRuntime: Bool = false, developerID: Bool = false) {
+  public init(
+    teamID: String? = nil, hardenedRuntime: Bool = false, developerID: Bool = false,
+    entitlements: Set<Entitlement> = []
+  ) {
     self.teamID = teamID
     self.hardenedRuntime = hardenedRuntime
     self.developerID = developerID
+    self.entitlements = entitlements
   }
 
   /// Ad hoc, unsigned or unreadable.
@@ -26,6 +32,6 @@ public protocol EntitlementProbing: Sendable {
   func holds(_ entitlement: Entitlement) -> Bool
 }
 
-public enum Entitlement: String, Sendable, Hashable {
+public enum Entitlement: String, Sendable, Hashable, CaseIterable {
   case timeSensitiveNotifications = "com.apple.developer.usernotifications.time-sensitive"
 }

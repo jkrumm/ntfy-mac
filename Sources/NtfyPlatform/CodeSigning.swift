@@ -27,8 +27,12 @@ public struct BundleSigningInspector: SigningInspecting {
     let team = values[kSecCodeInfoTeamIdentifier as String] as? String
     let raw = (values[kSecCodeInfoFlags as String] as? UInt32) ?? 0
     let hardened = SecCodeSignatureFlags(rawValue: raw).contains(.runtime)
+    let claimed = values[kSecCodeInfoEntitlementsDict as String] as? [String: Any] ?? [:]
+    let entitlements = Set(
+      Entitlement.allCases.filter { claimed[$0.rawValue] as? Bool == true })
     return SigningInfo(
-      teamID: team, hardenedRuntime: hardened, developerID: isDeveloperID(code))
+      teamID: team, hardenedRuntime: hardened, developerID: isDeveloperID(code),
+      entitlements: entitlements)
   }
 
   private func isDeveloperID(_ code: SecStaticCode) -> Bool {

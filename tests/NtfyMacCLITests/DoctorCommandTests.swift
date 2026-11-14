@@ -26,6 +26,7 @@ import Testing
     let status = try checks(result)
     for name in [
       "config", "token", "server", "auth", "topics", "app", "permissions", "login-item", "update",
+      "time-sensitive",
     ] {
       #expect(status[name] == "ok", "\(name)")
     }
@@ -51,6 +52,24 @@ import Testing
 
     rig.executablePath = "/opt/homebrew/Cellar/ntfy-mac/2.0.0/NtfyMac.app/Contents/MacOS/ntfy-mac"
     #expect(await rig.run("doctor").stdout.contains("Old Homebrew formula copy"))
+  }
+
+  @Test func theTimeSensitiveCheckReadsTheSignedEntitlement() async throws {
+    var rig = CLIRig()
+    let adHoc = await rig.run("doctor")
+    #expect(adHoc.stdout.contains("Not available in this build"))
+    #expect(try checks(await rig.run("doctor", "--json"))["time-sensitive"] == "ok")
+
+    rig.signing = SigningInfo(teamID: "TEAM000001", hardenedRuntime: true, developerID: true)
+    let missing = await rig.run("doctor", "--json")
+    #expect(try checks(missing)["time-sensitive"] == "warn")
+    #expect(missing.exit == .success)
+
+    rig.signing = SigningInfo(
+      teamID: "TEAM000001", hardenedRuntime: true, developerID: true,
+      entitlements: [.timeSensitiveNotifications])
+    let present = await rig.run("doctor")
+    #expect(present.stdout.contains("Time-sensitive notifications available"))
   }
 
   @Test func doctorIsReadOnly() async {

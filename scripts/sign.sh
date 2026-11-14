@@ -11,7 +11,11 @@
 #                               re-submitting (a changed byte would void it), then staples.
 #
 # The team id and the App Store Connect key come from APPLE_TEAM_ID, ASC_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID or, on the
-# mini, secrets-run (scripts/apple-credentials.sh). The app needs no entitlements: it is not sandboxed.
+# mini, secrets-run (scripts/apple-credentials.sh). The app is not sandboxed. The one entitlement it claims,
+# time-sensitive notifications (App/NtfyMac.entitlements), needs the Developer ID provisioning profile of the App ID:
+# APPLE_DEVELOPER_ID_PROFILE_BASE64 (CI), NTFY_MAC_PROFILE (a path) or ~/.local/state/apple-developer/
+# ntfy-mac-developer-id.provisionprofile (the mini). With a profile the script embeds it and adds the entitlement;
+# without one it signs without both, and `verify-signature.sh --release` (so every notarized run) refuses that.
 # Every run ends in scripts/verify-signature.sh; a failed verification is a non-zero exit.
 set -euo pipefail
 
@@ -32,6 +36,9 @@ fail() {
 
 if [[ "$identity" == "-" ]]; then
   [[ "$notarize" == 0 ]] || fail "NOTARIZE=1 needs SIGN_IDENTITY=developer-id (an ad-hoc app cannot be notarized)"
+  # An ad-hoc build carries neither the profile nor the entitlement (the app would be killed at launch); drop a
+  # profile a reused build directory may still hold from an earlier Developer ID run.
+  rm -f "$app/Contents/embedded.provisionprofile"
   codesign --force --deep --sign - "$app"
   "$root/scripts/verify-signature.sh" "$app"
   exit 0
@@ -47,6 +54,17 @@ trap 'rm -rf "$work"; [[ -z "$ASC_KEY_FILE" ]] || rm -f "$ASC_KEY_FILE"' EXIT
 load_team || fail "no team id"
 unlock_signing_keychain || fail "cannot unlock the signing keychain"
 resolve_developer_id || fail "no signing identity"
+command -v jq >/dev/null || fail "jq is required to check the provisioning profile"
+
+# The time-sensitive entitlement is restricted: it is claimed only together with the Developer ID provisioning profile
+# embedded in the bundle. Without a profile the app is signed without both (a release then fails verify-signature).
+load_profile "$work"
+entitlements="$root/App/NtfyMac.entitlements"
+if [[ -n "$PROFILE_FILE" ]]; then
+  profile_ok "$PROFILE_FILE" || fail "unusable provisioning profile (regenerate it, see docs/contributing.md)"
+else
+  echo "sign: no provisioning profile (APPLE_DEVELOPER_ID_PROFILE_BASE64, NTFY_MAC_PROFILE): signing without the time-sensitive entitlement" >&2
+fi
 
 sign_one() { # path, extra codesign options...
   local path="$1"
@@ -68,7 +86,14 @@ sign_bundle() {
     done
   fi
   sign_one "$app/Contents/MacOS/ntfy-mac"
-  sign_one "$app"
+  # The profile goes in before the app's seal, which covers it; the bundled CLI above stays entitlement-free.
+  rm -f "$app/Contents/embedded.provisionprofile"
+  if [[ -n "$PROFILE_FILE" ]]; then
+    cp "$PROFILE_FILE" "$app/Contents/embedded.provisionprofile"
+    sign_one "$app" --entitlements "$entitlements"
+  else
+    sign_one "$app"
+  fi
 }
 
 if [[ -z "$resume_id" ]]; then

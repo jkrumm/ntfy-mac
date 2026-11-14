@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Verifies the signature of NtfyMac.app. Usage: scripts/verify-signature.sh <app> [--developer-id | --release]
 #   (none)          codesign --verify --deep --strict; when the app is Developer ID signed, the full check below
-#   --developer-id  the app must be Developer ID signed: team, Hardened Runtime, secure timestamp, Authority, no
+#   --developer-id  the app must be Developer ID signed (a claimed entitlement needs its profile): team, Hardened Runtime, secure timestamp, Authority, no
 #                   get-task-allow, no app-sandbox, and the same for the bundled CLI and Sparkle's helpers
-#   --release       --developer-id plus a stapled ticket (stapler validate) and Gatekeeper (spctl: Notarized Developer ID)
+#   --release       --developer-id plus the embedded provisioning profile with the time-sensitive entitlement, a stapled
+#                   ticket (stapler validate) and Gatekeeper (spctl: Notarized Developer ID)
 # The expected team comes from APPLE_TEAM_ID or secrets-run (scripts/apple-credentials.sh). Any failure exits non-zero.
 set -euo pipefail
 
@@ -49,11 +50,28 @@ check_code() {
   ! grep -q 'com.apple.security.app-sandbox' <<<"$ents" || problem "$label: the code is sandboxed"
 }
 
+# check_profile: the time-sensitive entitlement and the provisioning profile that authorizes it go together. A claim
+# without a profile is killed at launch; a release must carry both.
+check_profile() {
+  local profile="$app/Contents/embedded.provisionprofile" ents msg claimed=0
+  ents="$(codesign -d --entitlements - --xml "$app" 2>/dev/null || true)"
+  grep -q "$TIME_SENSITIVE_KEY" <<<"$ents" && claimed=1
+  if [[ -f "$profile" ]]; then
+    msg="$(profile_ok "$profile" 2>&1)" || problem "$msg"
+    [[ "$claimed" == 1 ]] || problem "a provisioning profile is embedded but the signature lacks $TIME_SENSITIVE_KEY"
+  else
+    [[ "$claimed" == 0 ]] || problem "the signature claims $TIME_SENSITIVE_KEY without an embedded provisioning profile (the app would be killed at launch)"
+    [[ "$mode" != --release ]] || problem "no embedded provisioning profile: a release carries the time-sensitive entitlement"
+  fi
+}
+
 if [[ "$adhoc" == 1 ]]; then
   problem "the app is ad-hoc signed, a Developer ID signature is required"
 else
+  command -v jq >/dev/null || problem "jq is required to check the provisioning profile"
   fw="$app/Contents/Frameworks/Sparkle.framework"
   check_code "$app" "NtfyMac.app"
+  check_profile
   check_code "$app/Contents/MacOS/ntfy-mac" "bundled CLI"
   if [[ -d "$fw" ]]; then
     check_code "$fw" "Sparkle.framework"

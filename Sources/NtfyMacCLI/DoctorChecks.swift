@@ -21,6 +21,7 @@ struct DoctorChecks {
     checks.append(await legacyCheck())
     checks.append(duplicateCheck())
     checks.append(updateCheck())
+    checks.append(timeSensitiveCheck())
     if case .success(let config) = loaded { checks.append(overridesCheck(config)) }
     if sendTest { checks.append(await testNotification(appIsUp: app.first?.status != .fail)) }
     return checks

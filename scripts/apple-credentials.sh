@@ -76,3 +76,50 @@ resolve_developer_id() {
     return 1
   }
 }
+
+TIME_SENSITIVE_KEY="com.apple.developer.usernotifications.time-sensitive"
+
+# profile_ok <profile>: succeeds when the profile is a current Developer ID profile of the team for this app that
+# carries the time-sensitive entitlement. Prints the reason on stderr otherwise. Needs $TEAM (load_team) and jq.
+# (A profile holds dates and data, which plutil cannot convert whole to JSON: each part is extracted.)
+profile_ok() {
+  local profile="$1" plist ents expires all platform ok=0
+  plist="$(mktemp)"
+  if security cms -D -i "$profile" >"$plist" 2>/dev/null; then
+    ents="$(plutil -extract Entitlements json -o - "$plist" 2>/dev/null)" || ents=""
+    expires="$(plutil -extract ExpirationDate raw -o - "$plist" 2>/dev/null)" || expires=""
+    all="$(plutil -extract ProvisionsAllDevices raw -o - "$plist" 2>/dev/null)" || all=""
+    platform="$(plutil -extract Platform json -o - "$plist" 2>/dev/null)" || platform=""
+    ok=1
+  fi
+  rm -f "$plist"
+  [[ "$ok" == 1 && -n "$ents" ]] || {
+    echo "the provisioning profile does not decode" >&2
+    return 1
+  }
+  jq -e --arg key "$TIME_SENSITIVE_KEY" --arg team "$TEAM" --arg all "$all" --argjson platform "${platform:-[]}" \
+    '.[$key] == true and .["com.apple.developer.team-identifier"] == $team
+      and .["com.apple.application-identifier"] == ($team + ".com.jkrumm.ntfy-mac")
+      and $all == "true" and ($platform | index("OSX") != null)' <<<"$ents" >/dev/null || {
+    echo "the provisioning profile is not a Developer ID profile of this team for com.jkrumm.ntfy-mac with $TIME_SENSITIVE_KEY" >&2
+    return 1
+  }
+  [[ "$(date -u +%Y-%m-%dT%H:%M:%SZ)" < "$expires" ]] || {
+    echo "the provisioning profile expired on $expires" >&2
+    return 1
+  }
+}
+
+# Sets PROFILE_FILE to the Developer ID provisioning profile of the app: APPLE_DEVELOPER_ID_PROFILE_BASE64 (CI), else
+# NTFY_MAC_PROFILE, else the file next to the other credentials on the mini. Empty when there is none; the caller
+# decides whether that is fatal. $1 is a scratch directory for the decoded secret.
+load_profile() {
+  local work="$1" path="${NTFY_MAC_PROFILE:-$HOME/.local/state/apple-developer/ntfy-mac-developer-id.provisionprofile}"
+  PROFILE_FILE=""
+  if [[ -n "${APPLE_DEVELOPER_ID_PROFILE_BASE64:-}" ]]; then
+    printf '%s' "$APPLE_DEVELOPER_ID_PROFILE_BASE64" | base64 --decode >"$work/embedded.provisionprofile"
+    PROFILE_FILE="$work/embedded.provisionprofile"
+  elif [[ -r "$path" ]]; then
+    PROFILE_FILE="$path"
+  fi
+}

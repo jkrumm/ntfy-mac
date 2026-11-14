@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Claimed by scripts/sign.sh only for a Developer ID build that embeds the matching provisioning
+	     profile. An app that claims it without the profile is killed at launch, so the ad-hoc build
+	     (make check, snapshots, CI) is signed without this file. -->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+</dict>
+</plist>

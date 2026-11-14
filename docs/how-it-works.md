@@ -60,7 +60,7 @@ Icons and attachments are fetched with a size cap, without redirects, and the to
 | 2 (low)     | Tink  | active         | 5 s          | 0.25      |
 | 1 (min)     | Tink  | active         | 4 s          | 0.0       |
 
-The time-sensitive level needs a restricted entitlement (`com.apple.developer.usernotifications.time-sensitive`, which needs a provisioning profile). The app reads its own entitlements at run time: with it, priorities 4 and 5 use the time-sensitive level; without it (an ad-hoc build) they degrade to the active level, so they are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
+The time-sensitive level needs a restricted entitlement (`com.apple.developer.usernotifications.time-sensitive`, which needs a provisioning profile; a Developer ID release embeds it). The app reads its own entitlements at run time: with it, priorities 4 and 5 use the time-sensitive level; without it (an ad-hoc build) they degrade to the active level, so they are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
 
 ### Missed messages
 
