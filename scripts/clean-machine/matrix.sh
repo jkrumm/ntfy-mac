@@ -59,8 +59,20 @@ die() {
 export CM_OUT="$OUT" CM_OLD="$OLD" CM_NEW="$NEW"
 slot() { "$ROOT/scripts/apple-slot.sh" "${BASH_SOURCE[0]}" "$@"; }
 # A failed or killed run must not leave its clone running (and growing) behind it.
-cleanup_runs() { for vm in $(limactl list --format "{{.Name}}" 2>/dev/null | grep "^cmrun-"); do limactl delete -f "$vm" >/dev/null 2>&1; done; }
-trap cleanup_runs EXIT
+# Cleanup on exit. A base whose build did not finish is deleted (PARTIAL_BASE), so the next run rebuilds it instead of
+# cloning a half-built one. The run clones are deleted only by `run` itself (CLEAN_RUNS): `status` or `cells` in another
+# shell must never remove the VM of a cell that is running.
+PARTIAL_BASE=""
+CLEAN_RUNS=""
+cleanup_runs() {
+  local vm
+  for vm in $(limactl list --format "{{.Name}}" 2>/dev/null | grep "^cmrun-"); do limactl delete -f "$vm" >/dev/null 2>&1; done
+}
+on_exit() {
+  [[ -z "$PARTIAL_BASE" ]] || limactl delete -f "$PARTIAL_BASE" >/dev/null 2>&1
+  [[ -z "$CLEAN_RUNS" ]] || cleanup_runs
+}
+trap on_exit EXIT
 
 oses() {
   case "$1" in
@@ -123,6 +135,7 @@ build_pristine() {
   disk_guard
   if ! exists "$vm"; then
     log "$vm: creating (downloads the IPSW, installs macOS; about 10 minutes)"
+    PARTIAL_BASE="$vm"
     limactl start --name="$vm" --tty=false "$HERE/macos-$os.yaml" >"$OUT/create-$os.log" 2>&1 || die "creating $vm failed, see $OUT/create-$os.log"
     # The IPSW (about 17 GB) is only needed to create the VM.
     rm -rf "$HOME/Library/Caches/lima/download"
@@ -130,6 +143,7 @@ build_pristine() {
   start_vm "$vm" nogui
   enable_autologin "$vm"
   stop_vm "$vm"
+  PARTIAL_BASE=""
 }
 
 build_clt() {
@@ -137,6 +151,7 @@ build_clt() {
   exists "$vm" && return 0
   disk_guard
   limactl clone "cm-$os" "$vm" --tty=false >/dev/null 2>&1 || die "cannot clone cm-$os"
+  PARTIAL_BASE="$vm"
   start_vm "$vm"
   log "$vm: installing the Command Line Tools"
   label="$(gsh "$vm" "$GUEST_SUDO"'
@@ -145,6 +160,7 @@ build_clt() {
   [[ -n "$label" ]] || die "$vm: no Command Line Tools label offered"
   gsh "$vm" "$GUEST_SUDO sudo -A softwareupdate -i \"$label\" >/tmp/clt.log 2>&1; xcode-select -p" | grep -q CommandLineTools || die "$vm: Command Line Tools install failed"
   stop_vm "$vm"
+  PARTIAL_BASE=""
 }
 
 build_brew() {
@@ -152,6 +168,7 @@ build_brew() {
   exists "$vm" && return 0
   disk_guard
   limactl clone "cm-$os-clt" "$vm" --tty=false >/dev/null 2>&1 || die "cannot clone cm-$os-clt"
+  PARTIAL_BASE="$vm"
   start_vm "$vm"
   log "$vm: installing Homebrew"
   # The installer needs passwordless sudo for its own run; the drop-in is removed again.
@@ -161,6 +178,7 @@ build_brew() {
     sudo -A rm -f /etc/sudoers.d/cm-brew; exit $rc' || die "$vm: Homebrew install failed"
   gsh "$vm" '/opt/homebrew/bin/brew --version' | head -1 >&2
   stop_vm "$vm"
+  PARTIAL_BASE=""
 }
 
 cmd_bases() {
@@ -207,6 +225,7 @@ run_cell() {
 
 cmd_run() {
   mkdir -p "$OUT"
+  CLEAN_RUNS=1
   local target="${1:-}" os cell failed=0
   shift || true
   local cells=("$@")

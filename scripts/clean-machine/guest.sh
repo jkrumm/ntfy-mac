@@ -207,7 +207,7 @@ cell_install_no_clt() {
   step "install.sh on a Mac with no Command Line Tools (the pristine image)"
   note "developer-tools" "xcode-select -p: $(xcode-select -p 2>&1 | head -1)"
   local out rc
-  out="$(NTFY_MAC_NO_LAUNCH=1 bash "$DIR/install.sh" 2>&1)"
+  out="$(NTFY_MAC_VERSION="$NEW" NTFY_MAC_NO_LAUNCH=1 bash "$DIR/install.sh" 2>&1)"
   rc=$?
   echo "$out" | tail -5
   sleep 3
@@ -222,7 +222,7 @@ cell_direct_fresh() {
   step "install.sh, latest release, clean Mac"
   [[ -z "$(running_apps)" && ! -d "$DIRECT_APP" && ! -d "$CASK_APP" ]] && ok "clean-start" "no copy, nothing running" || bad "clean-start" "not clean"
   local rc
-  bash "$DIR/install.sh" 2>&1 | tail -6
+  NTFY_MAC_VERSION="$NEW" bash "$DIR/install.sh" 2>&1 | tail -6
   rc="${PIPESTATUS[0]}"
   [[ $rc -eq 0 ]] && ok "install.sh" "exit 0" || { bad "install.sh" "exit $rc"; return; }
   describe_app "$DIRECT_APP"
@@ -240,7 +240,7 @@ cell_direct_fresh() {
   step "second run of install.sh (the documented way to update)"
   local before after
   before="$(state_value x "$(cli_of "$DIRECT_APP")" 'config sha')|$(state_value x "$(cli_of "$DIRECT_APP")" 'history total')"
-  bash "$DIR/install.sh" 2>&1 | tail -3
+  NTFY_MAC_VERSION="$NEW" bash "$DIR/install.sh" 2>&1 | tail -3
   wait_for 30 app_running || bad "relaunch" "app not running after the second install.sh"
   sleep 8
   after="$(state_value x "$(cli_of "$DIRECT_APP")" 'config sha')|$(state_value x "$(cli_of "$DIRECT_APP")" 'history total')"
@@ -384,7 +384,7 @@ cell_cask_upgrade() {
 
 cell_together_direct_then_cask() {
   step "direct install $NEW first, then brew install --cask"
-  bash "$DIR/install.sh" 2>&1 | tail -2
+  NTFY_MAC_VERSION="$NEW" bash "$DIR/install.sh" 2>&1 | tail -2
   wait_for 30 app_running || { bad "app-opens" "direct copy did not start"; return; }
   seed "$DIRECT_APP"
   local b_hist
@@ -445,7 +445,7 @@ cell_together_cask_then_direct() {
   seed "$CASK_APP"
   local b_hist out rc
   b_hist="$(state_value x "$(cli_of "$CASK_APP")" 'history total')"
-  out="$(bash "$DIR/install.sh" 2>&1)"
+  out="$(NTFY_MAC_VERSION="$NEW" bash "$DIR/install.sh" 2>&1)"
   rc=$?
   echo "$out" | tail -3
   [[ $rc -eq 1 ]] && ok "install.sh-refuses" "exit 1: $(tail -1 <<<"$out" | cut -c1-120)" || bad "install.sh-refuses" "exit $rc"
