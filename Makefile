@@ -33,7 +33,7 @@ lint:
 # Fails when shellcheck is missing: a skipped lint must never look like a pass.
 lint-sh:
 	@command -v shellcheck > /dev/null || { echo "shellcheck not found (brew install shellcheck)"; exit 1; }
-	shellcheck install.sh scripts/*.sh
+	shellcheck install.sh scripts/*.sh scripts/clean-machine/*.sh
 
 # Not part of `check` yet: joins once the tree is clean.
 analyze:

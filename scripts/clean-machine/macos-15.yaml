@@ -1,0 +1,14 @@
+# Lima template for the clean-machine matrix: a macOS 15 guest (Apple Virtualization.framework), no host mounts.
+# The IPSW is pinned and digest-checked by Lima's own image template.
+minimumLimaVersion: 2.3.0
+base:
+  - template:_images/macos-15
+cpus: 4
+memory: 6GiB
+disk: 64GiB
+mounts: []
+video:
+  display: default
+osOpts:
+  Darwin:
+    suppressFirstLoginSetup: true
