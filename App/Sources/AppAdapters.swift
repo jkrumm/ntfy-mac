@@ -108,3 +108,15 @@ struct ConfiguredTopicSource: TopicSource {
     ).subscribedTopics()
   }
 }
+
+/// Brings another running copy of this bundle id (the direct copy or the cask copy) forward.
+struct RunningCopyActivator: RunningInstanceActivating {
+  let bundleIdentifier: String
+
+  func activateOther() -> Bool {
+    let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+      .filter { $0.processIdentifier != getpid() && !$0.isTerminated }
+    others.first?.activate()
+    return !others.isEmpty
+  }
+}

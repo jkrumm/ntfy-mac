@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let onboardingModel: OnboardingModel
   let coordinator: WindowCoordinator
   let updater: SparkleUpdater
+  /// Taken before anything else is built, so a second copy touches no config, history, login item
+  /// or socket. Held for the life of the process; the kernel drops it when the process ends.
+  private let instanceLease = AppDelegate.admitOrExit()
 
   override init() {
     let router = router
@@ -77,6 +80,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     super.init()
   }
 
+  /// The lease of the one running instance; a second copy quits here.
+  private static func admitOrExit() -> (any InstanceLease)? {
+    let log = Log.logger(.interface)
+    let admission = SingleInstanceGate(
+      lock: FileInstanceLock(
+        url: FileInstanceLock.defaultURL(applicationSupport: AppPipeline.applicationSupport())),
+      activator: RunningCopyActivator(
+        bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.jkrumm.ntfy-mac"),
+      log: { log.info("\($0, privacy: .public)") }
+    ).admit()
+    switch admission {
+    case .run(let lease): return lease
+    case .yield: exit(0)
+    }
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
     // The center only keeps a weak reference, and it needs its delegate before the first
@@ -119,6 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       done.signal()
     }
     _ = done.wait(timeout: .now() + .seconds(3))
+    instanceLease?.release()
   }
 }
 
