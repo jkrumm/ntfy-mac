@@ -17,9 +17,9 @@ public enum InstanceAdmission: Sendable {
 }
 
 /// Makes the app single-instance per user, whichever bundle (direct copy, cask copy) is started.
-/// A copy that does not get the lock activates the running one and yields. A lock that is held
-/// while no other copy is visible belongs to an instance that is quitting (an update or an
-/// install restarts the app), so the gate waits a bounded time for it before it yields.
+/// A copy that does not get the lock activates the running one, then keeps trying the lock for a
+/// bounded time before it yields: a restart (an update, an install) starts the new copy while the
+/// old one is still quitting, and that old copy stays visible as a running app until it is gone.
 public struct SingleInstanceGate: Sendable {
   /// A quitting instance stops within its three second termination budget.
   static let patience = Duration.seconds(4)
@@ -49,6 +49,7 @@ public struct SingleInstanceGate: Sendable {
 
   public func admit() -> InstanceAdmission {
     var waited = Duration.zero
+    var activated = false
     while true {
       do {
         if let lease = try lock.acquire() { return .run(holding: lease) }
@@ -56,12 +57,14 @@ public struct SingleInstanceGate: Sendable {
         log("instance lock unusable, starting anyway: \(error)")
         return .run(holding: nil)
       }
-      if activator.activateOther() {
-        log("another instance runs; activated it and quitting")
-        return .yield
+      if !activated, activator.activateOther() {
+        activated = true
+        log("another instance runs; activated it")
       }
       guard waited < Self.patience else {
-        log("the instance lock is held but no other copy is visible; quitting")
+        log(
+          "the instance lock is still held (\(activated ? "another copy is visible" : "no copy is visible")); quitting"
+        )
         return .yield
       }
       pause(Self.interval)

@@ -57,12 +57,14 @@ private final class Pauses: Sendable {
     let lock = InMemoryInstanceLock()
     let first = gate(lock, Activator(visible: true)).admit()
     let activator = Activator(visible: true)
-    let second = gate(lock, activator).admit()
+    let pauses = Pauses()
+    let second = gate(lock, activator, pauses).admit()
     guard case .yield = second else {
       Issue.record("a second instance was admitted")
       return
     }
     #expect(activator.activations == 1)
+    #expect(pauses.total == 40)
     #expect(lease(first) != nil && lock.isHeld)
   }
 
@@ -77,11 +79,13 @@ private final class Pauses: Sendable {
   @Test func aQuittingInstanceIsWaitedForNotReplacedByNothing() {
     let lock = InMemoryInstanceLock()
     let first = lease(gate(lock, Activator(visible: true)).admit())
-    // The old copy is still shutting down: no running app is visible, then the lock frees.
+    // The old copy is still shutting down, and still visible as a running app, until the lock frees.
     let pauses = Pauses { if $0 == 3 { first?.release() } }
-    let second = gate(lock, Activator(visible: false), pauses).admit()
+    let activator = Activator(visible: true)
+    let second = gate(lock, activator, pauses).admit()
     #expect(lease(second) != nil)
     #expect(pauses.total == 3)
+    #expect(activator.activations == 1)
   }
 
   @Test func aLockHeldByNobodyVisibleIsGivenUpAfterABoundedWait() {
