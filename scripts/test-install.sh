@@ -98,8 +98,14 @@ c="$tmp/brew-case"
 mkdir -p "$c/brew-a" "$c/brew-b/opt/ntfy-mac/NtfyMac.app"
 if brew_prefixes="$c/brew-a:$c/brew-b" run_install "$c" "$tmp/good"; then bad "Homebrew copy refuses the install"; else ok "Homebrew copy refuses the install"; fi
 check "Homebrew refusal installs nothing" nothing_installed "$c"
-check "Homebrew refusal names brew upgrade" grep -q "brew upgrade ntfy-mac" "$c/out"
-check "Homebrew refusal names brew uninstall" grep -q "brew uninstall ntfy-mac" "$c/out"
+check "Homebrew refusal names brew update" grep -q "brew update" "$c/out"
+check "Homebrew refusal names brew uninstall --formula" grep -q "brew uninstall --formula ntfy-mac" "$c/out"
+# the cask copy blocks it as well (Caskroom entry, no opt link)
+c="$tmp/brew-cask-case"
+mkdir -p "$c/brew-a" "$c/brew-b/Caskroom/ntfy-mac/2.0.1"
+if brew_prefixes="$c/brew-a:$c/brew-b" run_install "$c" "$tmp/good"; then bad "Homebrew cask copy refuses the install"; else ok "Homebrew cask copy refuses the install"; fi
+check "cask refusal installs nothing" nothing_installed "$c"
+check "cask refusal names brew uninstall --cask" grep -q "brew uninstall --cask ntfy-mac" "$c/out"
 c="$tmp/brew-absent"
 if brew_prefixes="$c/brew-a:$c/brew-b" run_install "$c" "$tmp/good"; then ok "no Homebrew copy installs as before"; else bad "no Homebrew copy installs as before"; cat "$c/out" >&2; fi
 check "no Homebrew copy leaves a working install" runs "$c"
@@ -212,7 +218,7 @@ for url in "https://evil.example/releases" "http://evil.example/x" "http://127.0
   c="$tmp/baseurl-$(echo "$url" | tr -c 'A-Za-z0-9\n' _)"
   mkdir -p "$c/home"
   if HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="$url" NTFY_MAC_APP_DIR="$c/apps" \
-    NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 bash "$installer" >"$c/out" 2>&1; then
+    NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 NTFY_MAC_BREW_PREFIXES="$c/no-brew" bash "$installer" >"$c/out" 2>&1; then
     bad "base URL $url is refused"
   else
     ok "base URL $url is refused"
@@ -224,7 +230,7 @@ for url in "http://127.0.0.1:1/x" "http://localhost/x"; do
   c="$tmp/baseok-$(echo "$url" | tr -c 'A-Za-z0-9\n' _)"
   mkdir -p "$c/home"
   HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="$url" NTFY_MAC_APP_DIR="$c/apps" \
-    NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 bash "$installer" >"$c/out" 2>&1 || true
+    NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 NTFY_MAC_BREW_PREFIXES="$c/no-brew" bash "$installer" >"$c/out" 2>&1 || true
   check "base URL $url is accepted (fails later, at the download)" grep -q "download of" "$c/out"
 done
 
@@ -232,7 +238,7 @@ done
 c="$tmp/badversion"
 mkdir -p "$c/home"
 if HOME="$c/home" NTFY_MAC_VERSION="../1.0" NTFY_MAC_BASE_URL="file://$tmp/good" NTFY_MAC_APP_DIR="$c/apps" \
-  NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 bash "$installer" >"$c/out" 2>&1; then
+  NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 NTFY_MAC_BREW_PREFIXES="$c/no-brew" bash "$installer" >"$c/out" 2>&1; then
   bad "non-semver version fails"
 else
   ok "non-semver version fails"

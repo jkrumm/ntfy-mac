@@ -39,8 +39,13 @@ macos_major="$(sw_vers -productVersion | cut -d. -f1)"
 # A Homebrew copy and this one would share a bundle id and destroy each other. No override.
 IFS=: read -r -a brew_prefixes <<<"${NTFY_MAC_BREW_PREFIXES:-/opt/homebrew:/usr/local}"
 for prefix in "${brew_prefixes[@]}"; do
-  [[ -n "$prefix" && -e "$prefix/opt/ntfy-mac/NtfyMac.app" ]] || continue
-  fail "ntfy-mac is managed by Homebrew ($prefix/opt/ntfy-mac). Update it with 'brew upgrade ntfy-mac', or run 'brew uninstall ntfy-mac' first to install with this script. Nothing was installed."
+  [[ -n "$prefix" ]] || continue
+  if [[ -d "$prefix/Caskroom/ntfy-mac" ]]; then
+    fail "ntfy-mac is installed by Homebrew (cask, $prefix/Caskroom/ntfy-mac). The app updates itself; run 'brew uninstall --cask ntfy-mac' first to install with this script. Nothing was installed."
+  fi
+  if [[ -e "$prefix/opt/ntfy-mac/NtfyMac.app" ]]; then
+    fail "ntfy-mac is installed by Homebrew (the old formula, $prefix/opt/ntfy-mac). Run 'brew update' to move it to the cask, or run 'brew uninstall --formula ntfy-mac' first to install with this script. Nothing was installed."
+  fi
 done
 
 # ── Version ───────────────────────────────────────────────────────────────────

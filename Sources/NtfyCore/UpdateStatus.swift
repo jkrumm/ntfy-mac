@@ -1,7 +1,7 @@
 /// Why this copy does not update itself. The raw values are the stable names of the wire format
 /// and of `ntfy-mac update --json`.
 public enum UpdateUnavailableReason: String, Sendable, Codable, Hashable, CaseIterable {
-  /// Installed by Homebrew; `brew upgrade` updates it.
+  /// The old Homebrew formula copy (Cellar or `opt`); `brew update` moves it to the cask.
   case homebrew
   /// Not Developer-ID signed (a development or ad-hoc build): Sparkle would refuse the update.
   case unsigned

@@ -65,8 +65,8 @@ struct DuplicateInstall: Sendable {
       detail: """
         \(list.joined(separator: "\n"))
         \(running)
-        Keep one. Homebrew formula copy: brew uninstall --formula ntfy-mac. Direct copy: delete the app and the \
-        ~/.local/bin/ntfy-mac link. Config and history stay.
+        Keep one. Homebrew copy: brew uninstall --cask ntfy-mac (the old formula: brew uninstall --formula \
+        ntfy-mac). Direct copy: delete the app and the ~/.local/bin/ntfy-mac link. Config and history stay.
         """)
   }
 }
