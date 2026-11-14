@@ -353,13 +353,13 @@ cell_cask_upgrade() {
   b_pin="$(state_value x "$cli" 'team-pin sha')"
   b_perm="$(state_value x "$cli" 'permission')"
   t0="$(date '+%Y-%m-%d %H:%M:%S')"
-  step "the tap moves to $NEW: plain brew upgrade (auto_updates: expect it to skip), then --greedy"
+  step "the tap moves to $NEW: plain brew upgrade (Homebrew 7.0.13 upgrades a copy older than the tap although the cask has auto_updates), then --greedy if it did not"
   replica_tap "$NEW"
   brew update-reset >/dev/null 2>&1 || true
   echo "brew outdated: [$(brew outdated --cask 2>&1 | tr '\n' ' ')]"
   echo "brew upgrade --cask (no name, what a user runs): $(brew upgrade --cask 2>&1 | grep -E "^(==>|Warning|Error|🍺)" | tr '\n' ';')"
   if [[ "$(bundle_version "$CASK_APP")" == "$OLD" ]]; then
-    note "brew-upgrade" "a bare brew upgrade left $OLD (auto_updates: Sparkle owns the update); trying --greedy"
+    note "brew-upgrade" "a bare brew upgrade left $OLD (not what Homebrew 7.0.13 did when this was written); trying --greedy"
     echo "brew upgrade --cask --greedy: $(brew upgrade --cask --greedy 2>&1 | grep -E "^(==>|Warning|Error|🍺)" | tr '\n' ';')"
   else
     note "brew-upgrade" "a bare brew upgrade moved the cask copy to $(bundle_version "$CASK_APP") although the cask has auto_updates"
