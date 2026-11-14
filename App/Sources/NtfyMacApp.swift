@@ -10,6 +10,9 @@ import UserNotifications
 /// to the scenes.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  /// Taken before anything else is built, so a second copy touches no config, history, login item
+  /// or socket. Held for the life of the process; the kernel drops it when the process ends.
+  private let instanceLease = AppDelegate.admitOrExit()
   private let router = ResponseRouter { Log.logger(.delivery).info("\($0, privacy: .public)") }
   private let responder: NotificationResponder
   private let controller: AppController
@@ -23,9 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let onboardingModel: OnboardingModel
   let coordinator: WindowCoordinator
   let updater: SparkleUpdater
-  /// Taken before anything else is built, so a second copy touches no config, history, login item
-  /// or socket. Held for the life of the process; the kernel drops it when the process ends.
-  private let instanceLease = AppDelegate.admitOrExit()
 
   override init() {
     let router = router
