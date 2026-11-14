@@ -24,7 +24,8 @@ check() { # description, command...
 
 # make_release <dir> [extra file to add to the archive root] [mode]
 # mode: failmigrate (the stub's migrate exits 1), unsigned, tampered (changed after signing),
-#       outlink (a signed symlink to /etc), inlink (a signed symlink inside the bundle)
+#       outlink (a signed symlink to /etc), inlink (a signed symlink inside the bundle),
+#       ticket (a stapled-looking Contents/CodeResources), badticket (that file without the s8ch magic)
 make_release() {
   local dir="$1" extra="${2:-}" mode="${3:-}"
   local src="$dir.src" app="$dir.src/NtfyMac.app"
@@ -55,6 +56,8 @@ PLIST
   [[ "$mode" != inlink ]] || ln -s ../MacOS/ntfy-mac "$app/Contents/Resources/inside"
   [[ "$mode" == unsigned ]] || codesign --force -s - "$app" >/dev/null 2>&1
   [[ "$mode" != tampered ]] || echo "# changed after signing" >>"$app/Contents/MacOS/ntfy-mac"
+  [[ "$mode" != ticket ]] || printf 's8ch\0ticket' >"$app/Contents/CodeResources"
+  [[ "$mode" != badticket ]] || printf 'nope\0ticket' >"$app/Contents/CodeResources"
   echo license >"$src/LICENSE"
   if [[ -n "$extra" ]]; then echo x >"$src/$extra"; fi
   (cd "$src" && COPYFILE_DISABLE=1 tar --no-xattrs -czf "$dir/$archive" NtfyMac.app LICENSE ${extra:+"$extra"})
@@ -65,7 +68,7 @@ PLIST
 run_install() {
   local c="$1" rel="$2"
   mkdir -p "$c/home"
-  HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="${base_url:-file://$rel}" \
+  PATH="${shims:+$shims:}$PATH" HOME="$c/home" NTFY_MAC_VERSION="$version" NTFY_MAC_BASE_URL="${base_url:-file://$rel}" \
     NTFY_MAC_ALLOW_UNNOTARIZED="$([[ "${allow_unnotarized:-1}" == 1 ]] && echo 1 || true)" \
     NTFY_MAC_APP_DIR="$c/apps" NTFY_MAC_BIN_DIR="$c/bin" NTFY_MAC_NO_LAUNCH=1 \
     NTFY_MAC_BREW_PREFIXES="${brew_prefixes:-$c/no-brew}" \
@@ -197,6 +200,67 @@ c="$tmp/adhoc-upgrade"
 run_install "$c" "$tmp/good" || bad "setup for the ad-hoc upgrade case"
 if allow_unnotarized=0 run_install "$c" "$tmp/good"; then bad "ad-hoc refusal keeps an existing install"; else ok "ad-hoc refusal keeps an existing install"; fi
 check "ad-hoc refusal leaves the old install working" runs "$c"
+
+# The notarization checks, with shims for codesign (claims Developer ID + Hardened Runtime) and spctl (claims
+# Notarized Developer ID) so the stapled-ticket check is reached with a fake app. xcrun must never be called:
+# on a Mac without Command Line Tools it opens the install-developer-tools dialog.
+shims="$tmp/shims"
+mkdir -p "$shims"
+cat >"$shims/codesign" <<'SHIM'
+#!/bin/sh
+case "$1" in
+  --verify) exit 0 ;;
+  -dvv)
+    echo "flags=0x10000(runtime)" >&2
+    echo "Authority=Developer ID Application: Test (TEAM123456)" >&2
+    exit 0
+    ;;
+esac
+exec /usr/bin/codesign "$@"
+SHIM
+cat >"$shims/spctl" <<'SHIM'
+#!/bin/sh
+echo "source=${SPCTL_SOURCE:-Notarized Developer ID}" >&2
+exit "${SPCTL_RC:-0}"
+SHIM
+cat >"$shims/xcrun" <<'SHIM'
+#!/bin/sh
+echo "xcrun called: $*" >>"${XCRUN_LOG:?}"
+exit 1
+SHIM
+chmod +x "$shims/codesign" "$shims/spctl" "$shims/xcrun"
+export XCRUN_LOG="$tmp/xcrun.log"
+
+make_release "$tmp/ticket" "" ticket
+make_release "$tmp/badticket" "" badticket
+
+c="$tmp/ticket-case"
+if allow_unnotarized=0 run_install "$c" "$tmp/ticket"; then ok "stapled app installs without the override"; else bad "stapled app installs without the override"; cat "$c/out" >&2; fi
+check "stapled app installs bundle and symlink" installed "$c"
+
+c="$tmp/noticket-case"
+if allow_unnotarized=0 run_install "$c" "$tmp/good"; then bad "app without the ticket file is refused"; else ok "app without the ticket file is refused"; fi
+check "missing ticket installs nothing" nothing_installed "$c"
+check "missing ticket says the app is not stapled" grep -q "not stapled" "$c/out"
+
+c="$tmp/badticket-case"
+if allow_unnotarized=0 run_install "$c" "$tmp/badticket"; then bad "ticket without the s8ch magic is refused"; else ok "ticket without the s8ch magic is refused"; fi
+check "bad ticket installs nothing" nothing_installed "$c"
+check "bad ticket says the app is not stapled" grep -q "not stapled" "$c/out"
+
+c="$tmp/notnotarized-case"
+if SPCTL_SOURCE="Developer ID" allow_unnotarized=0 run_install "$c" "$tmp/ticket"; then bad "Gatekeeper source other than Notarized Developer ID is refused"; else ok "Gatekeeper source other than Notarized Developer ID is refused"; fi
+check "non-notarized source installs nothing" nothing_installed "$c"
+check "non-notarized source names Notarized Developer ID" grep -q "Notarized Developer ID" "$c/out"
+
+c="$tmp/rejected-case"
+if SPCTL_RC=3 allow_unnotarized=0 run_install "$c" "$tmp/ticket"; then bad "Gatekeeper rejection is refused"; else ok "Gatekeeper rejection is refused"; fi
+check "Gatekeeper rejection installs nothing" nothing_installed "$c"
+check "Gatekeeper rejection is named" grep -q "Gatekeeper rejects" "$c/out"
+
+check "installer never calls xcrun" test ! -e "$XCRUN_LOG"
+check "install.sh does not mention xcrun outside comments" test -z "$(grep -v '^[[:space:]]*#' "$installer" | grep xcrun || true)"
+unset shims
 
 # the override is refused on an https base URL (and without any base URL), never silently honoured
 for url in "https://evil.example/releases" ""; do

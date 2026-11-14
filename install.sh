@@ -2,8 +2,9 @@
 # Installs NtfyMac.app into ~/Applications and links the CLI into ~/.local/bin.
 # The download is checked against the release's SHA256SUMS before anything is extracted, and a
 # failed check installs nothing; so does an extracted bundle with a bad code signature, one that is
-# not Developer ID signed with the Hardened Runtime, notarized and stapled (stapler, Gatekeeper), or
-# a symbolic link that leaves the bundle. Rerun to update.
+# not Developer ID signed with the Hardened Runtime, notarized and stapled (ticket file, Gatekeeper), or
+# a symbolic link that leaves the bundle. The checks use only tools that ship with macOS (no xcrun), so a Mac
+# without Command Line Tools installs without the developer-tools dialog. Rerun to update.
 #
 # Environment:
 #   NTFY_MAC_VERSION    version to install (default: the latest GitHub release)
@@ -12,7 +13,7 @@
 #   NTFY_MAC_NO_LAUNCH  set to 1 to skip opening the app
 #   NTFY_MAC_BASE_URL   directory URL holding the release files (tests; replaces the GitHub download
 #                       URL; only file://, http://127.0.0.1 and http://localhost are accepted)
-#   NTFY_MAC_ALLOW_UNNOTARIZED  set to 1 to skip the Developer ID, stapler and Gatekeeper checks (tests only;
+#   NTFY_MAC_ALLOW_UNNOTARIZED  set to 1 to skip the Developer ID, ticket and Gatekeeper checks (tests only;
 #                       refused unless NTFY_MAC_BASE_URL is a file:// or local http:// URL)
 #   NTFY_MAC_BREW_PREFIXES  colon-separated Homebrew prefixes to look in (tests only; default
 #                       /opt/homebrew:/usr/local)
@@ -130,10 +131,15 @@ if [[ "${NTFY_MAC_ALLOW_UNNOTARIZED:-}" != "1" ]]; then
     || fail "the app in $archive is not signed with a Developer ID Application certificate; nothing was installed"
   grep -Eq 'flags=0x[0-9a-f]+\(.*runtime' <<<"$signature" \
     || fail "the app in $archive does not use the Hardened Runtime; nothing was installed"
-  xcrun stapler validate "$extracted" >/dev/null 2>&1 \
-    || fail "the app in $archive has no valid notarization ticket; nothing was installed"
-  spctl --assess --type execute "$extracted" >/dev/null 2>&1 \
+  # No xcrun here: on a Mac without Command Line Tools it opens the install-developer-tools dialog. A stapled
+  # app carries its ticket in Contents/CodeResources, a file that starts with the magic "s8ch".
+  ticket="$extracted/Contents/CodeResources"
+  [[ -f "$ticket" && "$(head -c 4 "$ticket" 2>/dev/null)" == "s8ch" ]] \
+    || fail "the app in $archive is not stapled (no notarization ticket in Contents/CodeResources); nothing was installed"
+  assessment="$(spctl --assess --type execute --verbose=4 "$extracted" 2>&1)" \
     || fail "Gatekeeper rejects the app in $archive; nothing was installed"
+  grep -q 'source=Notarized Developer ID' <<<"$assessment" \
+    || fail "Gatekeeper does not report the app in $archive as Notarized Developer ID; nothing was installed"
 fi
 
 # ── Install ───────────────────────────────────────────────────────────────────
