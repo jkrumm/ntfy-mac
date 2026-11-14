@@ -172,6 +172,7 @@ jobs:
       - name: Style and audit
         run: |
           brew tap jkrumm/tap "${GITHUB_WORKSPACE}/tap"
+          brew trust jkrumm/tap # brew refuses to load a cask from an untrusted tap
           brew style jkrumm/tap/ntfy-mac
           brew audit --cask --online --strict jkrumm/tap/ntfy-mac
 
