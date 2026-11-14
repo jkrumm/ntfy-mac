@@ -4,7 +4,7 @@ Native macOS client for ntfy servers. The 1.x Bun/TypeScript daemon is gone (it 
 
 ## Architecture
 
-- **One long-lived process:** `NtfyMac.app` (LSUIElement). It holds the NDJSON stream, posts notifications and writes history.
+- **One long-lived process:** `NtfyMac.app` (LSUIElement). It holds the NDJSON stream, posts notifications and writes history. It is single-instance per user, whichever bundle (direct or cask copy) starts: `SingleInstanceGate` (`NtfyAppLogic`) takes `FileInstanceLock` (`app.instance.lock` in the app support dir, separate from the socket's `app.sock.lock`) first thing in `AppDelegate.init`, and a copy that does not get it activates the running one (`NSRunningApplication`) and exits before touching config, history or login item; the owner record and hand-off stay in the postponed app group item.
 - **CLI-first:** `ntfy-mac` lives inside the bundle (`NtfyMac.app/Contents/MacOS/ntfy-mac`) and drives the same `NtfyCore`. Every setting and action works from the CLI; the UI is a convenience over it.
 - **CLI ↔ app:** reads go straight to files (config, history DB read-only in WAL mode). Mutations write the config; the app watches it. App-only actions (post, ack, reconnect) go over a Unix domain socket, NDJSON, in the app support dir; the CLI launches the app via LaunchServices if it is down.
 - **Secrets:** token in the Keychain (service `com.jkrumm.ntfy-mac`). 1.x stores it in plaintext in `config.json`; 2.0 migrates it on first run.
