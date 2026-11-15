@@ -64,7 +64,7 @@ docs-check: build
 
 app:
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
-	scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
+	APPLE_SLOT_NAME=ntfy-mac-app scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
 		-derivedDataPath .build/xcode build
 	scripts/sign.sh $(APP)
 	test -x $(APP)/Contents/MacOS/ntfy-mac
@@ -79,7 +79,7 @@ SNAP_DIR ?= .build/snapshots
 
 snapshots:
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
-	scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
+	APPLE_SLOT_NAME=ntfy-mac-snapshots scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
 		-derivedDataPath .build/xcode-snap SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
 	scripts/sign.sh $(SNAP_APP)
 	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \

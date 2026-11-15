@@ -4,6 +4,7 @@
 #   on the mini  one Apple job at a time across repos (`lockf`), inside one of the factory's host-wide test slots
 #   elsewhere    (hosted CI, the MacBook; no `factory`): the bare command
 #
+# APPLE_SLOT_NAME names the factory step (default ntfy-mac-apple); `app` and `snapshots` set their own so the retro can tell them apart.
 # Exit 75 = no slot or lock within the wait (APPLE_LOCK_WAIT seconds, default 1800).
 set -u
 
@@ -14,4 +15,4 @@ set -u
 
 command -v factory >/dev/null 2>&1 || exec "$@"
 
-exec lockf -t "${APPLE_LOCK_WAIT:-1800}" /tmp/iris-apple.lock factory slot run --name ntfy-mac-apple -- "$@"
+exec lockf -t "${APPLE_LOCK_WAIT:-1800}" /tmp/iris-apple.lock factory slot run --name "${APPLE_SLOT_NAME:-ntfy-mac-apple}" -- "$@"
