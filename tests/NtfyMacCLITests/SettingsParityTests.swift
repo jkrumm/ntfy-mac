@@ -6,8 +6,10 @@ import Testing
 /// The settings catalog is the contract between the UI and the CLI: a setting the UI shows has a
 /// command, a parsing example and a row in docs/settings.md.
 @Suite struct SettingsParityTests {
-  private static let readOnly: Set<SettingID> = [.soundList, .notificationPermission]
-  private static let uiOnly: Set<SettingID> = [.soundPreview]
+  private static let readOnly: Set<SettingID> = [
+    .soundList, .soundPreview, .notificationPermission,
+  ]
+  private static let uiOnly: Set<SettingID> = []
 
   private func commandPaths() throws -> Set<String> {
     let document = try SchemaBuilder.build(root: NtfyMac.self)

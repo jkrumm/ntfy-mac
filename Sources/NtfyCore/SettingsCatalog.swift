@@ -165,9 +165,8 @@ public enum SettingsCatalog {
       .soundList, .sounds, "Available sound names", command: "sounds",
       example: "ntfy-mac sounds", storage: .system, kind: .readOnly),
     SettingEntry(
-      .soundPreview, .sounds, "Sound preview", storage: .system, kind: .uiOnly,
-      note: "Playing a sound is a UI affordance; the CLI tests a priority end to end with `notify`."
-    ),
+      .soundPreview, .sounds, "Sound preview", command: "sounds", example: "ntfy-mac sounds",
+      storage: .system, kind: .readOnly),
     SettingEntry(
       .dismiss, .sounds, "Auto-dismiss time per priority", key: "dismiss",
       command: "config dismiss set", example: "ntfy-mac config dismiss set 3 15",

@@ -30,7 +30,7 @@ Settings in `config.json` apply to the running app through its config watcher; n
 |-|-|-|-|-|
 | Sound per priority | config.json: `sounds` | `ntfy-mac config sounds set` | `ntfy-mac config sounds set 5 Sosumi` | `config sounds reset` restores the defaults; `silent` plays nothing. |
 | Available sound names | System | `ntfy-mac sounds` (read only) | `ntfy-mac sounds` |  |
-| Sound preview | System | UI only |  | Playing a sound is a UI affordance; the CLI tests a priority end to end with `notify`. |
+| Sound preview | System | `ntfy-mac sounds` (read only) | `ntfy-mac sounds` |  |
 | Auto-dismiss time per priority | config.json: `dismiss` | `ntfy-mac config dismiss set` | `ntfy-mac config dismiss set 3 15` | `never` keeps the notification; `config dismiss reset` restores the defaults. |
 
 ## Quiet hours
