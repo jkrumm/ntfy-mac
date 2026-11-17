@@ -2,9 +2,18 @@ APP := .build/xcode/Build/Products/Release/NtfyMac.app
 SWIFT_FILES := Sources tests App/Sources Package.swift
 TOOLS := scripts/tools.sh
 
-.PHONY: verify-signature check check-fast toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
+.PHONY: apple-guard verify-signature check check-fast toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
-check: toolchain lint-format lint lint-sh build docs-check test installer-check app
+check: apple-guard toolchain lint-format lint lint-sh build docs-check test installer-check app
+
+# `app` and `snapshots` (and so `check`) are CI's job: an xcodebuild holds the mini's one Apple lock, which iris also
+# waits on. They run when CI=true (GitHub Actions sets it) or FORCE=1; `package` and `install-macbook` set it for the
+# `app` they need. `check` lists the guard first, so a refusal costs nothing instead of coming after the whole gate.
+apple-guard:
+	@[ "$(CI)" = true ] || [ "$(FORCE)" = 1 ] || { \
+		echo "refused: this runs xcodebuild, which CI does on every PR head. Use 'make check-fast' locally;" \
+			"FORCE=1 make <target> runs it here (to reproduce a CI failure, or for a Makefile, CI or signing change)."; \
+		exit 1; }
 
 # The lead's tier (project.yaml `checks.fast`): everything `check` runs except the Release xcodebuild (`app`) and the
 # installer test. CI runs the full `check` on the PR head.
@@ -62,7 +71,7 @@ docs-check: build
 		diff -u docs/settings.md "$$tmp/out/docs/settings.md" && diff -u llms.txt "$$tmp/out/llms.txt" || \
 		{ echo "docs are stale: run 'make docs' and commit the result"; exit 1; }
 
-app:
+app: apple-guard
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
 	APPLE_SLOT_NAME=ntfy-mac-app scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
 		-derivedDataPath .build/xcode build
@@ -77,7 +86,7 @@ app:
 SNAP_APP := .build/xcode-snap/Build/Products/Release/NtfyMac.app
 SNAP_DIR ?= .build/snapshots
 
-snapshots:
+snapshots: apple-guard
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
 	APPLE_SLOT_NAME=ntfy-mac-snapshots scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
 		-derivedDataPath .build/xcode-snap SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
@@ -95,7 +104,7 @@ verify-signature:
 # ALLOW_ADHOC=1 skips that for local packaging tests (no appcast).
 package:
 	@test -n "$(VERSION)" || { echo "usage: make package VERSION=x.y.z"; exit 1; }
-	$(MAKE) app
+	$(MAKE) app FORCE=1
 	scripts/package.sh $(VERSION)
 
 # install.sh against a fake release: temp HOME and dirs, no app build, no launch.
@@ -107,5 +116,6 @@ installer-check:
 # the one MacBook-side command goes through ask-human.sh (one approval dialog, scripts/install-macbook.sh). The app
 # is ad-hoc signed unless SIGN_IDENTITY=developer-id NOTARIZE=1 make install-macbook builds the Developer ID
 # signed, notarized and stapled app (needs the team's credentials, see scripts/sign.sh).
+install-macbook: FORCE = 1
 install-macbook: app
 	scripts/install-macbook.sh $(APP)
