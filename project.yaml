@@ -12,3 +12,9 @@ signals:
 checks: { fast: make check-fast, full: make check, ci: true } # a lead runs fast (no xcodebuild); CI runs the full gate on the PR head
 # One lead: the Swift builds and the app run through the mini's Apple slot (scripts/apple-slot.sh), one xcodebuild at a time across repos.
 leads: 1
+# The weekly hygiene pass cannot run `make check` here: apple-guard refuses xcodebuild outside CI. It runs the lead tier
+# instead; CI runs the full gate on every PR head.
+hygiene:
+  check: false
+  reason: "make check runs xcodebuild, which apple-guard refuses outside CI; CI runs it on every PR head"
+  probes: [{ name: check-fast, target: check-fast }]
