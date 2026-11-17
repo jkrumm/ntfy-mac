@@ -26,7 +26,7 @@ make analyze          # Periphery dead-code scan
 make docs             # regenerate docs/cli.md, docs/settings.md and llms.txt from the CLI schema
 ```
 
-`make check` is the full gate and CI runs it; `make check-fast` is the quick local tier. Never edit the generated docs by hand. A new command or setting needs a `CommandSpec` or `SettingsCatalog` entry first; `AGENTS.md` has the layout and the rules.
+`make check` is the full gate and CI runs it; `make check-fast` is the quick local tier. Never edit the generated docs by hand. A new command or setting needs a `CommandSpec` or `SettingsCatalog` entry first; `AGENTS.md` has the rules and `docs/layout.md` the layout.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org). The `commit-msg` hook (lefthook, `scripts/check-commit-msg.sh`) checks the header and the 100-character line limit; CI runs commitlint with the conventional preset.
 

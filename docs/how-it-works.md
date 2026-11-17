@@ -1,6 +1,6 @@
 # How it works
 
-One app holds the connection and the history. The CLI is a second front end over the same core. This page covers the moving parts; the code layout is in `AGENTS.md`.
+One app holds the connection and the history. The CLI is a second front end over the same core. This page covers the moving parts; the code layout is in `docs/layout.md`.
 
 ## App and CLI
 
