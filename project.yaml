@@ -1,4 +1,4 @@
-# How the factory ships this project (software-factory docs/design.md §9).
+# How the factory ships this project (software-factory docs/project.md: the keys and why each is set).
 apiVersion: factory/v2
 name: ntfy-mac
 deploy:
@@ -6,8 +6,9 @@ deploy:
   # call (AGENTS.md "Release process"). Done means pushed with CI green.
   mode: none
 ship:
-  - { paths: ["**"], via: push }
+  - { via: push }
 signals:
   github: { label: factory, author: jkrumm, since: 2026-11-07T06:30:00Z } # the owner labelling a GitHub issue files it; its text stays data
 checks: { fast: make check-fast, full: make check, ci: true } # a lead runs fast (no xcodebuild); CI runs the full gate on the PR head
+# One lead: the Swift builds and the app run through the mini's Apple slot (scripts/apple-slot.sh), one xcodebuild at a time across repos.
 leads: 1
