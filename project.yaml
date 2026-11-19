@@ -10,8 +10,7 @@ ship:
 signals:
   github: { label: factory, author: jkrumm, since: 2026-11-07T06:30:00Z } # the owner labelling a GitHub issue files it; its text stays data
 checks: { fast: make check-fast, full: make check, ci: true } # a lead runs fast (no xcodebuild); CI runs the full gate on the PR head
-# One lead: the Swift builds and the app run through the mini's Apple slot (scripts/apple-slot.sh), one xcodebuild at a time across repos.
-leads: 1
+# No lead cap: the only shared resource is xcodebuild, and `scripts/apple-slot.sh` already serialises it (`lockf` plus a factory slot) for `app` and `snapshots`, which a lead never runs (CI does).
 # The weekly hygiene pass cannot run `make check` here: apple-guard refuses xcodebuild outside CI. It runs the lead tier
 # instead; CI runs the full gate on every PR head.
 hygiene:
