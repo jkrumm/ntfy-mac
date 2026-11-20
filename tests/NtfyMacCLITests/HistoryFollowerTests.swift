@@ -161,7 +161,12 @@ import Testing
   }
 
   private func waitForSleeper<T: Sendable>(or task: Task<T, any Error>) async {
-    for _ in 0..<2000 where clock.sleeperCount == 0 {
+    let finished = Mutex(false)
+    Task {
+      _ = try? await task.value
+      finished.withLock { $0 = true }
+    }
+    for _ in 0..<2000 where clock.sleeperCount == 0 && !finished.withLock({ $0 }) {
       try? await Task.sleep(for: .milliseconds(1))
     }
   }
