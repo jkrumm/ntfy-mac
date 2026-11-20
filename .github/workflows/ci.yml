@@ -33,7 +33,32 @@ jobs:
         run: command -v shellcheck || brew install shellcheck
 
       - name: Check
-        run: make check
+        run: make check-fast installer-check
+
+  # Beside `check`, not after it: the Release app build is the slow step of the gate. Same image, Xcode and cache.
+  # CI=true (set by GitHub Actions) lets apple-guard pass.
+  app:
+    runs-on: macos-26 # pinned image; macos-latest drifts
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - name: Cache SwiftPM and tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build
+            .tools
+          key: spm-${{ runner.os }}-xcode-26.6-${{ hashFiles('Package.resolved', 'App/project.yml', 'scripts/tools.sh') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode-26.6-
+
+      - name: App
+        run: make app
 
   commitlint:
     if: github.event_name == 'pull_request' # a direct push is linted by the local commit-msg hook
