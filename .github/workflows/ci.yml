@@ -53,9 +53,9 @@ jobs:
           path: |
             .build
             .tools
-          key: spm-${{ runner.os }}-xcode-26.6-${{ hashFiles('Package.resolved', 'App/project.yml', 'scripts/tools.sh') }}
+          key: spm-app-${{ runner.os }}-xcode-26.6-${{ hashFiles('Package.resolved', 'App/project.yml', 'scripts/tools.sh') }}
           restore-keys: |
-            spm-${{ runner.os }}-xcode-26.6-
+            spm-app-${{ runner.os }}-xcode-26.6-
 
       - name: App
         run: make app
