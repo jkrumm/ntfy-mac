@@ -48,11 +48,15 @@ lint-sh:
 analyze:
 	"$$($(TOOLS) periphery)" scan
 
+# SwiftPM compiles with one swift-frontend per core. Uncapped on the mini's 12 cores that peaked at 4.2 GiB (the fast step's
+# budget is 2 GiB); 4 jobs peak near 1.9 GiB for about 13 s more on a cold tree. Override with SWIFT_JOBS=n.
+SWIFT_JOBS ?= 4
+
 build:
-	swift build
+	swift build -j $(SWIFT_JOBS)
 
 test:
-	swift test
+	swift test -j $(SWIFT_JOBS)
 
 # Regenerates docs/cli.md, docs/settings.md and llms.txt from the debug CLI's `schema --json`. Offline: temp config and
 # data dirs, no app, no Keychain. `docs-check` writes to a temp dir and fails when the checked-in files differ.
