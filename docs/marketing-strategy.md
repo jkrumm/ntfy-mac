@@ -125,7 +125,7 @@ So I built ntfy-mac. It's a native menu bar app that:
 - Supports all ntfy features: tags, images, action buttons, click URLs
 
 Install:
-  brew install jkrumm/tap/ntfy-mac
+  brew install --cask jkrumm/tap/ntfy-mac
   ntfy-mac setup
 
 It auto-discovers your subscribed topics and just works. Been running it
@@ -157,7 +157,7 @@ How it works:
 - Priority → macOS interruption level mapping (urgent breaks through DND)
 - Menu bar app that starts at login (SMAppService)
 
-Install: brew install jkrumm/tap/ntfy-mac
+Install: brew install --cask jkrumm/tap/ntfy-mac
 
 https://github.com/jkrumm/ntfy-mac
 ```
@@ -191,7 +191,7 @@ Title: Why I replaced ntfy's PWA with a native macOS app
    - One command install via Homebrew
 
 5. Try it
-   - brew install jkrumm/tap/ntfy-mac && ntfy-mac setup
+   - brew install --cask jkrumm/tap/ntfy-mac && ntfy-mac setup
 ```
 
 ---
