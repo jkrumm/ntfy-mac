@@ -45,6 +45,11 @@ enum InFlightFate {
 ///   are exempt, as with quiet hours.
 /// - A topic that is muted, or a message below the topic's minimum priority, is stored and marked
 ///   notified without a notification, so a later reconcile never shows it.
+/// - While nobody is at the Mac (the displays are asleep, `SystemEvent.screensDidSleep`) a
+///   banner is posted but not seen, and a re-alert tick would spend one of the limited repeats on
+///   an empty room. The tick is held instead; when the displays wake, every notification that
+///   needs an acknowledgement and was posted or due while away is posted again with a full
+///   repeat budget (`DeliveryService+Presence`).
 /// - Reminders that came due in the history are shown again, polled every
 ///   `reminderPollInterval` (the CLI writes snoozes into the history from another process, so no
 ///   in-process timer knows the next deadline).
@@ -76,7 +81,11 @@ public actor DeliveryService: Delivering {
   let calendar: Calendar
   /// The detected meeting state; nil where the app has no detection (the CLI's one-shot uses).
   let meeting: (any MeetingStateProviding)?
+  /// Where the displays going dark and waking come from; nil where nothing watches the screen.
+  let presence: (any SystemEvents)?
   let log: @Sendable (String) -> Void
+  /// Lines that hold no message content or error text, safe to keep in the system log.
+  let trace: @Sendable (String) -> Void
 
   var queue: DeliveryQueue
   var timers = DeliveryTimers()
@@ -84,6 +93,7 @@ public actor DeliveryService: Delivering {
   var drainTask: Task<Void, Never>?
   var reminderTask: Task<Void, Never>?
   var meetingTask: Task<Void, Never>?
+  var presenceTask: Task<Void, Never>?
   var isFiringReminders = false
   /// Set when a post was held back by `Config.pausedUntil`; the resume reconciles once.
   var heldBack = false
@@ -104,12 +114,19 @@ public actor DeliveryService: Delivering {
   /// Reminders that were shown but could not be cleared in the history; never shown again.
   var unclearedReminders: Set<MessageRef> = []
   var stopped = false
+  /// False from the displays going dark until they wake.
+  var attended = true
+  /// Notification identifiers that need an acknowledgement and were posted, or came due for a
+  /// re-alert, while nobody was there.
+  var owedWhileAway: Set<String> = []
 
   public init(
     poster: any NotificationPoster, history: any HistoryStore, inbox: any HistoryInbox,
     config: any ConfigStore, clock: any Clock, minimumInterval: TimeInterval = 1.5,
     calendar: Calendar = .current, meeting: (any MeetingStateProviding)? = nil,
-    log: @escaping @Sendable (String) -> Void = { _ in }
+    presence: (any SystemEvents)? = nil,
+    log: @escaping @Sendable (String) -> Void = { _ in },
+    trace: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.poster = poster
     self.history = history
@@ -118,7 +135,9 @@ public actor DeliveryService: Delivering {
     self.clock = clock
     self.calendar = calendar
     self.meeting = meeting
+    self.presence = presence
     self.log = log
+    self.trace = trace
     queue = DeliveryQueue(minimumInterval: minimumInterval)
   }
 
@@ -129,6 +148,12 @@ public actor DeliveryService: Delivering {
   public func start() {
     guard !stopped, reminderTask == nil else { return }
     reminderTask = Task { await self.pollReminders() }
+    if let presence {
+      let events = presence.events()
+      presenceTask = Task {
+        for await event in events { await self.handlePresence(event) }
+      }
+    }
     guard let meeting else { return }
     meetingTask = Task {
       for await _ in meeting.changes() { await self.resumeIfPauseOver() }
@@ -142,11 +167,13 @@ public actor DeliveryService: Delivering {
     stopped = true
     queue.removeAll { _ in true }
     let tasks =
-      [drainTask, reminderTask, resumeTask, meetingTask].compactMap { $0 } + timers.cancelAll()
+      [drainTask, reminderTask, resumeTask, meetingTask, presenceTask].compactMap { $0 }
+      + timers.cancelAll()
     drainTask = nil
     reminderTask = nil
     resumeTask = nil
     meetingTask = nil
+    presenceTask = nil
     for task in tasks { task.cancel() }
     for task in tasks { await task.value }
   }
@@ -178,7 +205,8 @@ public actor DeliveryService: Delivering {
 
   /// Messages the topic settings suppress are marked notified and left out of every mode.
   func announce(_ messages: [NtfyMessage], as announcement: Announcement) async {
-    let fresh = await settleSuppressed(messages)
+    var fresh = await settleSuppressed(messages)
+    if announcement == .byAge { fresh = await deliverMustAcknowledge(fresh) }
     let decision =
       switch announcement {
       case .byAge: MissedMessagePolicy.decide(fresh, now: clock.now())
@@ -217,6 +245,26 @@ public actor DeliveryService: Delivering {
       }
     }
     return fresh
+  }
+
+  /// Delivers the messages that need an acknowledgement and are younger than
+  /// `reAlertResumeLimit` one by one, and returns the rest. Their age does not matter and neither
+  /// does what else came in with them: a summary or silence would drop exactly what the user
+  /// asked to be pestered about.
+  private func deliverMustAcknowledge(_ messages: [NtfyMessage]) async -> [NtfyMessage] {
+    let config = await currentConfig()
+    guard config.reAlert else { return messages }
+    let now = clock.now()
+    var rest: [NtfyMessage] = []
+    for message in messages {
+      let urgent = message.priority.rawValue >= config.reAlertMinPriority
+      if urgent, now.timeIntervalSince(message.time) < Self.reAlertResumeLimit {
+        deliver(message)
+      } else {
+        rest.append(message)
+      }
+    }
+    return rest
   }
 
   private static func digest(_ messages: [NtfyMessage]) -> MissedMessageDecision {

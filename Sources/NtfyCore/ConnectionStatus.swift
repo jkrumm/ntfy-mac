@@ -15,3 +15,18 @@ public enum ConnectionStatus: Sendable, Hashable {
   /// A failure retrying cannot fix. Stays until an explicit restart.
   case halted(NtfyError)
 }
+
+extension ConnectionStatus {
+  /// The case without its payload, for log lines.
+  var traceName: String {
+    switch self {
+    case .stopped: "stopped"
+    case .connecting: "connecting"
+    case .connected: "connected"
+    case .backingOff: "backingOff"
+    case .offline: "offline"
+    case .paused: "paused"
+    case .halted: "halted"
+    }
+  }
+}

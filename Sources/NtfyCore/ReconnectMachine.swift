@@ -11,12 +11,18 @@ import Foundation
 /// | connecting | `opened` or activity -> connected; failure or `connectTimeout` -> backingOff / halted |
 /// | connected | failure, clean finish or watchdog stall -> backingOff / halted |
 /// | backingOff | `timerFired` at `until` -> connecting |
-/// | offline | `pathChanged(online: true)` -> connecting |
-/// | paused | `didWake` -> connecting |
+/// | offline | `pathChanged(online: true)`, or the probe after `parkedProbe` -> connecting |
+/// | paused | `didWake`, `screensDidWake`, or the probe after `parkedProbe` -> connecting |
 /// | halted | `restart` or `stop` only |
 ///
-/// `didWake` and a returning network path connect at once and skip any backoff; `willSleep` and
-/// a lost path cancel the connection without counting a failure.
+/// `didWake`, `screensDidWake` and a returning network path connect at once and skip any backoff;
+/// `willSleep` and a lost path cancel the connection without counting a failure.
+///
+/// A parked state never waits on one event alone. A Mac in a dark-wake loop (lid closed, woken
+/// every minute) is awake for seconds at a time and may report the wake after the sleep, or not
+/// at all, so `paused` and `offline` carry a `wakeUp` too: the timer runs on a clock that keeps
+/// counting through sleep, so it firing means the process is running again, and a connection is
+/// tried. `offline` keeps its own record of the path, so the probe does not hide a later return.
 public struct ReconnectMachine: Sendable {
   public struct Timing: Sendable, Hashable {
     /// First retry delay, before jitter. It doubles per consecutive failure.
@@ -35,6 +41,8 @@ public struct ReconnectMachine: Sendable {
     /// A 429 waits at least this long, and the server's Retry-After if longer, at most the cap.
     public var rateLimitFloor: TimeInterval = 60
     public var rateLimitCap: TimeInterval = 3600
+    /// How long `paused` and `offline` wait for their event before a connection is tried anyway.
+    public var parkedProbe: TimeInterval = 60
 
     public init() {}
   }
@@ -119,7 +127,7 @@ extension ReconnectMachine {
       return settle(at: now)
     case .stop:
       running = false
-      return park(.stopped)
+      return park(.stopped, at: now)
     case .restart:
       running = true
       attempt = 0
@@ -137,20 +145,38 @@ extension ReconnectMachine {
     switch event {
     case .willSleep:
       asleep = true
-      return isLive ? park(.paused) : nil
+      return isLive ? park(.paused, at: now) : nil
     case .didWake:
       asleep = false
       guard isLive else { return nil }
       attempt = 0
       return settle(at: now)
+    case .screensDidSleep:
+      return nil
+    case .screensDidWake:
+      return handleScreensDidWake(at: now)
     case .pathChanged(let isOnline):
       let wasOnline = online
       online = isOnline
       guard isLive, !asleep else { return nil }
-      if !isOnline { return park(.offline) }
+      if !isOnline { return park(.offline, at: now) }
       guard !wasOnline else { return nil }
       attempt = 0
       return settle(at: now)
+    }
+  }
+
+  /// Someone is at the Mac, so it is awake whatever the last sleep event said; a parked or
+  /// waiting connection should not make them wait for its timer.
+  private mutating func handleScreensDidWake(at now: Date) -> Command? {
+    asleep = false
+    guard isLive else { return nil }
+    switch status {
+    case .paused, .backingOff:
+      attempt = 0
+      return settle(at: now)
+    default:
+      return nil
     }
   }
 
@@ -174,10 +200,14 @@ extension ReconnectMachine {
 extension ReconnectMachine {
   /// Connects if nothing forbids it, otherwise parks in the state that explains why.
   private mutating func settle(at now: Date) -> Command? {
-    guard running else { return park(.stopped) }
+    guard running else { return park(.stopped, at: now) }
     if case .halted = status { return nil }
-    if asleep { return park(.paused) }
-    if !online { return park(.offline) }
+    if asleep { return park(.paused, at: now) }
+    if !online { return park(.offline, at: now) }
+    return beginConnecting(at: now)
+  }
+
+  private mutating func beginConnecting(at now: Date) -> Command {
     status = .connecting
     openedAt = nil
     lastActivity = nil
@@ -185,9 +215,14 @@ extension ReconnectMachine {
     return .connect
   }
 
-  private mutating func park(_ parked: ConnectionStatus) -> Command {
+  /// Leaves the connection. `paused` and `offline` get a probe time (see the type's notes);
+  /// every other state waits for an input or sets its own `wakeUp`.
+  private mutating func park(_ parked: ConnectionStatus, at now: Date) -> Command {
     status = parked
-    wakeUp = nil
+    switch parked {
+    case .paused, .offline: wakeUp = now.addingTimeInterval(timing.parkedProbe)
+    default: wakeUp = nil
+    }
     openedAt = nil
     lastActivity = nil
     return .disconnect
@@ -213,13 +248,19 @@ extension ReconnectMachine {
     switch status {
     case .backingOff: return settle(at: now)
     case .connecting, .connected: return fail(.serverUnreachable, at: now)
+    case .paused:
+      asleep = false
+      attempt = 0
+      return settle(at: now)
+    case .offline:
+      return beginConnecting(at: now)
     default: return nil
     }
   }
 
   private mutating func fail(_ error: NtfyError, at now: Date) -> Command {
     resetIfHealthy(at: now)
-    if Self.isTerminal(error) { return park(.halted(error)) }
+    if Self.isTerminal(error) { return park(.halted(error), at: now) }
     attempt += 1
     return retry(after: delay(for: error), at: now)
   }
@@ -232,7 +273,7 @@ extension ReconnectMachine {
 
   private mutating func retry(after delay: TimeInterval, at now: Date) -> Command {
     let until = now.addingTimeInterval(delay)
-    _ = park(.backingOff(until: until, attempt: attempt))
+    _ = park(.backingOff(until: until, attempt: attempt), at: now)
     wakeUp = until
     return .disconnect
   }

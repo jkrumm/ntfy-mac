@@ -25,6 +25,18 @@ import Testing
     #expect(
       SystemEventMapper.workspaceEvent(named: NSWorkspace.willSleepNotification) == .willSleep)
     #expect(
+      SystemEventMapper.workspaceEvent(named: NSWorkspace.screensDidSleepNotification)
+        == .screensDidSleep)
+    #expect(
+      SystemEventMapper.workspaceEvent(named: NSWorkspace.screensDidWakeNotification)
+        == .screensDidWake)
+    #expect(
       SystemEventMapper.workspaceEvent(named: NSWorkspace.didLaunchApplicationNotification) == nil)
+  }
+
+  @Test func everyObservedNotificationMapsToAnEvent() {
+    for name in SystemEventMapper.workspaceNotifications {
+      #expect(SystemEventMapper.workspaceEvent(named: name) != nil)
+    }
   }
 }

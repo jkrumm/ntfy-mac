@@ -9,7 +9,8 @@ import Testing
     #expect(await rig.connect())
     rig.events.send(.willSleep)
     #expect(await rig.waitFor(.paused))
-    #expect(await rig.waitForSleepers(0))
+    // Only the probe timer is left.
+    #expect(await rig.waitForSleepers(1))
     #expect(await rig.eventually { rig.stream.liveConnectionCount == 0 })
 
     rig.events.send(.didWake)
@@ -17,6 +18,30 @@ import Testing
     #expect(rig.stream.calls[1].since == "c0")
     #expect(await rig.poller.calls.count == 2)
     #expect(await rig.connect(connection: 2))
+    await rig.supervisor.stop()
+  }
+
+  @Test func aSleepWhoseWakeEventNeverComesIsLeftByTheProbe() async {
+    let rig = SupervisorRig(cursor: "c0")
+    #expect(await rig.connect())
+    rig.events.send(.willSleep)
+    #expect(await rig.waitFor(.paused))
+    #expect(await rig.waitForSleepers(1))
+    await rig.advance(59)
+    #expect(rig.stream.calls.count == 1)
+    await rig.advance(1)
+    #expect(await rig.waitForCalls(2))
+    #expect(rig.stream.calls[1].since == "c0")
+    await rig.supervisor.stop()
+  }
+
+  @Test func theDisplaysWakingLeavesAPauseWithoutWaitingForTheProbe() async {
+    let rig = SupervisorRig(cursor: "c0")
+    #expect(await rig.connect())
+    rig.events.send(.willSleep)
+    #expect(await rig.waitFor(.paused))
+    rig.events.send(.screensDidWake)
+    #expect(await rig.waitForCalls(2))
     await rig.supervisor.stop()
   }
 
@@ -38,10 +63,10 @@ import Testing
     #expect(await rig.connect())
     rig.events.send(.pathChanged(online: false))
     #expect(await rig.waitFor(.offline))
-    #expect(await rig.waitForSleepers(0))
+    #expect(await rig.waitForSleepers(1))
     #expect(await rig.eventually { rig.stream.liveConnectionCount == 0 })
 
-    await rig.advance(3600)
+    await rig.advance(30)
     #expect(rig.stream.calls.count == 1)
     #expect(await rig.supervisor.currentStatus == .offline)
 
@@ -54,10 +79,10 @@ import Testing
     let rig = SupervisorRig { $0.initiallyOnline = false }
     await rig.supervisor.start()
     #expect(await rig.waitFor(.offline))
-    await rig.advance(86_400)
+    await rig.advance(30)
     #expect(rig.stream.calls.isEmpty)
     #expect(await rig.topics.callCount == 0)
-    #expect(rig.clock.sleeperCount == 0)
+    #expect(rig.clock.sleeperCount == 1)
 
     rig.events.send(.pathChanged(online: true))
     #expect(await rig.connect())
@@ -69,7 +94,7 @@ import Testing
     await rig.supervisor.start()
     rig.events.send(.pathChanged(online: false))
     #expect(await rig.waitFor(.offline))
-    await rig.advance(3600)
+    await rig.advance(30)
     #expect(await rig.supervisor.currentStatus == .offline)
     await rig.supervisor.stop()
   }

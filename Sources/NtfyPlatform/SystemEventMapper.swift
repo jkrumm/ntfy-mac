@@ -21,12 +21,20 @@ public struct SystemEventMapper: Sendable {
     return .pathChanged(online: satisfied)
   }
 
-  /// Both notifications are posted by `NSWorkspace.shared.notificationCenter`.
+  /// The notifications `workspaceNotifications` lists, all posted by
+  /// `NSWorkspace.shared.notificationCenter`.
   public static func workspaceEvent(named name: Notification.Name) -> SystemEvent? {
     switch name {
     case NSWorkspace.didWakeNotification: return .didWake
     case NSWorkspace.willSleepNotification: return .willSleep
+    case NSWorkspace.screensDidSleepNotification: return .screensDidSleep
+    case NSWorkspace.screensDidWakeNotification: return .screensDidWake
     default: return nil
     }
   }
+
+  public static let workspaceNotifications: [Notification.Name] = [
+    NSWorkspace.didWakeNotification, NSWorkspace.willSleepNotification,
+    NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification,
+  ]
 }

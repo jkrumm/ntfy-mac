@@ -52,8 +52,9 @@ final class AppPipeline: Sendable {
       log: { log.info("\($0, privacy: .private)") })
     let delivery = DeliveryService(
       poster: poster, history: store, inbox: store, config: services.config,
-      clock: services.clock, meeting: services.meeting,
-      log: { log.info("\($0, privacy: .private)") })
+      clock: services.clock, meeting: services.meeting, presence: SystemEventMonitor(),
+      log: { log.info("\($0, privacy: .private)") },
+      trace: { log.notice("\($0, privacy: .public)") })
 
     await delivery.start()
     await poster.restoreDeliveredCategories(inbox: store, config: services.config.load())
@@ -159,6 +160,7 @@ final class AppPipeline: Sendable {
     var options = StreamSupervisor.Options()
     options.selection = settings.topicSelection
     options.log = { log.info("\($0, privacy: .private)") }
+    options.trace = { log.notice("\($0, privacy: .public)") }
     options.sink = delivery.eventSink()
     options.activity = {
       let activity = ProcessActivity(

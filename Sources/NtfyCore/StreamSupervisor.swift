@@ -47,6 +47,9 @@ public actor StreamSupervisor {
     /// A value in 0...1 used to spread retries.
     public var jitter: @Sendable () -> Double = { Double.random(in: 0...1) }
     public var log: @Sendable (String) -> Void = { _ in }
+    /// Status changes and the system events behind them, as lines without message content or
+    /// error text, safe to keep in the system log.
+    public var trace: @Sendable (String) -> Void = { _ in }
     /// Called when the supervisor starts; the closure it returns is called when it stops. The app
     /// root passes `ProcessInfo.beginActivity`/`endActivity` here to keep App Nap away.
     public var activity: @Sendable () -> @Sendable () -> Void = { {} }
@@ -131,14 +134,27 @@ public actor StreamSupervisor {
 
 extension StreamSupervisor {
   func apply(_ input: ReconnectMachine.Input) {
+    let before = machine.status
     let command = machine.handle(input, at: ports.clock.now())
     broadcaster.publish(machine.status)
+    traceTransition(from: before, on: input)
     switch command {
     case .connect: startConnection()
     case .disconnect: cancelConnection()
     case nil: break
     }
     rearmTimer()
+  }
+
+  /// Logs what the machine did with an input that moved it or came from the system.
+  private func traceTransition(from before: ConnectionStatus, on input: ReconnectMachine.Input) {
+    let after = machine.status
+    let isSystem = if case .system = input { true } else { false }
+    guard isSystem || before.traceName != after.traceName else { return }
+    // Case labels only: a failure's payload can carry the server's text.
+    let label = String(String(describing: input).prefix { $0 != "(" })
+    let detail = if case .system(let event) = input { String(describing: event) } else { label }
+    options.trace("stream: \(before.traceName) -> \(after.traceName) on \(detail)")
   }
 
   func isCurrent(_ id: Int) -> Bool { id == connectionID && !Task.isCancelled }

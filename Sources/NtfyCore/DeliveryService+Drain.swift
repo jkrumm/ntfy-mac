@@ -92,6 +92,10 @@ extension DeliveryService {
       await settleReminder(ref)
       return .posted
     }
+    trace(
+      "delivery: posted priority \(message.priority.rawValue)"
+        + (repeatsLeft == nil ? "" : ", re-alert, \(repeatsLeft ?? 0) left")
+        + (attended ? "" : ", while away"))
     startTimers(for: content, message: message, repeatsLeft: repeatsLeft, config: config)
     if repeatsLeft == nil {
       await markNotified(ref)

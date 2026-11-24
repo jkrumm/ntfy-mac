@@ -11,6 +11,7 @@ extension DeliveryService {
         identifier: content.identifier, ref: content.messageRef, after: after.timeInterval)
     }
     guard content.requiresAcknowledge else { return }
+    if !attended { owedWhileAway.insert(content.identifier) }
     scheduleRealert(
       message, repeatsLeft: repeatsLeft ?? config.reAlertMaxRepeats,
       interval: TimeInterval(config.reAlertIntervalSeconds))
@@ -46,6 +47,11 @@ extension DeliveryService {
     guard timers.isCurrent(key, generation: generation) else { return }
     let config = await currentConfig()
     guard timers.finish(key, generation: generation), config.reAlert, !stopped else { return }
+    guard attended else {
+      owedWhileAway.insert(key.identifier)
+      trace("delivery: re-alert held, nobody at the Mac")
+      return
+    }
     queue.enqueue(.message(message, repeatsLeft: repeatsLeft - 1))
     startDraining()
   }

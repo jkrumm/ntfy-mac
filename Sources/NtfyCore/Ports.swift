@@ -34,8 +34,13 @@ public protocol CursorStore: Sendable {
 
 /// Something that happened to the machine, independent of the server.
 public enum SystemEvent: Sendable, Hashable {
+  /// The system woke: a full wake, or a dark wake with the displays still off.
   case didWake
   case willSleep
+  /// The displays went dark (idle, lid closed or system sleep): nobody is looking at the Mac.
+  case screensDidSleep
+  /// The displays came back: someone is at the Mac.
+  case screensDidWake
   case pathChanged(online: Bool)
 }
 
