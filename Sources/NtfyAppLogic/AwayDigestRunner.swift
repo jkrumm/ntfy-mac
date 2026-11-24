@@ -12,6 +12,8 @@ public actor AwayDigestRunner {
   private let summarizers: SummarizerProvider
   private let poster: any NotificationPoster
   private let clock: any Clock
+  private let meeting: (any MeetingStateProviding)?
+  private let calendar: Calendar
   private let log: @Sendable (String) -> Void
   private var policy: ReturnPolicy
   private var building = false
@@ -20,6 +22,7 @@ public actor AwayDigestRunner {
   public init(
     events: any SystemEvents, config: any ConfigStore, inbox: any HistoryInbox,
     summarizers: SummarizerProvider, poster: any NotificationPoster, clock: any Clock,
+    meeting: (any MeetingStateProviding)? = nil, calendar: Calendar = .current,
     log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.events = events
@@ -28,6 +31,8 @@ public actor AwayDigestRunner {
     self.summarizers = summarizers
     self.poster = poster
     self.clock = clock
+    self.meeting = meeting
+    self.calendar = calendar
     self.log = log
     policy = ReturnPolicy(now: clock.now())
   }
@@ -63,6 +68,13 @@ public actor AwayDigestRunner {
     await post(since: since)
   }
 
+  private func isHeld(_ config: Config) async -> Bool {
+    let state = await meeting?.current() ?? .inactive
+    let known = await meeting?.hasReading() ?? true
+    return DigestHold.holds(
+      config, meeting: state, meetingKnown: known, now: clock.now(), calendar: calendar)
+  }
+
   private func currentConfig() async -> Config {
     (try? await config.load()) ?? Config()
   }
@@ -72,6 +84,10 @@ public actor AwayDigestRunner {
     building = true
     defer { building = false }
     let config = await currentConfig()
+    guard await !isHeld(config) else {
+      log("digest held back by a pause, quiet hours or a meeting")
+      return
+    }
     let builder = DigestBuilder(inbox: inbox, log: log)
     let messages: [StoredMessage]
     do throws(NtfyError) {

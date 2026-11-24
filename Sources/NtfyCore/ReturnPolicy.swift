@@ -89,3 +89,18 @@ public struct SummarizerProvider: Sendable {
     return make(endpoint, key, model, allowInsecure)
   }
 }
+
+/// Whether the user's own hold on notifications covers the digest: a manual pause, quiet hours or
+/// a meeting. The digest is a notification, so it keeps to them; it waits for the next return and
+/// the window it would have covered rolls over. Priority 5 gets no bypass: a digest has no single
+/// priority.
+public enum DigestHold {
+  public static func holds(
+    _ config: Config, meeting: MeetingState, meetingKnown: Bool, now: Date, calendar: Calendar
+  ) -> Bool {
+    if let until = config.pausedUntil, until > now { return true }
+    if config.quietHours.contains(now, calendar: calendar) { return true }
+    if config.meeting.effectiveState(detected: meeting, at: now).isActive { return true }
+    return config.meeting.mode == .pause && !meetingKnown
+  }
+}

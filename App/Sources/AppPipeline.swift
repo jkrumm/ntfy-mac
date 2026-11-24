@@ -75,7 +75,7 @@ final class AppPipeline: Sendable {
       events: SystemEventMonitor(), config: services.config, inbox: store,
       summarizers: SummarizerProvider(
         keys: KeychainSecretStore(account: "summary-key"), make: AnthropicSummarizer.make),
-      poster: poster, clock: services.clock,
+      poster: poster, clock: services.clock, meeting: services.meeting,
       log: { log.info("\($0, privacy: .private)") })
     await digest.start()
     return AppPipeline(

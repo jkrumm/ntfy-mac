@@ -12,6 +12,7 @@ private struct DigestRig {
   let poster = RecordingNotificationPoster()
   let events = ManualSystemEvents()
   let runner: AwayDigestRunner
+  let meeting = ManualMeetingState()
 
   init(
     summary: SummarySettings = SummarySettings(
@@ -22,11 +23,13 @@ private struct DigestRig {
     config = InMemoryConfigStore(Config(summary: summary))
     summarizer = ScriptedSummarizer(outcome)
     let summarizer = summarizer
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
     runner = AwayDigestRunner(
       events: events, config: config, inbox: history,
       summarizers: SummarizerProvider(
         keys: InMemorySecretStore(token: key), make: { _, _, _, _ in summarizer }),
-      poster: poster, clock: clock)
+      poster: poster, clock: clock, meeting: meeting, calendar: utc)
   }
 
   /// A message that arrived and was shown now.
@@ -161,6 +164,36 @@ private struct DigestRig {
     rig.minutes(20)
     await rig.runner.process(.screenUnlocked)
     #expect(await rig.poster.digests.map(\.title) == ["While you were away · 3 messages"])
+  }
+
+  @Test func aPauseHoldsTheDigestAndTheMessagesRollOver() async {
+    let rig = DigestRig()
+    await rig.config.update { $0.pausedUntil = rig.clock.now().addingTimeInterval(3600) }
+    await rig.absence(away: 20)
+    #expect(await rig.poster.digests.isEmpty)
+    #expect(await rig.summarizer.calls.isEmpty)
+    await rig.config.update { $0.pausedUntil = nil }
+    await rig.runner.process(.screenLocked)
+    rig.minutes(20)
+    await rig.runner.process(.screenUnlocked)
+    #expect(await rig.poster.digests.map(\.title) == ["While you were away · 3 messages"])
+  }
+
+  @Test func quietHoursHoldTheDigest() async throws {
+    let rig = DigestRig()
+    let start = try #require(ClockTime(hour: 0, minute: 0))
+    let end = try #require(ClockTime(hour: 23, minute: 59))
+    await rig.config.update { $0.quietHours = QuietHours(enabled: true, start: start, end: end) }
+    await rig.absence(away: 20)
+    #expect(await rig.poster.digests.isEmpty)
+  }
+
+  @Test func aMeetingHoldsTheDigest() async {
+    let rig = DigestRig()
+    await rig.config.update { $0.meeting.mode = .pause }
+    rig.meeting.set(.active(.presenting))
+    await rig.absence(away: 20)
+    #expect(await rig.poster.digests.isEmpty)
   }
 
   @Test func theEventStreamDrivesTheRunner() async {
