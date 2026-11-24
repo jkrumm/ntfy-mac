@@ -11,7 +11,14 @@ struct HistorySidebar: View {
   }
 
   @Bindable var model: HistoryModel
+  let windows: WindowRouter
   @State private var deleting: Item?
+  @State private var emojiTopic: EmojiTarget?
+
+  private struct EmojiTarget: Identifiable {
+    let topic: String
+    var id: String { topic }
+  }
 
   var body: some View {
     List(selection: selection) {
@@ -23,11 +30,13 @@ struct HistorySidebar: View {
         urgent: false, badge: "to acknowledge"
       )
       .tag(Item.needsAcknowledgement)
+      .contextMenu { menu(.needsAcknowledgement, unread: 0) }
       if !model.topics.isEmpty {
         Section("Topics") {
           ForEach(model.topics, id: \.topic) { summary in
             row(
-              summary.topic, symbol: "number", unread: summary.unread,
+              summary.topic, symbol: "number", emoji: model.emoji(for: summary.topic),
+              unread: summary.unread,
               urgent: model.urgentTopics.contains(summary.topic)
             )
             .tag(Item.topic(summary.topic))
@@ -49,18 +58,30 @@ struct HistorySidebar: View {
     } message: {
       Text("This cannot be undone.")
     }
+    .sheet(item: $emojiTopic) { target in
+      TopicEmojiSheet(model: model, topic: target.topic)
+    }
   }
 
-  /// Symbol and name on the left; an urgent marker and the unread count on the right.
+  /// Symbol (or the topic's emoji) and name on the left; an urgent marker and the unread count on
+  /// the right.
   private func row(
-    _ title: String, symbol: String, unread: Int, urgent: Bool, badge: String = "unread"
+    _ title: String, symbol: String, emoji: String? = nil, unread: Int, urgent: Bool,
+    badge: String = "unread"
   ) -> some View {
     HStack(spacing: 6) {
-      Image(systemName: symbol)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(width: 14)
-        .accessibilityHidden(true)
+      if let emoji {
+        Text(verbatim: emoji)
+          .font(.caption)
+          .frame(width: 14)
+          .accessibilityHidden(true)
+      } else {
+        Image(systemName: symbol)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(width: 14)
+          .accessibilityHidden(true)
+      }
       Text(verbatim: title)
         .fontWeight(unread > 0 ? .semibold : .regular)
         .lineLimit(1)
@@ -89,10 +110,57 @@ struct HistorySidebar: View {
 
   private func menu(_ item: Item, unread: Int) -> some View {
     Group {
-      Button("Mark All Read") { Task { await model.markAllRead(topic: name(item)) } }
-        .disabled(unread == 0)
-      Divider()
-      Button("Delete All Messages…", role: .destructive) { deleting = item }
+      if let topic = name(item) { topicSettingsMenu(topic) }
+      Button("Acknowledge All") { Task { await model.acknowledgeAll(topic: name(item)) } }
+        .disabled(model.pendingCount(in: scope(of: item)) == 0)
+      if item != .needsAcknowledgement {
+        Button("Mark All Read") { Task { await model.markAllRead(topic: name(item)) } }
+          .disabled(unread == 0)
+        Divider()
+        Button("Delete All Messages…", role: .destructive) { deleting = item }
+      }
+    }
+  }
+
+  /// Mute, show in All messages, minimum priority, emoji and the Settings window, for one topic.
+  @ViewBuilder private func topicSettingsMenu(_ topic: String) -> some View {
+    let settings = model.settings(for: topic)
+    Toggle(
+      "Mute",
+      isOn: Binding(
+        get: { settings.mute },
+        set: { value in Task { await model.setMute(value, topic: topic) } }))
+    Toggle(
+      "Show in All Messages",
+      isOn: Binding(
+        get: { !settings.hideFromAll },
+        set: { value in Task { await model.setHideFromAll(!value, topic: topic) } }))
+    Menu("Minimum Priority") {
+      Picker(
+        "Minimum Priority",
+        selection: Binding(
+          get: { settings.minPriority ?? 0 },
+          set: { value in
+            Task { await model.setMinPriority(value == 0 ? nil : value, topic: topic) }
+          })
+      ) {
+        Text("None").tag(0)
+        ForEach(SettingsModel.priorities, id: \.self) { value in
+          Text(SettingsModel.priorityTitle(value)).tag(value)
+        }
+      }
+      .pickerStyle(.inline)
+    }
+    Button("Set Emoji…") { emojiTopic = EmojiTarget(topic: topic) }
+    Button("Topic Settings…") { windows.showSettings(section: .topics) }
+    Divider()
+  }
+
+  private func scope(of item: Item) -> HistoryModel.Scope {
+    switch item {
+    case .all: .all
+    case .needsAcknowledgement: .needsAcknowledgement
+    case .topic(let topic): .topic(topic)
     }
   }
 

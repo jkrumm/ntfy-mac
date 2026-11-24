@@ -5,10 +5,13 @@ import SwiftUI
 /// server address and token are the one place with an explicit "Test and save".
 struct SettingsWindow: View {
   @Bindable var model: SettingsModel
+  /// Where a request for a section (the History sidebar's "Topic Settings…") comes from.
+  let windows: WindowRouter?
   @State private var section: SettingsSection
 
-  init(model: SettingsModel, section: SettingsSection = .server) {
+  init(model: SettingsModel, windows: WindowRouter? = nil, section: SettingsSection = .server) {
     self.model = model
+    self.windows = windows
     _section = State(initialValue: section)
   }
 
@@ -37,8 +40,16 @@ struct SettingsWindow: View {
       .navigationTitle(section.title)
     }
     .frame(minWidth: CGFloat(minimum.width), minHeight: CGFloat(minimum.height))
-    .task { model.start() }
+    .task {
+      model.start()
+      applyPendingSection()
+    }
+    .onChange(of: windows?.pendingSettingsSection) { applyPendingSection() }
     .onDisappear { model.stop() }
+  }
+
+  private func applyPendingSection() {
+    if let requested = windows?.takeSettingsSection() { section = requested }
   }
 
   private var minimum: WindowSize { AppWindow.settings.minimumSize }

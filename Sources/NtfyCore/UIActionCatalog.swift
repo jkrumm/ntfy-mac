@@ -24,7 +24,8 @@ public enum UIActionCatalog {
   public static let entries: [UIActionEntry] = [
     UIActionEntry(
       id: .acknowledge, label: "Acknowledge", command: "ack", example: "ntfy-mac ack alerts m1",
-      note: "`--all --topic <topic>` acknowledges a whole topic."),
+      note: "`--all` acknowledges everything that waits for it (the window's Acknowledge All), "
+        + "`--all --topic <topic>` a whole topic."),
     UIActionEntry(
       id: .markRead, label: "Mark read", command: "read",
       example: "ntfy-mac read alerts m1 --json",

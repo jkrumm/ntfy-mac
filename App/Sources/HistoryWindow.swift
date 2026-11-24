@@ -15,7 +15,7 @@ struct HistoryWindow: View {
 
   var body: some View {
     NavigationSplitView {
-      HistorySidebar(model: model)
+      HistorySidebar(model: model, windows: windows)
         .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 230)
     } content: {
       HistoryList(model: model, deleting: $deleting)

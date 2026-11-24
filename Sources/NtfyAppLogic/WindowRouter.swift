@@ -22,6 +22,9 @@ public final class WindowRouter {
   /// The message the History window should select when it appears; the window clears it with
   /// `takeSelection()` once it applied it.
   public private(set) var pendingSelection: MessageKey?
+  /// The Settings section to show when the window appears or comes forward; the window clears it
+  /// with `takeSettingsSection()`.
+  public private(set) var pendingSettingsSection: SettingsSection?
   @ObservationIgnored private var serial = 0
 
   public init() {}
@@ -31,7 +34,10 @@ public final class WindowRouter {
     post(.history)
   }
 
-  public func showSettings() { post(.settings) }
+  public func showSettings(section: SettingsSection? = nil) {
+    if let section { pendingSettingsSection = section }
+    post(.settings)
+  }
 
   public func showOnboarding() { post(.onboarding) }
 
@@ -58,6 +64,12 @@ public final class WindowRouter {
   public func takeSelection() -> MessageKey? {
     defer { pendingSelection = nil }
     return pendingSelection
+  }
+
+  /// Returns the pending Settings section and clears it.
+  public func takeSettingsSection() -> SettingsSection? {
+    defer { pendingSettingsSection = nil }
+    return pendingSettingsSection
   }
 
   private func post(_ window: AppWindow) {

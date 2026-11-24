@@ -41,7 +41,7 @@ struct HistoryRowView: View {
               .accessibilityLabel("Acknowledged")
           }
           if showsTopic {
-            Text(verbatim: row.topic)
+            Text(verbatim: topicLabel)
               .font(.caption)
               .foregroundStyle(.tertiary)
               .lineLimit(1)
@@ -60,6 +60,11 @@ struct HistoryRowView: View {
     .contentShape(Rectangle())
     .onHover { hovering = $0 }
     .accessibilityElement(children: .combine)
+  }
+
+  /// The topic name, after its emoji when it has one, so "All messages" reads as an overview.
+  private var topicLabel: String {
+    [model.emoji(for: row.topic), row.topic].compactMap { $0 }.joined(separator: " ")
   }
 
   /// High and urgent only; an acknowledged one is dimmed, since nothing is left to do.
@@ -96,18 +101,17 @@ struct HistoryRowView: View {
   }
 }
 
-/// Right-click on a row: copy what it says, open its link, then what can be done to it.
+/// Right-click on a row: copy what it says (title and message together), copy or open its link,
+/// then what can be done to it.
 struct HistoryRowMenu: View {
   let model: HistoryModel
   let row: MessageRow
   @Binding var deleting: MessageKey?
 
   var body: some View {
-    Button("Copy Text") { HistoryClipboard.copy(row.body.isEmpty ? row.title : row.body) }
-    if row.hasTitle {
-      Button("Copy Title") { HistoryClipboard.copy(row.title) }
-    }
+    Button("Copy") { HistoryClipboard.copy(row.copyText) }
     if let url = row.clickURL {
+      Button("Copy Link") { HistoryClipboard.copy(url.absoluteString) }
       Button("Open Link") { Task { _ = await model.open(url) } }
     }
     Divider()

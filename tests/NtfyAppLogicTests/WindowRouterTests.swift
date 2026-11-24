@@ -13,6 +13,17 @@ import Testing
     #expect(router.request != first)
   }
 
+  @Test func aSettingsRequestCanNameASectionAndTheWindowTakesItOnce() {
+    let router = WindowRouter()
+    router.showSettings()
+    #expect(router.takeSettingsSection() == nil)
+    router.showSettings(section: .topics)
+    #expect(router.request?.window == .settings)
+    #expect(router.pendingSettingsSection == .topics)
+    #expect(router.takeSettingsSection() == .topics)
+    #expect(router.takeSettingsSection() == nil)
+  }
+
   @Test func consumingClearsOnlyTheHandledRequest() throws {
     let router = WindowRouter()
     router.showSettings()

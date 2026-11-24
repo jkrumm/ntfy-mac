@@ -17,6 +17,31 @@ extension HistoryModel {
     await refresh()
   }
 
+  /// Acknowledges the messages that need it (see `canAcknowledge`) and withdraws their
+  /// notifications: every topic's for nil, else the topic's. The rest stay as they are.
+  public func acknowledgeAll(topic: String?) async {
+    guard let handles else { return }
+    do throws(NtfyError) {
+      let pending = try await handles.inbox.unacknowledged(
+        minPriority: acknowledgePolicy.minPriority
+      ).filter { topic == nil || $0.message.topic == topic }
+      for entry in pending {
+        await handles.delivery.acknowledge(topic: entry.message.topic, id: entry.message.id)
+      }
+    } catch {
+      log("acknowledge all failed: \(error)")
+    }
+    await refresh()
+  }
+
+  /// How many messages an "Acknowledge All" in this view would settle.
+  public func pendingCount(in scope: Scope) -> Int {
+    switch scope {
+    case .all, .needsAcknowledgement: pendingCount
+    case .topic(let topic): pendingByTopic[topic] ?? 0
+    }
+  }
+
   public func markRead(_ key: MessageKey? = nil) async {
     guard let key = key ?? selection else { return }
     await perform("mark read") { inbox throws(NtfyError) in

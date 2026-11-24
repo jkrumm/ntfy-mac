@@ -27,6 +27,14 @@ struct HistoryFilterBar: View {
           .monospacedDigit()
           .fixedSize()
         Spacer(minLength: 4)
+        if model.needsAcknowledgementOnly {
+          Button("Acknowledge All (\(model.pendingCount))") {
+            Task { await model.acknowledgeAll(topic: nil) }
+          }
+          .controlSize(.small)
+          .disabled(model.pendingCount == 0)
+          .help("Acknowledge every message that waits for it")
+        }
         if model.isNarrowing {
           Button("Clear") { model.clearNarrowing() }
             .buttonStyle(.link)

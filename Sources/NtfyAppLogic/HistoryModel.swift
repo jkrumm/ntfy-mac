@@ -25,6 +25,11 @@ public final class HistoryModel {
   /// How many messages still wait for an acknowledgement, across all topics; the sidebar badge.
   /// The same rule as `canAcknowledge` and `AppModel.unacknowledgedCount`.
   public private(set) var pendingCount = 0
+  /// The same, per topic, for the sidebar menus.
+  public private(set) var pendingByTopic: [String: Int] = [:]
+  /// What the user decided per topic (mute, minimum priority, emoji, hide from All messages), as
+  /// last read from the config.
+  public private(set) var topicSettings: [String: TopicSettings] = [:]
   /// The messages matching the filters, as far as loaded (`loadMore()` extends it).
   public private(set) var rows: [MessageRow] = []
   /// `rows` grouped by calendar day, newest first.
@@ -93,8 +98,15 @@ public final class HistoryModel {
   // MARK: Derived
 
   public var hasMore: Bool { rows.count < resultCount }
-  public var totalUnread: Int { topics.reduce(0) { $0 + $1.unread } }
-  public var totalMessages: Int { topics.reduce(0) { $0 + $1.total } }
+  /// Unread messages of "All messages": the topics hidden from it do not count.
+  public var totalUnread: Int {
+    topics.reduce(0) { $0 + (hiddenTopics.contains($1.topic) ? 0 : $1.unread) }
+  }
+  public var totalMessages: Int {
+    topics.reduce(0) { $0 + (hiddenTopics.contains($1.topic) ? 0 : $1.total) }
+  }
+  /// The topics kept out of "All messages" (`TopicSettings.hideFromAll`).
+  public var hiddenTopics: Set<String> { Set(topicSettings.filter { $0.value.hideFromAll }.keys) }
   /// Any filter narrows the list (a topic counts).
   public var isFiltering: Bool {
     selectedTopic != nil || needsAcknowledgementOnly || !trimmedSearch.isEmpty
@@ -108,6 +120,7 @@ public final class HistoryModel {
   @ObservationIgnored let clock: any NtfyCore.Clock
   @ObservationIgnored let config: any ConfigStore
   @ObservationIgnored let calendar: Calendar
+  @ObservationIgnored let configChanges: @Sendable () -> AsyncStream<Void>
   @ObservationIgnored let pageSize: Int
   @ObservationIgnored let searchDebounce: Duration
   @ObservationIgnored let log: @Sendable (String) -> Void
@@ -122,6 +135,7 @@ public final class HistoryModel {
   public init(
     source: any PipelineSource, opener: any LinkOpening, clock: any NtfyCore.Clock,
     config: any ConfigStore, calendar: Calendar = .current,
+    configChanges: @escaping @Sendable () -> AsyncStream<Void> = { AsyncStream { $0.finish() } },
     pageSize: Int = HistoryModel.defaultPageSize,
     searchDebounce: Duration = HistoryModel.defaultSearchDebounce,
     log: @escaping @Sendable (String) -> Void = { _ in }
@@ -131,6 +145,7 @@ public final class HistoryModel {
     self.clock = clock
     self.config = config
     self.calendar = calendar
+    self.configChanges = configChanges
     self.pageSize = max(pageSize, 1)
     self.searchDebounce = searchDebounce
     self.log = log
@@ -143,11 +158,15 @@ public final class HistoryModel {
   public func start() {
     guard tasks.isEmpty else { return }
     let rebuilds = source.rebuilds()
+    let configs = configChanges()
     tasks = [
       Task {
         await attach()
         for await _ in rebuilds { await attach() }
-      }
+      },
+      Task {
+        for await _ in configs { await refresh() }
+      },
     ]
   }
 
@@ -204,6 +223,7 @@ public final class HistoryModel {
       let stored = try await config.load()
       let policy = AcknowledgePolicy(config: stored)
       acknowledgePolicy = policy
+      topicSettings = stored.topicSettings
       let query = currentQuery(limit: loadedLimit)
       let summaries = try await inbox.topics()
       let waiting = try await inbox.unacknowledged(minPriority: policy.minPriority)
@@ -219,6 +239,7 @@ public final class HistoryModel {
       topics = summaries
       urgentTopics = Set(waiting.map(\.message.topic))
       pendingCount = waiting.count
+      pendingByTopic = Dictionary(grouping: waiting, by: \.message.topic).mapValues(\.count)
       resultCount = count
       rows = entries.map(MessageRow.init)
       days = HistoryGrouping.days(of: rows, calendar: calendar)
@@ -241,7 +262,8 @@ public final class HistoryModel {
       text: trimmedSearch.isEmpty ? nil : trimmedSearch,
       minPriority: minPriority, since: dateFilter.start(from: clock.now(), calendar: calendar),
       until: until, limit: limit, offset: offset,
-      unacknowledgedFrom: needsAcknowledgementOnly ? acknowledgePolicy.minPriority : nil)
+      unacknowledgedFrom: needsAcknowledgementOnly ? acknowledgePolicy.minPriority : nil,
+      excludingTopics: scope == .all ? hiddenTopics : [])
   }
 
   /// Back to the first page, re-read.

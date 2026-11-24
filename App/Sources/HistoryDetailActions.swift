@@ -1,8 +1,9 @@
 import NtfyAppLogic
 import SwiftUI
 
-/// Acknowledge (where it applies), read state, remind, copy and delete for the shown message.
-/// Whole labels while they fit, else icons with the label as help: a label never truncates.
+/// Acknowledge (where it applies), read state, remind, copy (title and message together) and
+/// delete for the shown message. Whole labels while they fit, else icons with the label as help:
+/// a label never truncates.
 ///
 /// Acknowledging changes the message, and the bar must not move for it: the Acknowledge button
 /// and the "Acknowledged" state share one slot (`InPlaceSwap`) sized for the wider of the two, and
@@ -88,18 +89,12 @@ struct HistoryDetailActions: View {
         Label("Remind", systemImage: "bell")
       }
       .help("Show this message again later")
-      Menu {
-        Button("Copy Text") {
-          HistoryClipboard.copy(detail.body.isEmpty ? detail.title : detail.body)
-        }
-        if detail.hasTitle { Button("Copy Title") { HistoryClipboard.copy(detail.title) } }
-        if let url = detail.clickURL {
-          Button("Copy Link") { HistoryClipboard.copy(url.absoluteString) }
-        }
+      Button {
+        HistoryClipboard.copy(detail.copyText)
       } label: {
         Label("Copy", systemImage: "doc.on.doc")
       }
-      .help("Copy")
+      .help("Copy the title and the message")
       Button(role: .destructive) {
         deleting = detail.key
       } label: {

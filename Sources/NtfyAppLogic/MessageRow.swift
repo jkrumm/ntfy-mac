@@ -56,6 +56,10 @@ public struct MessageRow: Sendable, Hashable, Identifiable {
     return lines.dropFirst().joined(separator: " ")
   }
 
+  /// What Copy puts on the pasteboard: the title, a blank line, the body. A part that is empty
+  /// is left out, and a title taken from the body's first line is not repeated.
+  public var copyText: String { MessageCopy.text(title: hasTitle ? title : "", body: body) }
+
   private static func title(of message: NtfyMessage) -> String {
     if let title = message.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
       return title

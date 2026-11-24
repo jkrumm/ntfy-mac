@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
     historyModel = HistoryModel(
       source: controller, opener: WorkspaceLinkOpener(), clock: services.clock,
-      config: services.config,
+      config: services.config, configChanges: { ConfigWatcher().changes() },
       log: { Log.logger(.interface).info("\($0, privacy: .private)") })
     let configChanges: @Sendable () -> AsyncStream<Void> = { ConfigWatcher().changes() }
     let secrets = KeychainSecretStore()
@@ -167,7 +167,7 @@ struct NtfyMacApp: App {
     .restorationBehavior(.disabled)
 
     Window(AppWindow.settings.title, id: AppWindow.settings.rawValue) {
-      SettingsWindow(model: delegate.settingsModel)
+      SettingsWindow(model: delegate.settingsModel, windows: delegate.windows)
     }
     .defaultSize(AppWindow.settings.defaultSize)
     .defaultLaunchBehavior(.suppressed)
