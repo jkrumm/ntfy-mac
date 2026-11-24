@@ -190,10 +190,12 @@ public final class AppModel {
     await readMeeting()
     guard let inbox = handles?.inbox else { return }
     do throws(NtfyError) {
-      let rows = try await inbox.entries(HistoryQuery(limit: recentLimit))
+      let stored = try await config.load()
+      let hidden = stored.hiddenFromAll
+      let rows = try await inbox.entries(HistoryQuery(limit: recentLimit, excludingTopics: hidden))
       let unread = try await inbox.entries(
-        HistoryQuery(unreadOnly: true, limit: Self.unreadCountCap))
-      let policy = AcknowledgePolicy(config: try await config.load())
+        HistoryQuery(unreadOnly: true, limit: Self.unreadCountCap, excludingTopics: hidden))
+      let policy = AcknowledgePolicy(config: stored)
       let unacknowledged = try await inbox.unacknowledged(minPriority: policy.minPriority)
       acknowledgePolicy = policy
       recent = rows.map(MessageRow.init)

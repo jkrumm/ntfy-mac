@@ -103,6 +103,7 @@ extension CommandSpec {
         "ntfy-mac config get reAlert", "ntfy-mac config set reAlertIntervalSeconds 600",
         "ntfy-mac config reset reAlertIntervalSeconds", "ntfy-mac config topic list",
         "ntfy-mac config topic set builds --mute --min-priority 4 --emoji 🔨",
+        "ntfy-mac config topic set updates --hide-from-all",
         "ntfy-mac config topic show builds", "ntfy-mac config topic reset builds",
         "ntfy-mac config quiet-hours show",
         "ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest",

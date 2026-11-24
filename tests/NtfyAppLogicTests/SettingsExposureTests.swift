@@ -54,6 +54,9 @@ private enum Exposure {
     .topicEmoji: Change(
       apply: { await $0.setEmoji("🔨", topic: "builds") },
       verify: { $0.topicSettings["builds"]?.emoji == "🔨" }),
+    .topicHideFromAll: Change(
+      apply: { await $0.setHideFromAll(true, topic: "builds") },
+      verify: { $0.topicSettings["builds"]?.hideFromAll == true }),
     .sounds: Change(
       apply: { await $0.setSound(.named("Glass"), for: 5) },
       verify: { $0.sounds == [5: .named("Glass")] }),

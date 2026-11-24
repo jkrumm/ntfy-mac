@@ -25,6 +25,12 @@ struct HistorySelect: Sendable {
     arguments.append(contentsOf: values)
   }
 
+  /// `condition` has one `?` per value; for a list whose length is not known at compile time.
+  mutating func and(_ condition: String, values: [any DatabaseValueConvertible & Sendable]) {
+    conditions.append(condition)
+    arguments.append(contentsOf: values)
+  }
+
   mutating func matching(_ pattern: FTS5Pattern) {
     join = "JOIN message_ft ON message_ft.rowid = m.pk"
     and("message_ft MATCH ?", pattern)
@@ -68,6 +74,11 @@ extension HistoryQuery {
   func select(server: String, paged: Bool = true) -> HistorySelect? {
     var select = HistorySelect(server: server)
     if let topic { select.and("m.topic = ?", topic) }
+    if !excludingTopics.isEmpty {
+      let names = excludingTopics.sorted()
+      let marks = names.map { _ in "?" }.joined(separator: ", ")
+      select.and("m.topic NOT IN (\(marks))", values: names)
+    }
     if unreadOnly { select.and("m.read_at IS NULL") }
     if let unacknowledgedFrom {
       select.and("m.acked_at IS NULL")

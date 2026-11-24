@@ -23,6 +23,7 @@ Settings in `config.json` apply to the running app through its config watcher; n
 | Mute a topic | config.json: `topicSettings.<topic>.mute` | `ntfy-mac config topic set` | `ntfy-mac config topic set builds --mute` | `--unmute` undoes it; `config topic reset <topic>` clears all topic settings. |
 | Minimum priority of a topic | config.json: `topicSettings.<topic>.minPriority` | `ntfy-mac config topic set` | `ntfy-mac config topic set builds --min-priority 4` | `--min-priority none` removes the filter. |
 | Emoji of a topic | config.json: `topicSettings.<topic>.emoji` | `ntfy-mac config topic set` | `ntfy-mac config topic set builds --emoji 🔨` | `--emoji none` removes it. |
+| Hide a topic from All messages | config.json: `topicSettings.<topic>.hideFromAll` | `ntfy-mac config topic set` | `ntfy-mac config topic set updates --hide-from-all` | Its messages still notify (unless muted) and show in the topic's own view and in Unacknowledged; they leave All messages, its unread count and the menu bar. `--show-in-all` undoes it. |
 
 ## Sounds and dismiss timing
 

@@ -40,7 +40,11 @@ public enum SettingsSection: String, Sendable, CaseIterable, Identifiable {
   public var settings: [SettingID] {
     switch self {
     case .server: [.serverURL, .token, .allowInsecure]
-    case .topics: [.topicSubscribe, .topicUnsubscribe, .topicMute, .topicMinPriority, .topicEmoji]
+    case .topics:
+      [
+        .topicSubscribe, .topicUnsubscribe, .topicMute, .topicMinPriority, .topicEmoji,
+        .topicHideFromAll,
+      ]
     case .sounds: [.sounds, .dismiss]
     case .reAlert: [.reAlert, .reAlertIntervalSeconds, .reAlertMinPriority, .reAlertMaxRepeats]
     case .quietHours:

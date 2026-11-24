@@ -87,8 +87,13 @@ extension SettingsModel {
 
   /// Blank or `nil` removes the emoji.
   public func setEmoji(_ emoji: String?, topic: String) async {
-    let trimmed = emoji?.trimmingCharacters(in: .whitespacesAndNewlines)
-    await updateTopic(topic) { $0.emoji = trimmed.flatMap { $0.isEmpty ? nil : $0 } }
+    let normalized = TopicSettings.normalizedEmoji(emoji)
+    await updateTopic(topic) { $0.emoji = normalized }
+  }
+
+  /// Keeps a topic's messages out of "All messages", its unread count and the menu bar.
+  public func setHideFromAll(_ hide: Bool, topic: String) async {
+    await updateTopic(topic) { $0.hideFromAll = hide }
   }
 
   /// Like `config topic reset <topic>`.
@@ -99,10 +104,6 @@ extension SettingsModel {
   private func updateTopic(
     _ topic: String, _ change: @escaping @Sendable (inout TopicSettings) -> Void
   ) async {
-    await write { config in
-      var settings = config.topicSettings[topic] ?? TopicSettings()
-      change(&settings)
-      config.topicSettings[topic] = settings == TopicSettings() ? nil : settings
-    }
+    await write { $0.updateTopic(topic, change) }
   }
 }

@@ -31,7 +31,8 @@ struct SettingsTopicsSection: View {
       } footer: {
         Text(
           "Topics from your ntfy account are managed in the ntfy web app. "
-            + "Muted topics are still stored in the history."
+            + "Muted topics are still stored in the history. A topic hidden from All messages "
+            + "still notifies and keeps its own view."
         )
       }
     }
@@ -40,7 +41,7 @@ struct SettingsTopicsSection: View {
   }
 }
 
-/// One topic as its own group: the name and where it comes from on top, then the three
+/// One topic as its own group: the name and where it comes from on top, then its
 /// settings as labelled rows, so labels and controls line up the same way for every topic.
 private struct TopicRowView: View {
   let model: SettingsModel
@@ -63,6 +64,13 @@ private struct TopicRowView: View {
           set: { value in Task { await model.setMute(value, topic: row.name) } })
       )
       .help(settingCommandHint(.topicMute))
+      Toggle(
+        "Hide from All messages",
+        isOn: Binding(
+          get: { row.settings.hideFromAll },
+          set: { value in Task { await model.setHideFromAll(value, topic: row.name) } })
+      )
+      .help(settingCommandHint(.topicHideFromAll))
       LabeledContent("Minimum priority") {
         Picker("Minimum priority", selection: priority) {
           Text("Any").tag(0)

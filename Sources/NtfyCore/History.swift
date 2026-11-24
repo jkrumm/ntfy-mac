@@ -38,11 +38,13 @@ public struct HistoryQuery: Sendable, Hashable {
   public var until: Date?
   public var limit: Int
   public var offset: Int
+  /// Messages of these topics are left out ("All messages" without the topics that opted out).
+  public var excludingTopics: Set<String>
 
   public init(
     topic: String? = nil, unreadOnly: Bool = false, text: String? = nil,
     minPriority: Priority? = nil, since: Date? = nil, until: Date? = nil, limit: Int = 100,
-    offset: Int = 0, unacknowledgedFrom: Priority? = nil
+    offset: Int = 0, unacknowledgedFrom: Priority? = nil, excludingTopics: Set<String> = []
   ) {
     self.topic = topic
     self.unreadOnly = unreadOnly
@@ -53,6 +55,7 @@ public struct HistoryQuery: Sendable, Hashable {
     self.until = until
     self.limit = limit
     self.offset = offset
+    self.excludingTopics = excludingTopics
   }
 }
 

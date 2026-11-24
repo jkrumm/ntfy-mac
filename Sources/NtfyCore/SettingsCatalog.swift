@@ -10,6 +10,7 @@ public enum SettingID: String, Sendable, CaseIterable, Hashable {
   case topicMute
   case topicMinPriority
   case topicEmoji
+  case topicHideFromAll
   case sounds
   case soundList
   case soundPreview
@@ -157,6 +158,13 @@ public enum SettingsCatalog {
       .topicEmoji, .topics, "Emoji of a topic", key: "topicSettings.<topic>.emoji",
       command: "config topic set", example: "ntfy-mac config topic set builds --emoji 🔨",
       note: "`--emoji none` removes it."),
+    SettingEntry(
+      .topicHideFromAll, .topics, "Hide a topic from All messages",
+      key: "topicSettings.<topic>.hideFromAll", command: "config topic set",
+      example: "ntfy-mac config topic set updates --hide-from-all",
+      note: "Its messages still notify (unless muted) and show in the topic's own view and in "
+        + "Unacknowledged; they leave All messages, its unread count and the menu bar. "
+        + "`--show-in-all` undoes it."),
     SettingEntry(
       .sounds, .sounds, "Sound per priority", key: "sounds", command: "config sounds set",
       example: "ntfy-mac config sounds set 5 Sosumi",

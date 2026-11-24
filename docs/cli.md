@@ -61,7 +61,7 @@ Everything the History window does to a message has a command. A test fails when
 
 | Action in the window | Command | Example | Notes |
 |-|-|-|-|
-| Acknowledge | `ntfy-mac ack` | `ntfy-mac ack alerts m1` | `--all --topic <topic>` acknowledges a whole topic. |
+| Acknowledge | `ntfy-mac ack` | `ntfy-mac ack alerts m1` | `--all` acknowledges everything that waits for it (the window's Acknowledge All), `--all --topic <topic>` a whole topic. |
 | Mark read | `ntfy-mac read` | `ntfy-mac read alerts m1 --json` | Reading a message marks it read; `--no-mark` leaves it. Mark unread and mark all read have no command; `ack --all --topic <topic>` also marks a topic read, and acknowledges it. |
 | Remind me | `ntfy-mac remind` | `ntfy-mac remind alerts m1 --in 1h` | The window offers 15 minutes, 1 hour and tomorrow 08:00; `--until` takes any time. |
 | Delete | `ntfy-mac delete` | `ntfy-mac delete alerts m1` | `--topic <topic> --all` deletes every message of a topic. |
@@ -255,6 +255,7 @@ ntfy-mac config set reAlertIntervalSeconds 600
 ntfy-mac config reset reAlertIntervalSeconds
 ntfy-mac config topic list
 ntfy-mac config topic set builds --mute --min-priority 4 --emoji 🔨
+ntfy-mac config topic set updates --hide-from-all
 ntfy-mac config topic show builds
 ntfy-mac config topic reset builds
 ntfy-mac config quiet-hours show
@@ -452,7 +453,7 @@ Show and change the settings of one topic.
 ntfy-mac config topic
 ```
 
-The topic follows the verb: ntfy-mac config topic show|set|reset <topic>. `config topic list` shows every topic with settings of its own. A muted topic is stored in the history and never notified; a minimum priority holds back messages below it.
+The topic follows the verb: ntfy-mac config topic show|set|reset <topic>. `config topic list` shows every topic with settings of its own. A muted topic is stored in the history and never notified; a minimum priority holds back messages below it; a topic hidden from All messages still notifies and keeps its own view, but its messages stay out of All messages, the unread count and the menu bar.
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
@@ -485,17 +486,18 @@ ntfy-mac config topic show <topic>
 
 #### `ntfy-mac config topic set`
 
-Mute a topic, filter it by priority, or give it an emoji.
+Mute a topic, filter it by priority, give it an emoji, or hide it from All messages.
 
 ```
-ntfy-mac config topic set <topic> [--mute] [--unmute] [--min-priority <integer>] [--emoji <string>]
+ntfy-mac config topic set <topic> [--mute] [--unmute] [--min-priority <integer>] [--emoji <string>] [--hide-from-all] [--show-in-all]
 ```
 
-At least one option is required. --min-priority takes 1 to 5, or none to remove the filter; --emoji takes an emoji for the notification title, or none to remove it.
+At least one option is required. --min-priority takes 1 to 5, or none to remove the filter; --emoji takes an emoji for the notification title, or none to remove it. --hide-from-all keeps the topic's messages out of All messages, the unread count and the menu bar; --show-in-all undoes it.
 
 ```sh
 ntfy-mac config topic set builds --mute
 ntfy-mac config topic set builds --min-priority 4 --emoji 🔨
+ntfy-mac config topic set updates --hide-from-all
 ```
 
 | Argument | Kind | Type | Default | Required | Description |
@@ -505,6 +507,8 @@ ntfy-mac config topic set builds --min-priority 4 --emoji 🔨
 | `--unmute` | flag | boolean | `false` | no | Notify again. |
 | `--min-priority` | option | integer (1 to 5) |  | no | Hold back messages below this priority (1-5), or none. |
 | `--emoji` | option | string |  | no | Prefix for the notification title, or none. |
+| `--hide-from-all` | flag | boolean | `false` | no | Keep the topic's messages out of All messages and the unread count. |
+| `--show-in-all` | flag | boolean | `false` | no | Show the topic in All messages again. |
 | `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
 #### `ntfy-mac config topic reset`

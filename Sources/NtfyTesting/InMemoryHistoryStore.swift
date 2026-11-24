@@ -222,6 +222,7 @@ extension InMemoryHistoryStore {
 extension HistoryQuery {
   fileprivate func accepts(_ stored: StoredMessage) -> Bool {
     if let topic, stored.message.topic != topic { return false }
+    if excludingTopics.contains(stored.message.topic) { return false }
     if unreadOnly, stored.readAt != nil { return false }
     if let unacknowledgedFrom,
       stored.ackedAt != nil || stored.message.priority < unacknowledgedFrom

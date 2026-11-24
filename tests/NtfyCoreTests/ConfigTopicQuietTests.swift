@@ -43,6 +43,28 @@ import Testing
     #expect(config.object["topicSettings"] == nil)
   }
 
+  @Test func hideFromAllRoundTripsAndIsWrittenOnlyWhenTrue() throws {
+    let config = try parse(#"{"topicSettings":{"updates":{"hideFromAll":true,"emoji":"📦"}}}"#)
+    #expect(config.topicSettings["updates"] == TopicSettings(emoji: "📦", hideFromAll: true))
+    #expect(config.hiddenFromAll == ["updates"])
+    #expect(try roundTrip(config) == config)
+    let written = try #require(config.object["topicSettings"]?.objectValue?["updates"]?.objectValue)
+    #expect(written["hideFromAll"] == .bool(true))
+
+    var shown = config
+    shown.updateTopic("updates") { $0.hideFromAll = false }
+    let kept = try #require(shown.object["topicSettings"]?.objectValue?["updates"]?.objectValue)
+    #expect(kept["hideFromAll"] == nil)
+    #expect(kept["emoji"] == .string("📦"))
+    #expect(shown.hiddenFromAll.isEmpty)
+    shown.updateTopic("updates") { $0.emoji = nil }
+    #expect(shown.topicSettings["updates"] == nil)
+    #expect(shown.object["topicSettings"] == nil)
+    #expect(
+      try parse(#"{"topicSettings":{"a":{"hideFromAll":"yes"}}}"#).topicSettings["a"]
+        == TopicSettings())
+  }
+
   @Test func malformedTopicSettingsReadAsAbsent() throws {
     let config = try parse(
       """

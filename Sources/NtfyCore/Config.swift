@@ -34,7 +34,7 @@ public struct Config: Sendable, Hashable {
   public var reAlertMaxRepeats: Int
   /// Notifications are held back until this moment (ISO 8601 in the file); absent means not paused.
   public var pausedUntil: Date?
-  /// Per-topic mute, minimum priority and emoji, keyed by topic name.
+  /// Per-topic mute, minimum priority, emoji and "hide from All messages", keyed by topic name.
   public var topicSettings: [String: TopicSettings]
   public var quietHours: QuietHours
   /// Automatic suppression while a video meeting is detected, and the manual override.
@@ -222,5 +222,18 @@ extension Config {
   /// Whether the topic settings keep this message out of the notifications.
   func suppresses(_ message: NtfyMessage) -> Bool {
     topicSettings[message.topic]?.suppresses(message.priority) ?? false
+  }
+
+  /// The topics kept out of "All messages", the unread count and the menu bar (`hideFromAll`).
+  public var hiddenFromAll: Set<String> {
+    Set(topicSettings.filter { $0.value.hideFromAll }.keys)
+  }
+
+  /// Changes one topic's settings; a topic left at the defaults has no entry. The one write path
+  /// of the Settings window, the History window's sidebar and the CLI.
+  public mutating func updateTopic(_ topic: String, _ change: (inout TopicSettings) -> Void) {
+    var settings = topicSettings[topic] ?? TopicSettings()
+    change(&settings)
+    topicSettings[topic] = settings == TopicSettings() ? nil : settings
   }
 }

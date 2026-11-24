@@ -201,6 +201,7 @@ ntfy-mac config set reAlertIntervalSeconds 600           # re-alert every 10 min
 ntfy-mac config set reAlert off                          # stop repeating urgent alerts
 ntfy-mac config topic set builds --mute                  # store, never notify
 ntfy-mac config topic set builds --min-priority 4        # hold back anything below high
+ntfy-mac config topic set updates --hide-from-all        # notify, but keep out of All messages
 ntfy-mac config quiet-hours set --start 22:00 --end 07:00  # on, with urgent bypass and a digest
 ntfy-mac config quiet-hours off                          # off, times kept
 ntfy-mac config                                          # show it all

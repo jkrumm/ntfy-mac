@@ -7,18 +7,21 @@ struct TopicSettingsRow: Encodable, Sendable {
   let mute: Bool
   let minPriority: Int?
   let emoji: String?
+  let hideFromAll: Bool
 
   init(topic: String, settings: TopicSettings) {
     self.topic = topic
     mute = settings.mute
     minPriority = settings.minPriority
     emoji = settings.emoji
+    hideFromAll = settings.hideFromAll
   }
 
   var text: String {
     "\(topic): " + (mute ? "muted" : "notifying")
       + ", minimum priority " + (minPriority.map(String.init) ?? "none")
       + ", emoji " + (emoji ?? "none")
+      + (hideFromAll ? ", hidden from All messages" : "")
   }
 }
 
@@ -44,7 +47,9 @@ struct ConfigTopicCommand: CLICommand {
     discussion: """
       The topic follows the verb: ntfy-mac config topic show|set|reset <topic>. `config topic
       list` shows every topic with settings of its own. A muted topic is stored in the history and
-      never notified; a minimum priority holds back messages below it.
+      never notified; a minimum priority holds back messages below it; a topic hidden from All
+      messages still notifies and keeps its own view, but its messages stay out of All messages,
+      the unread count and the menu bar.
       """,
     subcommands: [
       ConfigTopicList.self, ConfigTopicShow.self, ConfigTopicSet.self, ConfigTopicReset.self,
@@ -100,13 +105,18 @@ struct ConfigTopicShow: CLICommand {
 
 struct ConfigTopicSet: CLICommand {
   static let configuration = CommandConfiguration(
-    commandName: "set", abstract: "Mute a topic, filter it by priority, or give it an emoji.",
+    commandName: "set",
+    abstract:
+      "Mute a topic, filter it by priority, give it an emoji, or hide it from All messages.",
     discussion: """
       At least one option is required. --min-priority takes 1 to 5, or none to remove the filter;
-      --emoji takes an emoji for the notification title, or none to remove it.
+      --emoji takes an emoji for the notification title, or none to remove it. --hide-from-all
+      keeps the topic's messages out of All messages, the unread count and the menu bar;
+      --show-in-all undoes it.
 
         ntfy-mac config topic set builds --mute
         ntfy-mac config topic set builds --min-priority 4 --emoji 🔨
+        ntfy-mac config topic set updates --hide-from-all
       """)
 
   @Argument(help: "The topic.") var topic: String
@@ -115,6 +125,9 @@ struct ConfigTopicSet: CLICommand {
   @Option(name: .long, help: "Hold back messages below this priority (1-5), or none.")
   var minPriority: String?
   @Option(name: .long, help: "Prefix for the notification title, or none.") var emoji: String?
+  @Flag(name: .long, help: "Keep the topic's messages out of All messages and the unread count.")
+  var hideFromAll = false
+  @Flag(name: .long, help: "Show the topic in All messages again.") var showInAll = false
   @OptionGroup var output: OutputOptions
 
   func validate() throws {
@@ -122,8 +135,13 @@ struct ConfigTopicSet: CLICommand {
     guard !(mute && unmute) else {
       throw ValidationError("Use either --mute or --unmute, not both.")
     }
-    guard mute || unmute || minPriority != nil || emoji != nil else {
-      throw ValidationError("Nothing to set: pass --mute, --unmute, --min-priority or --emoji.")
+    guard !(hideFromAll && showInAll) else {
+      throw ValidationError("Use either --hide-from-all or --show-in-all, not both.")
+    }
+    guard mute || unmute || minPriority != nil || emoji != nil || hideFromAll || showInAll else {
+      throw ValidationError(
+        "Nothing to set: pass --mute, --unmute, --min-priority, --emoji, --hide-from-all "
+          + "or --show-in-all.")
     }
     _ = try parsedMinPriority()
     _ = try parsedEmoji()
@@ -153,13 +171,17 @@ struct ConfigTopicSet: CLICommand {
     let topic = topic
     let mute = mute
     let unmute = unmute
+    let hideFromAll = hideFromAll
+    let showInAll = showInAll
     try await environment.config.update { config in
-      var settings = config.topicSettings[topic] ?? TopicSettings()
-      if mute { settings.mute = true }
-      if unmute { settings.mute = false }
-      if let minPriority { settings.minPriority = minPriority }
-      if let emoji { settings.emoji = emoji }
-      config.topicSettings[topic] = settings == TopicSettings() ? nil : settings
+      config.updateTopic(topic) { settings in
+        if mute { settings.mute = true }
+        if unmute { settings.mute = false }
+        if let minPriority { settings.minPriority = minPriority }
+        if let emoji { settings.emoji = emoji }
+        if hideFromAll { settings.hideFromAll = true }
+        if showInAll { settings.hideFromAll = false }
+      }
     }
     let config = try await environment.config.load()
     let row = TopicSettingsRow(

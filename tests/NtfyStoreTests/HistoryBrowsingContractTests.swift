@@ -31,6 +31,29 @@ import Testing
   }
 
   @Test(arguments: Backend.allCases)
+  func excludingTopicsLeavesThemOutOfEntriesAndCountAndKeepsPaging(_ backend: Backend)
+    async throws
+  {
+    let rig = try HistoryRig(backend)
+    try await rig.store.append(rig.message("1", topic: "a", at: 0, body: "deploy"))
+    try await rig.store.append(rig.message("2", topic: "b", at: 10, body: "deploy"))
+    try await rig.store.append(rig.message("3", topic: "c", at: 20, body: "deploy"))
+    try await rig.store.append(rig.message("4", topic: "a", at: 30, body: "other"))
+
+    func ids(_ query: HistoryQuery) async throws -> [String] {
+      try await rig.store.entries(query).map(\.message.id)
+    }
+    #expect(try await ids(HistoryQuery(excludingTopics: ["b", "c"])) == ["4", "1"])
+    #expect(try await rig.store.count(HistoryQuery(excludingTopics: ["b", "c"])) == 2)
+    #expect(try await rig.store.count(HistoryQuery(limit: 1, excludingTopics: ["b"])) == 3)
+    #expect(try await ids(HistoryQuery(limit: 1, offset: 1, excludingTopics: ["b"])) == ["3"])
+    #expect(try await ids(HistoryQuery(text: "deploy", excludingTopics: ["a"])) == ["3", "2"])
+    #expect(try await ids(HistoryQuery(unreadOnly: true, excludingTopics: ["a"])) == ["3", "2"])
+    #expect(try await ids(HistoryQuery(topic: "b", excludingTopics: ["a"])) == ["2"])
+    #expect(try await ids(HistoryQuery(excludingTopics: [])) == ["4", "3", "2", "1"])
+  }
+
+  @Test(arguments: Backend.allCases)
   func unacknowledgedFromListsWhatStillWaitsAndComposesWithTheOtherFilters(_ backend: Backend)
     async throws
   {

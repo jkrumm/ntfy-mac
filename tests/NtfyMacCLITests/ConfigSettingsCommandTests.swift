@@ -151,6 +151,26 @@ import Testing
     #expect(await rig.config.load().topicSettings.isEmpty)
   }
 
+  @Test func topicSetHidesAndShowsInAllMessages() async throws {
+    let rig = CLIRig()
+    let hidden = await rig.run("config", "topic", "set", "updates", "--hide-from-all")
+    #expect(hidden.exit == .success)
+    #expect(await rig.config.load().topicSettings["updates"] == TopicSettings(hideFromAll: true))
+    #expect(
+      hidden.stdout
+        == "updates: notifying, minimum priority none, emoji none, hidden from All messages\n")
+    let shown = try await rig.run("config", "topic", "show", "updates", "--json").json()
+    #expect(shown["hideFromAll"] as? Bool == true)
+    // Independent of mute.
+    _ = await rig.run("config", "topic", "set", "updates", "--mute")
+    #expect(
+      await rig.config.load().topicSettings["updates"]
+        == TopicSettings(mute: true, hideFromAll: true))
+    _ = await rig.run("config", "topic", "set", "updates", "--unmute", "--show-in-all")
+    #expect(await rig.config.load().topicSettings["updates"] == nil)
+    #expect(await rig.config.load().topicSettings.isEmpty)
+  }
+
   @Test func topicShowListAndResetAndJSON() async throws {
     let rig = CLIRig()
     #expect(await rig.run("config", "topic", "list").stdout.contains("No topic has its own"))
@@ -171,6 +191,7 @@ import Testing
 
   @Test(arguments: [
     ["set", "builds"], ["set", "builds", "--mute", "--unmute"],
+    ["set", "builds", "--hide-from-all", "--show-in-all"],
     ["set", "builds", "--min-priority", "9"], ["set", "builds", "--min-priority", "x"],
     ["set", "builds", "--emoji", " "], ["set", "bad topic", "--mute"], ["show", "a/b"],
     ["reset", ""],

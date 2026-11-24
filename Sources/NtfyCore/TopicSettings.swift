@@ -8,11 +8,24 @@ public struct TopicSettings: Sendable, Hashable {
   public var minPriority: Int?
   /// Prefixed to the notification title.
   public var emoji: String?
+  /// Left out of "All messages" in the History window, its unread count and the menu bar's badge
+  /// and recent rows. Still notified (unless muted), still in the topic's own view and in the
+  /// unacknowledged view. Independent of `mute`.
+  public var hideFromAll: Bool
 
-  public init(mute: Bool = false, minPriority: Int? = nil, emoji: String? = nil) {
+  public init(
+    mute: Bool = false, minPriority: Int? = nil, emoji: String? = nil, hideFromAll: Bool = false
+  ) {
     self.mute = mute
     self.minPriority = minPriority.map { Priority(clamping: $0).rawValue }
     self.emoji = emoji
+    self.hideFromAll = hideFromAll
+  }
+
+  /// The value an emoji field stores: trimmed, and nil for blank or nil.
+  public static func normalizedEmoji(_ emoji: String?) -> String? {
+    let trimmed = emoji?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.flatMap { $0.isEmpty ? nil : $0 }
   }
 
   /// Whether a message of this priority is stored without a notification.
@@ -26,17 +39,18 @@ public struct TopicSettings: Sendable, Hashable {
     static let mute = "mute"
     static let minPriority = "minPriority"
     static let emoji = "emoji"
+    static let hideFromAll = "hideFromAll"
   }
 
   /// Reads one topic's object; wrong-typed fields read as their default, and nil means the value
   /// is not an object.
   init?(value: ConfigValue) {
     guard let object = value.objectValue else { return nil }
-    let emoji = object[Key.emoji]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
     self.init(
       mute: object[Key.mute]?.isTrue ?? false,
       minPriority: object[Key.minPriority]?.intValue,
-      emoji: emoji.flatMap { $0.isEmpty ? nil : $0 })
+      emoji: Self.normalizedEmoji(object[Key.emoji]?.stringValue),
+      hideFromAll: object[Key.hideFromAll]?.isTrue ?? false)
   }
 
   /// The JSON to write, or nil when every field is at its default.
@@ -45,6 +59,7 @@ public struct TopicSettings: Sendable, Hashable {
     if mute { object[Key.mute] = .bool(true) }
     if let minPriority { object[Key.minPriority] = .int(minPriority) }
     if let emoji, !emoji.isEmpty { object[Key.emoji] = .string(emoji) }
+    if hideFromAll { object[Key.hideFromAll] = .bool(true) }
     return object.isEmpty ? nil : .object(object)
   }
 }
