@@ -189,7 +189,8 @@ struct HistorySidebar: View {
   }
 
   private func prompt(_ item: Item) -> String {
-    name(item).map { "Delete all messages in \($0)?" } ?? "Delete all messages in every topic?"
+    name(item).map { "Delete all messages in \($0)?" }
+      ?? "Delete all messages listed in All messages?"
   }
 
   private func delete(_ item: Item) async {
@@ -197,6 +198,6 @@ struct HistorySidebar: View {
       await model.deleteAll(topic: topic)
       return
     }
-    for summary in model.topics { await model.deleteAll(topic: summary.topic) }
+    for summary in model.shownInAll { await model.deleteAll(topic: summary.topic) }
   }
 }

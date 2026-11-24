@@ -56,9 +56,10 @@ extension HistoryModel {
     }
   }
 
-  /// Reads every message of the topic; nil reads every topic.
+  /// Reads every message of the topic; nil reads every topic of "All messages" (not the ones
+  /// hidden from it, which that view does not show).
   public func markAllRead(topic: String?) async {
-    let names = topic.map { [$0] } ?? topics.map(\.topic)
+    let names = topic.map { [$0] } ?? shownInAll.map(\.topic)
     await perform("mark all read") { inbox throws(NtfyError) in
       for name in names { try await inbox.markAllRead(topic: name) }
     }

@@ -73,6 +73,17 @@ import Testing
     rig.model.stop()
   }
 
+  @Test func markAllReadOnAllMessagesLeavesAHiddenTopicAlone() async {
+    let rig = await rig()
+    await rig.model.markAllRead(topic: nil)
+    #expect(rig.model.topics.first { $0.topic == "alerts" }?.unread == 0)
+    #expect(rig.model.topics.first { $0.topic == "updates" }?.unread == 2)
+    await rig.model.markAllRead(topic: "updates")
+    #expect(rig.model.topics.first { $0.topic == "updates" }?.unread == 0)
+    #expect(rig.model.shownInAll.map(\.topic) == ["alerts"])
+    rig.model.stop()
+  }
+
   // MARK: The sidebar menu's writes
 
   @Test func theMenuWritesMuteAndMinimumPriorityToTheConfig() async {

@@ -105,6 +105,8 @@ public final class HistoryModel {
   public var totalMessages: Int {
     topics.reduce(0) { $0 + (hiddenTopics.contains($1.topic) ? 0 : $1.total) }
   }
+  /// The topics "All messages" lists.
+  public var shownInAll: [TopicSummary] { topics.filter { !hiddenTopics.contains($0.topic) } }
   /// The topics kept out of "All messages" (`TopicSettings.hideFromAll`).
   public var hiddenTopics: Set<String> { Set(topicSettings.filter { $0.value.hideFromAll }.keys) }
   /// Any filter narrows the list (a topic counts).
