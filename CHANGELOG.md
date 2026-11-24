@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/jkrumm/ntfy-mac/compare/v2.1.0...v2.1.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **core:** reconnect and re-alert for a Mac that sleeps in short dark wakes ([4e6c06e](https://github.com/jkrumm/ntfy-mac/commit/4e6c06ee0891ec67596e89551f0ea310c8db1126))
+
 # [2.1.0](https://github.com/jkrumm/ntfy-mac/compare/v2.0.1...v2.1.0) (2026-11-14)
 
 
