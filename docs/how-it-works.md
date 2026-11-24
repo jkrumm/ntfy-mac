@@ -19,8 +19,8 @@ The app connects to `/<topics>/json` and reads the NDJSON stream with `URLSessio
 - **Backoff** doubles from a short first delay up to 5 minutes, scaled by jitter into 50 to 100 percent. It resets only after a connection stayed up for 60 seconds, so a server that accepts and drops does not reset it.
 - **Watchdog.** If nothing arrives (message or keepalive) for twice the observed keepalive gap, at least 90 seconds, the connection counts as stalled and is replaced.
 - **Terminal answers.** A 401 or 403, or a redirect, stops the stream: the token is never sent to another host. A 429 waits long.
-- **Wake and network changes.** The app reconnects when the Mac wakes or the network path changes, without waiting for the watchdog.
-- **Offline.** While there is no network path, the app waits instead of counting failures.
+- **Wake and network changes.** The app reconnects when the Mac wakes, when the displays wake (someone sat down), or when the network path changes, without waiting for the watchdog or a backoff.
+- **Offline and asleep.** While there is no network path, or the Mac is going to sleep, the app waits instead of counting failures. Neither wait depends on one event: after 60 seconds a connection is tried anyway, because the wake event of a Mac that wakes for seconds at a time (lid closed, a USB device or maintenance waking it every minute) can arrive late, out of order or not at all. A failed probe backs off like any other failure, and the network coming back still connects at once.
 
 After every reconnect a poll request fetches what arrived during the gap. The cursor (`lastMessageId`, in `~/.local/share/ntfy-mac/state.json`) advances only after a message is stored.
 
@@ -62,9 +62,15 @@ Icons and attachments are fetched with a size cap, without redirects, and the to
 
 The time-sensitive level needs a restricted entitlement (`com.apple.developer.usernotifications.time-sensitive`, which needs a provisioning profile; a Developer ID release embeds it). The app reads its own entitlements at run time: with it, priorities 4 and 5 use the time-sensitive level; without it (an ad-hoc build) they degrade to the active level, so they are loud but may not break through every Focus. Sounds and dismiss times are configurable (`ntfy-mac config`). Urgent and high notifications repeat until acknowledged when `reAlert` is on.
 
+### Re-alerts and being away
+
+A banner posted while the displays are dark is never seen, and a re-alert every few minutes would use up its repeats on an empty room. While the displays are asleep (idle, lid closed or system sleep) the app holds each re-alert that comes due. When they wake, every unacknowledged message at or above the re-alert threshold that was posted or came due while you were away is posted again at once, with a full repeat budget. Acknowledging while away, or turning `reAlert` off, cancels it. Messages below the threshold are not posted again; they wait in Notification Center.
+
+The system log keeps one line per such step (`delivery: away`, `back`, `re-alert held`, `posted priority N`) and per stream state change (`stream: paused -> connecting on didWake`), without message text, topic or error details: `log show --last 1h --predicate 'subsystem == "com.jkrumm.ntfy-mac"'`.
+
 ### Missed messages
 
-When the app reconnects after a gap, it sorts the batch by the age of its oldest message:
+Messages that must be acknowledged (priority at or above `reAlertMinPriority`, with `reAlert` on) and younger than 24 hours are always shown one by one, whatever else came in with them; they also start their re-alerts. When the app reconnects after a gap, it sorts the rest of the batch by the age of its oldest message:
 
 | Age of oldest missed message | Behavior                                              |
 | ---------------------------- | ----------------------------------------------------- |
