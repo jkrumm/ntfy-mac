@@ -15,6 +15,18 @@ public actor RecordingNotificationPoster: NotificationPoster {
     }
   }
 
+  public struct Digest: Sendable, Hashable {
+    public let title: String
+    public let body: String
+
+    public init(title: String, body: String) {
+      self.title = title
+      self.body = body
+    }
+  }
+
+  /// Every successful digest post, in order.
+  public private(set) var digests: [Digest] = []
   /// Every successful post, in order.
   public private(set) var posted: [NotificationContent] = []
   public private(set) var summaries: [MissedSummary] = []
@@ -58,6 +70,11 @@ public actor RecordingNotificationPoster: NotificationPoster {
   ) throws(NtfyError) {
     try check()
     summaries.append(MissedSummary(count: count, oldestTopic: oldestTopic, cause: cause))
+  }
+
+  public func postDigest(title: String, body: String) throws(NtfyError) {
+    try check()
+    digests.append(Digest(title: title, body: body))
   }
 
   public func remove(identifiers: [String]) {

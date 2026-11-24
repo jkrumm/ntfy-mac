@@ -25,7 +25,19 @@ public struct SystemEventMonitor: SystemEvents {
           }
         }
       }
+      let distributed = DistributedNotificationCenter.default()
+      let lockObservers = [
+        SystemEventMapper.lockNotification, SystemEventMapper.unlockNotification,
+      ]
+      .map { name in
+        distributed.addObserver(forName: name, object: nil, queue: nil) { _ in
+          if let event = SystemEventMapper.distributedEvent(named: name) {
+            continuation.yield(event)
+          }
+        }
+      }
       let tokens = Observers(observers)
+      let lockTokens = Observers(lockObservers)
       let monitor = NWPathMonitor()
       let reported = Mutex(SystemEventMapper())
       monitor.pathUpdateHandler = { path in
@@ -36,6 +48,7 @@ public struct SystemEventMonitor: SystemEvents {
       continuation.onTermination = { _ in
         monitor.cancel()
         tokens.remove(from: center)
+        lockTokens.remove(from: distributed)
       }
     }
   }

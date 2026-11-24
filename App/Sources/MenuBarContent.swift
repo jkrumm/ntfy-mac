@@ -24,7 +24,10 @@ struct MenuBarContent: View {
     .task { coordinator.install(openWindow) }
     .onChange(of: windows.request) { coordinator.fulfil(windows) }
     .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-      Task { await model.refreshPermission() }
+      Task {
+        await model.refreshPermission()
+        await model.noteOpened()
+      }
     }
   }
 

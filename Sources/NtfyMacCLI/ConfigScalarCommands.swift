@@ -9,12 +9,21 @@ enum ConfigKey: String, CaseIterable, ExpressibleByArgument {
   case reAlertIntervalSeconds
   case reAlertMinPriority
   case reAlertMaxRepeats
+  case summaryEnabled = "summary.enabled"
+  case summaryEndpoint = "summary.endpoint"
+  case summaryModel = "summary.model"
+  case summaryMinAwayMinutes = "summary.minAwayMinutes"
+  case summaryMinMessages = "summary.minMessages"
 
   /// What `set` accepts, for the usage message.
   var expectation: String {
     switch self {
-    case .allowInsecure, .allowPrivateNetworkActions, .reAlert:
+    case .allowInsecure, .allowPrivateNetworkActions, .reAlert, .summaryEnabled:
       "true, false, on or off"
+    case .summaryEndpoint: "an http(s) URL, or an empty value to clear it"
+    case .summaryModel: "a model name"
+    case .summaryMinAwayMinutes: "a whole number of minutes, 0 or more"
+    case .summaryMinMessages: "a whole number above 0"
     case .reAlertIntervalSeconds: "a whole number of seconds above 0"
     case .reAlertMinPriority: "a priority from 1 to 5"
     case .reAlertMaxRepeats: "a whole number, 0 or more"
@@ -25,21 +34,37 @@ enum ConfigKey: String, CaseIterable, ExpressibleByArgument {
   func parse(_ text: String) throws -> ScalarValue {
     let invalid = ValidationError("\(rawValue) must be \(expectation) (got \(text)).")
     switch self {
-    case .allowInsecure, .allowPrivateNetworkActions, .reAlert:
-      switch text.lowercased() {
-      case "true", "on": return .bool(true)
-      case "false", "off": return .bool(false)
-      default: throw invalid
-      }
-    case .reAlertIntervalSeconds:
-      guard let seconds = Int(text), seconds > 0 else { throw invalid }
-      return .int(seconds)
-    case .reAlertMinPriority:
-      guard let priority = Int(text), Priority.range.contains(priority) else { throw invalid }
-      return .int(priority)
-    case .reAlertMaxRepeats:
-      guard let repeats = Int(text), repeats >= 0 else { throw invalid }
-      return .int(repeats)
+    case .allowInsecure, .allowPrivateNetworkActions, .reAlert, .summaryEnabled:
+      return .bool(try Self.flag(text, otherwise: invalid))
+    case .summaryEndpoint:
+      let trimmed = text.trimmingCharacters(in: .whitespaces)
+      if trimmed.isEmpty { return .string("") }
+      guard let endpoint = SummaryEndpoint.normalized(trimmed) else { throw invalid }
+      return .string(endpoint)
+    case .summaryModel:
+      let model = text.trimmingCharacters(in: .whitespaces)
+      guard !model.isEmpty else { throw invalid }
+      return .string(model)
+    default:
+      guard let number = Int(text), numbers.contains(number) else { throw invalid }
+      return .int(number)
+    }
+  }
+
+  private static func flag(_ text: String, otherwise invalid: ValidationError) throws -> Bool {
+    switch text.lowercased() {
+    case "true", "on": return true
+    case "false", "off": return false
+    default: throw invalid
+    }
+  }
+
+  /// The whole numbers a numeric key takes.
+  private var numbers: ClosedRange<Int> {
+    switch self {
+    case .reAlertIntervalSeconds, .summaryMinMessages: 1...Int.max
+    case .reAlertMinPriority: Priority.range
+    default: 0...Int.max
     }
   }
 
@@ -51,6 +76,19 @@ enum ConfigKey: String, CaseIterable, ExpressibleByArgument {
     case .reAlertIntervalSeconds: .int(config.reAlertIntervalSeconds)
     case .reAlertMinPriority: .int(config.reAlertMinPriority)
     case .reAlertMaxRepeats: .int(config.reAlertMaxRepeats)
+    case .summaryEnabled, .summaryEndpoint, .summaryModel, .summaryMinAwayMinutes,
+      .summaryMinMessages:
+      summaryValue(config.summary)
+    }
+  }
+
+  private func summaryValue(_ summary: SummarySettings) -> ScalarValue {
+    switch self {
+    case .summaryEnabled: .bool(summary.enabled)
+    case .summaryEndpoint: .string(summary.endpoint ?? "")
+    case .summaryModel: .string(summary.model)
+    case .summaryMinAwayMinutes: .int(summary.minAwayMinutes)
+    default: .int(summary.minMessages)
     }
   }
 
@@ -65,6 +103,17 @@ enum ConfigKey: String, CaseIterable, ExpressibleByArgument {
     case (.reAlertMinPriority, .int(let number)):
       config.reAlertMinPriority = Priority(clamping: number).rawValue
     case (.reAlertMaxRepeats, .int(let number)): config.reAlertMaxRepeats = number
+    default: applySummary(value, to: &config.summary)
+    }
+  }
+
+  private func applySummary(_ value: ScalarValue, to summary: inout SummarySettings) {
+    switch (self, value) {
+    case (.summaryEnabled, .bool(let flag)): summary.enabled = flag
+    case (.summaryEndpoint, .string(let text)): summary.endpoint = text.isEmpty ? nil : text
+    case (.summaryModel, .string(let text)): summary.model = text
+    case (.summaryMinAwayMinutes, .int(let number)): summary.minAwayMinutes = number
+    case (.summaryMinMessages, .int(let number)): summary.minMessages = number
     default: break
     }
   }
@@ -73,12 +122,14 @@ enum ConfigKey: String, CaseIterable, ExpressibleByArgument {
 enum ScalarValue: Encodable, Sendable, Hashable, CustomStringConvertible {
   case bool(Bool)
   case int(Int)
+  case string(String)
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
     case .bool(let flag): try container.encode(flag)
     case .int(let number): try container.encode(number)
+    case .string(let text): try container.encode(text)
     }
   }
 
@@ -86,6 +137,7 @@ enum ScalarValue: Encodable, Sendable, Hashable, CustomStringConvertible {
     switch self {
     case .bool(let flag): flag ? "true" : "false"
     case .int(let number): String(number)
+    case .string(let text): text
     }
   }
 }
@@ -143,6 +195,15 @@ struct ConfigSet: CLICommand {
 
   func execute(_ environment: CLIEnvironment, _ out: Output) async throws {
     let parsed = try key.parse(value)
+    if key == .summaryEndpoint, case .string(let endpoint) = parsed, !endpoint.isEmpty {
+      let allowInsecure = try await environment.config.load().allowInsecure
+      guard SummaryEndpoint.isSecure(endpoint, allowInsecure: allowInsecure) else {
+        throw CLIFailure.runtime(
+          "insecure-server",
+          "Refusing a plain http endpoint: the key would travel unprotected. Use https, or "
+            + "turn on: ntfy-mac config set allowInsecure true")
+      }
+    }
     let key = key
     try await environment.config.update { key.apply(parsed, to: &$0) }
     let config = try await environment.config.load()

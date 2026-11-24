@@ -151,7 +151,7 @@ extension ReconnectMachine {
       guard isLive else { return nil }
       attempt = 0
       return settle(at: now)
-    case .screensDidSleep:
+    case .screensDidSleep, .screenLocked, .screenUnlocked:
       return nil
     case .screensDidWake:
       return handleScreensDidWake(at: now)

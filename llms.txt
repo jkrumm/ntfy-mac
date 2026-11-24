@@ -87,3 +87,4 @@ ntfy-mac wait --topic approvals --match '/^(yes|no)/i' --timeout 600 --json
 - [`ntfy-mac login-item <off|on|status>`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-login-item): Start ntfy-mac at login: on, off or status.
 - [`ntfy-mac migrate [--dry-run]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-migrate): Remove the leftovers of a 1.x install.
 - [`ntfy-mac schema`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-schema): Describe every command, flag, exit code and error code.
+- [`ntfy-mac summary [--since <duration-or-timestamp>] [--test]`](https://github.com/jkrumm/ntfy-mac/blob/master/docs/cli.md#ntfy-mac-summary): Summarize the notifications of a time window, as the away digest does.

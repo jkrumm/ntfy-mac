@@ -69,6 +69,8 @@ final class SettingsScratch: Sendable {
 struct SettingsRig {
   let store: any ConfigStore
   let secrets: InMemorySecretStore
+  let summaryKeys = InMemorySecretStore()
+  let summarizer = ScriptedSummarizer()
   let tester: ScriptedServerTester
   let topics: ScriptedTopicSource
   let loginItem: InMemoryLoginItem
@@ -107,7 +109,9 @@ struct SettingsRig {
       clock: pipeline.clock)
     model = SettingsModel(
       SettingsModel.Dependencies(
-        config: store, secrets: secrets, tester: tester, topicSource: topics, source: source,
+        config: store, secrets: secrets, summaryKeys: summaryKeys,
+        summarizerMake: { [summarizer] _, _, _, _ in summarizer }, tester: tester,
+        topicSource: topics, source: source,
         loginItem: loginItem, sounds: StubSoundList(), preview: preview,
         configChanges: { signal.stream() }),
       app: app, permission: flow, windows: windows,

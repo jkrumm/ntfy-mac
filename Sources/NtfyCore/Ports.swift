@@ -41,6 +41,10 @@ public enum SystemEvent: Sendable, Hashable {
   case screensDidSleep
   /// The displays came back: someone is at the Mac.
   case screensDidWake
+  /// The screen was locked: the user stepped away without the displays going dark yet.
+  case screenLocked
+  /// The screen was unlocked: the user is back at the Mac.
+  case screenUnlocked
   case pathChanged(online: Bool)
 }
 
@@ -72,6 +76,9 @@ public protocol NotificationPoster: Sendable {
   /// One notification standing in for `count` messages that were held back or missed.
   func postMissedSummary(count: Int, oldestTopic: String, cause: MissedSummaryCause)
     async throws(NtfyError)
+  /// The digest of what was missed while away: `title` and the summary `body`; a click opens the
+  /// History window like the missed-message summary does.
+  func postDigest(title: String, body: String) async throws(NtfyError)
   /// Withdraws delivered notifications. Unknown identifiers are ignored.
   func remove(identifiers: [String]) async
   /// The identifiers of the notifications currently shown.

@@ -39,6 +39,8 @@ public struct Config: Sendable, Hashable {
   public var quietHours: QuietHours
   /// Automatic suppression while a video meeting is detected, and the manual override.
   public var meeting: MeetingSettings
+  /// The optional digest of messages missed while away.
+  public var summary: SummarySettings
   /// Every other top-level key, preserved verbatim.
   public var extras: [String: ConfigValue]
 
@@ -58,6 +60,7 @@ public struct Config: Sendable, Hashable {
     topicSettings: [String: TopicSettings] = [:],
     quietHours: QuietHours = QuietHours(),
     meeting: MeetingSettings = MeetingSettings(),
+    summary: SummarySettings = SummarySettings(),
     extras: [String: ConfigValue] = [:]
   ) {
     self.url = url
@@ -75,6 +78,7 @@ public struct Config: Sendable, Hashable {
     self.topicSettings = topicSettings
     self.quietHours = quietHours
     self.meeting = meeting
+    self.summary = summary
     self.extras = extras
   }
 
@@ -102,10 +106,11 @@ public struct Config: Sendable, Hashable {
     static let topicSettings = "topicSettings"
     static let quietHours = "quietHours"
     static let meeting = "meeting"
+    static let summary = "summary"
     static let known: Set<String> = [
       url, token, sounds, dismiss, extraTopics, allowInsecure, allowPrivateNetworkActions,
       reAlert, reAlertIntervalSeconds, reAlertMinPriority, reAlertMaxRepeats, pausedUntil,
-      topicSettings, quietHours, meeting,
+      topicSettings, quietHours, meeting, summary,
     ]
   }
 
@@ -155,6 +160,7 @@ public struct Config: Sendable, Hashable {
     }
     quietHours = QuietHours(value: object[Key.quietHours])
     meeting = MeetingSettings(value: object[Key.meeting])
+    summary = SummarySettings(value: object[Key.summary])
     extras = object.filter { !Self.Key.known.contains($0.key) }
   }
 
@@ -195,6 +201,7 @@ public struct Config: Sendable, Hashable {
     if !topics.isEmpty { result[Key.topicSettings] = .object(topics) }
     if let quiet = quietHours.configValue { result[Key.quietHours] = quiet }
     if let meeting = meeting.configValue { result[Key.meeting] = meeting }
+    if let summary = summary.configValue { result[Key.summary] = summary }
     return result
   }
 

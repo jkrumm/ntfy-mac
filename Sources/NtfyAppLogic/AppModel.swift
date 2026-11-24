@@ -206,6 +206,11 @@ public final class AppModel {
     }
   }
 
+  /// The menu bar or a window was opened: a digest of what was missed may be due.
+  public func noteOpened() async {
+    await source.current()?.digest?.windowOpened()
+  }
+
   /// Asks the system what notifications may do. Call it when the app becomes active and when
   /// the menu opens.
   public func refreshPermission() async {

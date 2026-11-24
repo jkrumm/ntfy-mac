@@ -72,6 +72,13 @@ public actor UserNotificationPoster: NotificationPoster {
     try await center.add(spec)
   }
 
+  public func postDigest(title: String, body: String) async throws(NtfyError) {
+    let spec = UserNotificationMapper.digestSpec(
+      title: title, body: body,
+      identifier: UserNotificationMapper.summaryPrefix + UUID().uuidString)
+    try await center.add(spec)
+  }
+
   public func remove(identifiers: [String]) async {
     guard !identifiers.isEmpty else { return }
     await center.removeDelivered(identifiers: identifiers)

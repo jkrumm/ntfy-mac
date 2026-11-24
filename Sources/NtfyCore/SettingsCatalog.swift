@@ -24,6 +24,12 @@ public enum SettingID: String, Sendable, CaseIterable, Hashable {
   case reAlertIntervalSeconds
   case reAlertMinPriority
   case reAlertMaxRepeats
+  case summaryEnabled
+  case summaryEndpoint
+  case summaryKey
+  case summaryModel
+  case summaryMinAwayMinutes
+  case summaryMinMessages
   case meetingMode
   case meetingUrgentBypass
   case presenting
@@ -40,6 +46,7 @@ public enum SettingGroup: String, Sendable, CaseIterable, Hashable {
   case quietHours
   case reAlert
   case meetings
+  case summary
   case actions
   case system
 
@@ -51,6 +58,7 @@ public enum SettingGroup: String, Sendable, CaseIterable, Hashable {
     case .quietHours: "Quiet hours"
     case .reAlert: "Re-alert"
     case .meetings: "Meetings"
+    case .summary: "Away digest"
     case .actions: "Message actions"
     case .system: "System"
     }
@@ -224,6 +232,32 @@ public enum SettingsCatalog {
       note: "Holds notifications whatever the detection says, even with the mode off. "
         + "It lasts one hour unless you pass `--for` or `--indefinitely`; "
         + "`ntfy-mac present off` ends it."),
+    SettingEntry(
+      .summaryEnabled, .summary, "Summarize what I missed while away", key: "summary.enabled",
+      command: "config set", example: "ntfy-mac config set summary.enabled on",
+      note: "Off by default. It needs an endpoint and a key; without them nothing is sent."),
+    SettingEntry(
+      .summaryEndpoint, .summary, "Summary endpoint", key: "summary.endpoint",
+      command: "config set",
+      example: "ntfy-mac config set summary.endpoint https://api.anthropic.com",
+      note: "The base URL of an Anthropic-compatible API; `/v1/messages` is appended. https "
+        + "unless `allowInsecure` is on. An empty value clears it."),
+    SettingEntry(
+      .summaryKey, .summary, "Summary API key", command: "config summary-key set",
+      example: "ntfy-mac config summary-key set", storage: .keychain,
+      note: "Read from stdin, sent as `x-api-key`. `config summary-key clear` removes it."),
+    SettingEntry(
+      .summaryModel, .summary, "Summary model", key: "summary.model", command: "config set",
+      example: "ntfy-mac config set summary.model claude-haiku-5-5",
+      note: "A gateway may take an alias such as `haiku`. `config reset summary.model` "
+        + "restores the default."),
+    SettingEntry(
+      .summaryMinAwayMinutes, .summary, "Minutes away before a digest",
+      key: "summary.minAwayMinutes", command: "config set",
+      example: "ntfy-mac config set summary.minAwayMinutes 15"),
+    SettingEntry(
+      .summaryMinMessages, .summary, "Messages needed for a digest", key: "summary.minMessages",
+      command: "config set", example: "ntfy-mac config set summary.minMessages 3"),
     SettingEntry(
       .allowPrivateNetworkActions, .actions, "Allow actions to reach the private network",
       key: "allowPrivateNetworkActions", command: "config set",

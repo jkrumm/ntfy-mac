@@ -172,6 +172,11 @@ public final class HistoryModel {
     ]
   }
 
+  /// The History window opened: a digest of what was missed may be due.
+  public func noteOpened() async {
+    await source.current()?.digest?.windowOpened()
+  }
+
   /// Stops following and cancels pending work. The last values stay readable.
   public func stop() {
     for task in tasks + pipelineTasks { task.cancel() }

@@ -100,6 +100,19 @@ import UserNotifications
     #expect(content.attachments.isEmpty)
   }
 
+  @Test func theDigestCarriesItsTextAndOpensHistoryOnClick() {
+    let digest = UserNotificationMapper.digestSpec(
+      title: "While you were away · 7 messages", body: "Two alerts.",
+      identifier: UserNotificationMapper.summaryPrefix + "x")
+    #expect(digest.title == "While you were away · 7 messages")
+    #expect(digest.body == "Two alerts.")
+    #expect(digest.userInfo.isEmpty)
+    #expect(
+      NotificationResponder.isSummaryClick(
+        actionIdentifier: UNNotificationDefaultActionIdentifier,
+        requestIdentifier: digest.identifier))
+  }
+
   @Test func summaryCopiesTheOldTextAndStaysQuiet() {
     let spec = UserNotificationMapper.summarySpec(count: 7, oldestTopic: "alerts", identifier: "s")
     #expect(spec.body == "7 notifications while you were away (alerts)")

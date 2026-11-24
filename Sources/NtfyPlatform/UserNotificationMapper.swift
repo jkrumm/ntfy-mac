@@ -46,6 +46,17 @@ public enum UserNotificationMapper {
       attachment: nil)
   }
 
+  /// The digest of missed messages. Its identifier carries the summary prefix, so a click opens the
+  /// History window like the missed-message summary's does.
+  public static func digestSpec(title: String, body: String, identifier: String)
+    -> UserNotificationSpec
+  {
+    UserNotificationSpec(
+      identifier: identifier, title: title, subtitle: "", body: body, threadID: nil,
+      sound: "Pop", interruption: .active, relevance: 0.5, userInfo: [:], category: nil,
+      attachment: nil)
+  }
+
   /// One category per notification, because the buttons differ per message.
   public static func category(for content: NotificationContent) -> NotificationCategorySpec {
     NotificationCategorySpec(

@@ -187,6 +187,8 @@ struct CLIRig {
   let scratch = Scratch()
   let config: InMemoryConfigStore
   let secrets: InMemorySecretStore
+  let summaryKeys = InMemorySecretStore()
+  let summarizer = ScriptedSummarizer()
   let topics: ScriptedTopicSource
   let app: FakeApp
   let processes: FakeProcesses
@@ -243,7 +245,8 @@ struct CLIRig {
     let publisher = StubPublisher(failure: publishFailure, time: clock.now())
     return CLIEnvironment(
       paths: paths, variables: variables, terminal: terminal, executablePath: executablePath,
-      config: config, secrets: secrets, app: app,
+      config: config, secrets: secrets, summaryKeys: summaryKeys,
+      summarizerMake: { [summarizer] _, _, _, _ in summarizer }, app: app,
       topicSource: { _, _, _ in source }, publisher: { _, _, _ in publisher },
       history: FakeHistory(store: store, absent: historyAbsent), clock: clock,
       runUntilInterrupted: { try await $0() }, processes: processes, releases: releases,

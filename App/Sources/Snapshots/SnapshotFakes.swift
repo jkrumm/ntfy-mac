@@ -79,6 +79,7 @@
     func postMissedSummary(count: Int, oldestTopic: String, cause: MissedSummaryCause)
       async throws(NtfyError)
     {}
+    func postDigest(title: String, body: String) async throws(NtfyError) {}
     func remove(identifiers: [String]) async {}
     func deliveredIdentifiers() async -> Set<String> { [] }
   }

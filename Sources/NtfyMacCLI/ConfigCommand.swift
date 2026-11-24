@@ -9,6 +9,7 @@ struct ConfigCommand: CLICommand {
       ConfigShowCommand.self, ConfigSoundsCommand.self, ConfigDismissCommand.self,
       ConfigGet.self, ConfigSet.self, ConfigReset.self, ConfigTopicCommand.self,
       ConfigQuietHoursCommand.self, ConfigMeetingCommand.self,
+      ConfigSummaryKeyCommand.self,
     ]
   )
 

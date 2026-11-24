@@ -34,6 +34,10 @@ struct CLIEnvironment: Sendable {
   var executablePath: String
   var config: any ConfigStore
   var secrets: any SecretStore
+  /// The API key of the summary endpoint.
+  var summaryKeys: any SecretStore
+  /// Builds the summarizer for an endpoint, key, model and `allowInsecure`.
+  var summarizerMake: SummarizerProvider.Make
   var app: any AppControlling
   var topicSource: TopicSourceFactory
   var publisher: PublisherFactory

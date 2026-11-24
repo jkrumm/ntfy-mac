@@ -35,6 +35,8 @@ final class AppPipeline: Sendable {
   /// Nil in the local pipeline.
   let supervisor: StreamSupervisor?
   let attachments: any AttachmentFetching
+  /// Posts the digest of what was missed when the user returns.
+  let digest: AwayDigestRunner
   private let retention: Task<Void, Never>
 
   /// Opens the store and starts everything; `settings` nil starts the local pipeline. Throws
@@ -69,16 +71,24 @@ final class AppPipeline: Sendable {
         options: options(settings: settings, delivery: delivery))
       await supervisor?.start()
     }
+    let digest = AwayDigestRunner(
+      events: SystemEventMonitor(), config: services.config, inbox: store,
+      summarizers: SummarizerProvider(
+        keys: KeychainSecretStore(account: "summary-key"), make: AnthropicSummarizer.make),
+      poster: poster, clock: services.clock,
+      log: { log.info("\($0, privacy: .private)") })
+    await digest.start()
     return AppPipeline(
       services: services, store: store, delivery: delivery, supervisor: supervisor,
-      attachments: attachments(settings: settings))
+      attachments: attachments(settings: settings), digest: digest)
   }
 
   private init(
     services: AppServices, store: SQLiteHistoryStore, delivery: DeliveryService,
-    supervisor: StreamSupervisor?, attachments: any AttachmentFetching
+    supervisor: StreamSupervisor?, attachments: any AttachmentFetching, digest: AwayDigestRunner
   ) {
     self.services = services
+    self.digest = digest
     self.attachments = attachments
     self.store = store
     self.delivery = delivery
@@ -93,6 +103,7 @@ final class AppPipeline: Sendable {
   func shutdown() async {
     await services.router.use(nil)
     await supervisor?.stop()
+    await digest.stop()
     retention.cancel()
     await retention.value
     await delivery.shutdown()
@@ -196,6 +207,7 @@ extension AppPipeline {
   /// What the socket handler may use of this pipeline.
   var handles: PipelineHandles {
     PipelineHandles(
-      store: store, delivery: delivery, supervisor: supervisor, attachments: attachments)
+      store: store, delivery: delivery, supervisor: supervisor, attachments: attachments,
+      digest: digest)
   }
 }

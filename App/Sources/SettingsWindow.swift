@@ -62,6 +62,7 @@ struct SettingsWindow: View {
     case .reAlert: SettingsReAlertSection(model: model)
     case .quietHours: SettingsQuietHoursSection(model: model)
     case .meetings: SettingsMeetingsSection(model: model)
+    case .summary: SettingsSummarySection(model: model)
     case .actions: SettingsActionsSection(model: model)
     case .general: SettingsGeneralSection(model: model)
     }

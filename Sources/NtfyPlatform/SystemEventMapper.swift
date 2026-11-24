@@ -33,6 +33,18 @@ public struct SystemEventMapper: Sendable {
     }
   }
 
+  /// The lock and unlock notifications `SystemEventMonitor` takes from the distributed center.
+  public static let lockNotification = Notification.Name("com.apple.screenIsLocked")
+  public static let unlockNotification = Notification.Name("com.apple.screenIsUnlocked")
+
+  public static func distributedEvent(named name: Notification.Name) -> SystemEvent? {
+    switch name {
+    case lockNotification: return .screenLocked
+    case unlockNotification: return .screenUnlocked
+    default: return nil
+    }
+  }
+
   public static let workspaceNotifications: [Notification.Name] = [
     NSWorkspace.didWakeNotification, NSWorkspace.willSleepNotification,
     NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification,

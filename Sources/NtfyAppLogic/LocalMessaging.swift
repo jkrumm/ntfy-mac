@@ -66,11 +66,15 @@ public struct PipelineHandles: Sendable {
   public let supervisor: StreamSupervisor?
   /// Downloads attachments for the History window's preview.
   public let attachments: any AttachmentFetching
+  /// The away digest; nil where there is none (tests, snapshots).
+  public let digest: AwayDigestRunner?
 
   public init(
     store: any HistoryStore & HistoryInbox & HistoryObserving, delivery: DeliveryService,
-    supervisor: StreamSupervisor?, attachments: any AttachmentFetching
+    supervisor: StreamSupervisor?, attachments: any AttachmentFetching,
+    digest: AwayDigestRunner? = nil
   ) {
+    self.digest = digest
     messages = LocalMessaging(history: store, delivery: delivery)
     inbox = store
     changes = store

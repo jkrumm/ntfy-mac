@@ -109,8 +109,19 @@ extension CommandSpec {
         "ntfy-mac config quiet-hours set --start 22:00 --end 07:00 --no-digest",
         "ntfy-mac config quiet-hours off", "ntfy-mac config meeting show",
         "ntfy-mac config meeting set --mode pause --no-urgent-bypass",
-        "ntfy-mac config meeting reset",
+        "ntfy-mac config meeting reset", "ntfy-mac config set summary.enabled on",
+        "ntfy-mac config set summary.endpoint https://api.anthropic.com",
+        "ntfy-mac config summary-key set", "ntfy-mac config summary-key clear",
       ]),
+    CommandSpec(
+      "summary", files: true,
+      note: "Reads the history read-only; never starts the app and never posts.",
+      errors: history + [
+        "summary-not-configured", "unauthorized", "server-unreachable", "rate-limited",
+        "redirected", "insecure-server", "invalid-response",
+      ],
+      domains: ["--since": .durationOrTimestamp],
+      examples: ["ntfy-mac summary --since 1h", "ntfy-mac summary --test --json"]),
     CommandSpec(
       "notify", app: .launches, errors: ["app-unavailable", "permission-denied"],
       domains: ["--priority": .priority, "--dismiss-after": .seconds, "--url": .url],
@@ -248,6 +259,9 @@ enum ErrorCatalog {
     Entry(
       code: "app-outdated", exitCode: 1,
       meaning: "The running app is older than the CLI and does not know the command."),
+    Entry(
+      code: "summary-not-configured", exitCode: 1,
+      meaning: "The summary endpoint or its key is missing; see config summary-key."),
     Entry(code: "storage", exitCode: 1, meaning: "Reading or writing local state failed."),
     Entry(code: "internal", exitCode: 1, meaning: "The app failed while handling the request."),
     Entry(code: "topic-not-local", exitCode: 1, meaning: "Only local topics can be removed."),

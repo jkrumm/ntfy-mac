@@ -34,6 +34,16 @@ import Testing
       SystemEventMapper.workspaceEvent(named: NSWorkspace.didLaunchApplicationNotification) == nil)
   }
 
+  @Test func lockAndUnlockMapToTheirEvents() {
+    #expect(
+      SystemEventMapper.distributedEvent(named: SystemEventMapper.lockNotification)
+        == .screenLocked)
+    #expect(
+      SystemEventMapper.distributedEvent(named: SystemEventMapper.unlockNotification)
+        == .screenUnlocked)
+    #expect(SystemEventMapper.distributedEvent(named: NSWorkspace.didWakeNotification) == nil)
+  }
+
   @Test func everyObservedNotificationMapsToAnEvent() {
     for name in SystemEventMapper.workspaceNotifications {
       #expect(SystemEventMapper.workspaceEvent(named: name) != nil)

@@ -44,7 +44,9 @@ private struct NoQuitGuard: QuitGuarding {
       quitGuard: NoQuitGuard(), source: source, clock: clock)
     return SettingsModel(
       SettingsModel.Dependencies(
-        config: rig.config, secrets: rig.secrets, tester: tester,
+        config: rig.config, secrets: rig.secrets, summaryKeys: rig.summaryKeys,
+        summarizerMake: { [summarizer = rig.summarizer] _, _, _, _ in summarizer },
+        tester: tester,
         topicSource: rig.topics, source: source, loginItem: InMemoryLoginItem(),
         sounds: NoSounds(), preview: SilentPreview(), configChanges: { AsyncStream { $0.finish() } }
       ),
@@ -60,9 +62,18 @@ private struct NoQuitGuard: QuitGuarding {
     await model.setReAlertInterval(seconds: 600)
     await model.setReAlertMinPriority(4)
     await model.setReAlertMaxRepeats(6)
+    await model.setSummaryEnabled(true)
+    model.summaryEndpointText = "https://gw.example.com/anthropic"
+    await model.commitSummaryEndpoint()
+    model.summaryModelText = "haiku"
+    await model.commitSummaryModel()
+    await model.setSummaryMinAwayMinutes(30)
+    await model.setSummaryMinMessages(5)
     let expected: [String: String] = [
       "allowInsecure": "true", "allowPrivateNetworkActions": "true", "reAlert": "false",
       "reAlertIntervalSeconds": "600", "reAlertMinPriority": "4", "reAlertMaxRepeats": "6",
+      "summary.enabled": "true", "summary.endpoint": "https://gw.example.com/anthropic",
+      "summary.model": "haiku", "summary.minAwayMinutes": "30", "summary.minMessages": "5",
     ]
     #expect(Set(expected.keys) == Set(ConfigKey.allCases.map(\.rawValue)))
     for (key, value) in expected {

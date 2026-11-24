@@ -96,7 +96,8 @@
       let flow = { Self.flow(permissions, source: source, clock: clock) }
       settings = SettingsModel(
         SettingsModel.Dependencies(
-          config: config, secrets: secrets, tester: SnapshotServerTester(),
+          config: config, secrets: secrets, summaryKeys: SnapshotSecrets(token: nil),
+          summarizerMake: { _, _, _, _ in nil }, tester: SnapshotServerTester(),
           topicSource: SnapshotTopics(), source: source, loginItem: loginItem,
           sounds: SnapshotSounds(), preview: SnapshotPreview(),
           configChanges: { AsyncStream { _ in } }),

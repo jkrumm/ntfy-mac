@@ -92,6 +92,28 @@ private enum Exposure {
     .presenting: Change(
       apply: { await $0.setPresenting(true) },
       verify: { $0.meeting.presentingUntil.map { !PauseWindow.isIndefinite($0) } == true }),
+    .summaryEnabled: Change(
+      apply: { await $0.setSummaryEnabled(true) }, verify: { $0.summary.enabled }),
+    .summaryEndpoint: Change(
+      apply: {
+        $0.summaryEndpointText = "https://gateway.example.com/anthropic"
+        await $0.commitSummaryEndpoint()
+      }, verify: { $0.summary.endpoint == "https://gateway.example.com/anthropic" }),
+    .summaryKey: Change(
+      apply: {
+        $0.summaryKeyText = "sk-test"
+        await $0.saveSummaryKey()
+      }, verify: { _ in true }),
+    .summaryModel: Change(
+      apply: {
+        $0.summaryModelText = "haiku"
+        await $0.commitSummaryModel()
+      }, verify: { $0.summary.model == "haiku" }),
+    .summaryMinAwayMinutes: Change(
+      apply: { await $0.setSummaryMinAwayMinutes(30) },
+      verify: { $0.summary.minAwayMinutes == 30 }),
+    .summaryMinMessages: Change(
+      apply: { await $0.setSummaryMinMessages(5) }, verify: { $0.summary.minMessages == 5 }),
     .loginItem: Change(apply: { await $0.setLaunchAtLogin(true) }, verify: { _ in true }),
     .pause: Change(
       apply: { await $0.resume() }, verify: { $0.pausedUntil == nil }, clearsKey: true),

@@ -56,15 +56,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let secrets = KeychainSecretStore()
     let tester = NtfyServerTester()
     let loginItem = SMAppServiceLoginItem()
-    func permissionFlow() -> NotificationPermissionFlow {
-      NotificationPermissionFlow(
-        permissions: UserNotificationPermissionProvider(center: services.center),
-        opener: WorkspaceLinkOpener(), quitGuard: ProcessQuitGuard(), source: controller,
-        clock: services.clock)
+    let permissionFlow = {
+      AppDelegate.permissionFlow(controller: controller, services: services)
     }
     settingsModel = SettingsModel(
       SettingsModel.Dependencies(
-        config: services.config, secrets: secrets, tester: tester,
+        config: services.config, secrets: secrets,
+        summaryKeys: KeychainSecretStore(account: "summary-key"),
+        summarizerMake: AnthropicSummarizer.make, tester: tester,
         topicSource: ConfiguredTopicSource(config: services.config, secrets: secrets),
         source: controller, loginItem: loginItem, sounds: SystemSoundList(),
         preview: NSSoundPreview(), configChanges: configChanges),
@@ -78,6 +77,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       if window == .onboarding { onboarding.dismiss() }
     }
     super.init()
+  }
+
+  private static func permissionFlow(
+    controller: AppController, services: AppServices
+  ) -> NotificationPermissionFlow {
+    NotificationPermissionFlow(
+      permissions: UserNotificationPermissionProvider(center: services.center),
+      opener: WorkspaceLinkOpener(), quitGuard: ProcessQuitGuard(), source: controller,
+      clock: services.clock)
   }
 
   /// The lease of the one running instance; a second copy quits here.

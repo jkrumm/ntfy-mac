@@ -14,6 +14,8 @@ Native macOS client for ntfy servers. The 1.x Bun/TypeScript daemon is gone (it 
 
 Dependency direction is enforced in `Package.swift`. `NtfyCore` depends on nothing; every adapter sees the core and nothing else; executables are the only composition roots. Before adding or moving code under `Sources/` or `App/`, read `docs/layout.md`: it maps each target's contents, ports and adapters.
 
+The away digest (off by default; opt-in with an endpoint and a key) has one port and one adapter: `MessageSummarizing` in `NtfyCore` (fake: `ScriptedSummarizer` in `NtfyTesting`) and `AnthropicSummarizer` in `NtfyClient` (Anthropic Messages API only, `x-api-key`, base-URL endpoint so a gateway prefix works). `ReturnPolicy` decides when the user is back, `SummarizerProvider` builds the adapter only for a usable config (no request otherwise), `AwayDigestRunner` in `NtfyAppLogic` posts it. The key is Keychain account `summary-key`, never `config.json`; `NTFY_SUMMARY_KEY` overrides it for one CLI run.
+
 Rules: actors own mutable state (stream supervisor, delivery queue); no singletons or global state; one composition root each in the app and the CLI; logging via `os.Logger` (subsystem `com.jkrumm.ntfy-mac`, categories per area); tests go through module interfaces, not internals.
 
 ## Gate

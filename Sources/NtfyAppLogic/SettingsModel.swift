@@ -17,6 +17,8 @@ public final class SettingsModel {
   /// The config as last read or edited.
   public private(set) var config = Config()
   public private(set) var hasStoredToken = false
+  public internal(set) var hasSummaryKey = false
+  public internal(set) var summaryTest = SummaryTestState.idle
   public private(set) var loginItem = LoginItemState.notRegistered
   /// The topics the account has on the server; empty until fetched, or without a server.
   public private(set) var serverTopics: [String] = []
@@ -25,13 +27,19 @@ public final class SettingsModel {
   public private(set) var soundNames: [String] = []
   public private(set) var serverTest = ServerTestState.idle
   /// The last thing that went wrong, in a sentence; cleared by the next change that works.
-  public private(set) var notice: String?
+  public internal(set) var notice: String?
 
   /// The server address as typed. Follows the saved one until it is edited; unsaved edits survive reloads.
   public var urlText = ""
   /// The token as typed. Empty means "keep the stored one"; it is never filled from the Keychain.
   public var tokenText = ""
   public var newTopicText = ""
+  /// The summary endpoint and model as typed; they follow the saved values until edited, and are
+  /// written on commit (`commitSummaryEndpoint`, `commitSummaryModel`).
+  public var summaryEndpointText = ""
+  public var summaryModelText = SummarySettings.defaultModel
+  /// The summary key as typed; empty means "keep the stored one". Never filled from the Keychain.
+  public var summaryKeyText = ""
 
   public let permission: NotificationPermissionFlow
   public let app: AppModel
@@ -39,6 +47,8 @@ public final class SettingsModel {
   @ObservationIgnored let store: any ConfigStore
   @ObservationIgnored let connection: ServerConnection
   @ObservationIgnored let secrets: any SecretStore
+  @ObservationIgnored let summaryKeys: any SecretStore
+  @ObservationIgnored let summarizers: SummarizerProvider
   @ObservationIgnored let topicSource: any TopicSource
   @ObservationIgnored let source: any PipelineSource
   @ObservationIgnored let loginItems: any LoginItemControlling
@@ -58,6 +68,8 @@ public final class SettingsModel {
   public struct Dependencies {
     public var config: any ConfigStore
     public var secrets: any SecretStore
+    public var summaryKeys: any SecretStore
+    public var summarizerMake: SummarizerProvider.Make
     public var tester: any ServerTesting
     public var topicSource: any TopicSource
     public var source: any PipelineSource
@@ -67,13 +79,16 @@ public final class SettingsModel {
     public var configChanges: @Sendable () -> AsyncStream<Void>
 
     public init(
-      config: any ConfigStore, secrets: any SecretStore, tester: any ServerTesting,
+      config: any ConfigStore, secrets: any SecretStore, summaryKeys: any SecretStore,
+      summarizerMake: @escaping SummarizerProvider.Make, tester: any ServerTesting,
       topicSource: any TopicSource, source: any PipelineSource,
       loginItem: any LoginItemControlling, sounds: any SoundListing,
       preview: any SoundPreviewing, configChanges: @escaping @Sendable () -> AsyncStream<Void>
     ) {
       self.config = config
       self.secrets = secrets
+      self.summaryKeys = summaryKeys
+      self.summarizerMake = summarizerMake
       self.tester = tester
       self.topicSource = topicSource
       self.source = source
@@ -91,6 +106,9 @@ public final class SettingsModel {
   ) {
     store = dependencies.config
     secrets = dependencies.secrets
+    summaryKeys = dependencies.summaryKeys
+    summarizers = SummarizerProvider(
+      keys: dependencies.summaryKeys, make: dependencies.summarizerMake)
     connection = ServerConnection(
       config: dependencies.config, secrets: dependencies.secrets, tester: dependencies.tester)
     topicSource = dependencies.topicSource
@@ -185,7 +203,15 @@ public final class SettingsModel {
   /// - Parameter generation: `editGeneration` when the job was enqueued.
   private func loadConfig(_ generation: Int) async {
     let previousURL = config.url ?? ""
-    defer { if urlText == previousURL { urlText = config.url ?? "" } }
+    let previousEndpoint = config.summary.endpoint ?? ""
+    let previousModel = config.summary.model
+    defer {
+      if urlText == previousURL { urlText = config.url ?? "" }
+      if summaryEndpointText == previousEndpoint {
+        summaryEndpointText = config.summary.endpoint ?? ""
+      }
+      if summaryModelText == previousModel { summaryModelText = config.summary.model }
+    }
     do throws(NtfyError) {
       let loaded = try await store.load()
       // An edit made after this job was enqueued is newer than the file; its own write reloads
@@ -195,6 +221,7 @@ public final class SettingsModel {
       log("config not read: \(error)")
     }
     hasStoredToken = ((try? await secrets.token()) ?? nil).map { !$0.isEmpty } ?? false
+    hasSummaryKey = ((try? await summaryKeys.token()) ?? nil).map { !$0.isEmpty } ?? false
     loginItem = loginItems.state()
   }
 

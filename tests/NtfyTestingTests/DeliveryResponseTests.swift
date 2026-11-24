@@ -167,6 +167,7 @@ private actor GatedPoster: NotificationPoster {
   }
 
   func postMissedSummary(count: Int, oldestTopic: String, cause: MissedSummaryCause) {}
+  func postDigest(title: String, body: String) {}
   func remove(identifiers: [String]) { removed.append(contentsOf: identifiers) }
   func deliveredIdentifiers() -> Set<String> { [] }
 

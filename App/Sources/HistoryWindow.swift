@@ -55,6 +55,7 @@ struct HistoryWindow: View {
     .onAppear {
       if model.publisher == nil { model.publisher = ConfiguredPublisherProvider.live() }
       model.start()
+      Task { await model.noteOpened() }
       applyPendingSelection()
     }
     .onDisappear { model.stop() }

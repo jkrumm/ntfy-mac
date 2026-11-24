@@ -16,6 +16,12 @@ extension CLIEnvironment {
       executablePath: AppBundle.executable()?.path ?? "ntfy-mac",
       config: FileConfigStore(url: paths.configFile),
       secrets: KeychainSecretStore(),
+      summaryKeys: EnvironmentSecretStore(
+        override: variables["NTFY_SUMMARY_KEY"], base: KeychainSecretStore(account: "summary-key")),
+      summarizerMake: { endpoint, key, model, allowInsecure in
+        AnthropicSummarizer.make(
+          endpoint: endpoint, key: key, model: model, allowInsecure: allowInsecure)
+      },
       app: AppLink(socket: paths.socket),
       topicSource: { base, token, allowInsecure in
         NtfyAccountClient(base: base, token: token, allowInsecure: allowInsecure, timeout: 10)

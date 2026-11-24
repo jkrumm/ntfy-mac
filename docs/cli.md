@@ -45,6 +45,7 @@ Every command takes --json for machine-readable output on stdout.
 | permission-denied | 4 | Notifications are not allowed. |
 | invalid-response | 1 | An answer that could not be read. |
 | app-outdated | 1 | The running app is older than the CLI and does not know the command. |
+| summary-not-configured | 1 | The summary endpoint or its key is missing; see config summary-key. |
 | storage | 1 | Reading or writing local state failed. |
 | internal | 1 | The app failed while handling the request. |
 | topic-not-local | 1 | Only local topics can be removed. |
@@ -101,6 +102,7 @@ Everything the History window does to a message has a command. A test fails when
 | [`ntfy-mac login-item`](#ntfy-mac-login-item) | Start ntfy-mac at login: on, off or status. |
 | [`ntfy-mac migrate`](#ntfy-mac-migrate) | Remove the leftovers of a 1.x install. |
 | [`ntfy-mac schema`](#ntfy-mac-schema) | Describe every command, flag, exit code and error code. |
+| [`ntfy-mac summary`](#ntfy-mac-summary) | Summarize the notifications of a time window, as the away digest does. |
 
 ## `ntfy-mac setup`
 
@@ -264,6 +266,10 @@ ntfy-mac config quiet-hours off
 ntfy-mac config meeting show
 ntfy-mac config meeting set --mode pause --no-urgent-bypass
 ntfy-mac config meeting reset
+ntfy-mac config set summary.enabled on
+ntfy-mac config set summary.endpoint https://api.anthropic.com
+ntfy-mac config summary-key set
+ntfy-mac config summary-key clear
 ```
 
 ### `ntfy-mac config show`
@@ -399,14 +405,14 @@ ntfy-mac config dismiss reset
 Print the value of a setting.
 
 ```
-ntfy-mac config get <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority>
+ntfy-mac config get <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority|summary.enabled|summary.endpoint|summary.minAwayMinutes|summary.minMessages|summary.model>
 ```
 
 Example: ntfy-mac config get reAlertIntervalSeconds
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
-| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority`, `summary.enabled`, `summary.endpoint`, `summary.minAwayMinutes`, `summary.minMessages`, `summary.model` |  | yes | The setting. |
 | `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
 ### `ntfy-mac config set`
@@ -414,7 +420,7 @@ Example: ntfy-mac config get reAlertIntervalSeconds
 Change a setting.
 
 ```
-ntfy-mac config set <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority> <value>
+ntfy-mac config set <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority|summary.enabled|summary.endpoint|summary.minAwayMinutes|summary.minMessages|summary.model> <value>
 ```
 
 Booleans take true, false, on or off. reAlertIntervalSeconds is above 0, reAlertMinPriority 1 to 5, reAlertMaxRepeats 0 or more. The running app picks the change up through its config watcher.
@@ -426,7 +432,7 @@ ntfy-mac config set reAlertIntervalSeconds 600
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
-| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority`, `summary.enabled`, `summary.endpoint`, `summary.minAwayMinutes`, `summary.minMessages`, `summary.model` |  | yes | The setting. |
 | `value` | positional | string |  | yes | The new value. |
 | `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
@@ -435,14 +441,14 @@ ntfy-mac config set reAlertIntervalSeconds 600
 Restore a setting to its default.
 
 ```
-ntfy-mac config reset <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority>
+ntfy-mac config reset <allowInsecure|allowPrivateNetworkActions|reAlert|reAlertIntervalSeconds|reAlertMaxRepeats|reAlertMinPriority|summary.enabled|summary.endpoint|summary.minAwayMinutes|summary.minMessages|summary.model>
 ```
 
 Example: ntfy-mac config reset reAlertIntervalSeconds
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
-| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority` |  | yes | The setting. |
+| `key` | positional | `allowInsecure`, `allowPrivateNetworkActions`, `reAlert`, `reAlertIntervalSeconds`, `reAlertMaxRepeats`, `reAlertMinPriority`, `summary.enabled`, `summary.endpoint`, `summary.minAwayMinutes`, `summary.minMessages`, `summary.model` |  | yes | The setting. |
 | `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
 
 ### `ntfy-mac config topic`
@@ -644,6 +650,49 @@ ntfy-mac config meeting reset
 ```
 
 A running `present on` stays until `ntfy-mac present off`.
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+### `ntfy-mac config summary-key`
+
+Store or remove the API key of the summary endpoint.
+
+```
+ntfy-mac config summary-key
+```
+
+The key lives in the Keychain, never in config.json. `set` reads it from stdin so it stays out of the shell history and the process list.
+
+```sh
+printf %s "$KEY" | ntfy-mac config summary-key set
+ntfy-mac config summary-key clear
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config summary-key set`
+
+Store the key read from stdin.
+
+```
+ntfy-mac config summary-key set
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+#### `ntfy-mac config summary-key clear`
+
+Remove the stored key.
+
+```
+ntfy-mac config summary-key clear
+```
 
 | Argument | Kind | Type | Default | Required | Description |
 |-|-|-|-|-|-|
@@ -1356,4 +1405,40 @@ With --json: one document with the full command tree (arguments with type, defau
 
 ```sh
 ntfy-mac schema --json
+```
+
+## `ntfy-mac summary`
+
+Summarize the notifications of a time window, as the away digest does.
+
+```
+ntfy-mac summary [--since <duration-or-timestamp>] [--test]
+```
+
+Reads the history read-only and prints the digest of the messages that were shown as notifications since --since (default 1h). With the digest on, an endpoint and a key (see config summary-key) the model writes it; otherwise, or when the endpoint fails, it is the counts per topic. Nothing is posted. NTFY_SUMMARY_KEY replaces the stored key for this run. --test sends one tiny request to the endpoint and prints the model's answer.
+
+```sh
+ntfy-mac summary --since 1h
+ntfy-mac summary --test
+```
+
+| Argument | Kind | Type | Default | Required | Description |
+|-|-|-|-|-|-|
+| `--since` | option | duration-or-timestamp | `1h` | no | Start of the window: a duration such as 2h, or an ISO 8601 time. |
+| `--test` | flag | boolean | `false` | no | Send one tiny request to the endpoint instead of summarizing. |
+| `--json` | flag | boolean | `false` | no | Print machine-readable JSON on stdout instead of text. |
+
+**Needs**
+
+- Does not use the app.
+- Reads or writes the local config or history files.
+- Reads the history read-only; never starts the app and never posts.
+
+**Error codes:** `usage`, `insecure-server`, `invalid-response`, `rate-limited`, `redirected`, `server-unreachable`, `storage`, `summary-not-configured`, `unauthorized`. See [Error codes](#error-codes).
+
+**Examples**
+
+```sh
+ntfy-mac summary --since 1h
+ntfy-mac summary --test --json
 ```

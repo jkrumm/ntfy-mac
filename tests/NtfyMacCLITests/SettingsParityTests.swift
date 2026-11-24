@@ -1,3 +1,4 @@
+import Foundation
 import NtfyCore
 import Testing
 
@@ -54,7 +55,8 @@ import Testing
   @Test func everySettableExampleRunsSuccessfully() async {
     for entry in SettingsCatalog.entries where entry.kind != .uiOnly {
       guard let example = entry.example else { continue }
-      let rig = CLIRig()
+      var rig = CLIRig()
+      rig.stdin = Data("sk-example\n".utf8)
       await rig.config.update { $0.extraTopics = ["builds"] }
       let words = ExampleWords.split(example)
       let result = await rig.run(Array(words.dropFirst()))

@@ -9,7 +9,7 @@ extension DeliveryService {
       trace("delivery: away, displays asleep")
     case .screensDidWake:
       await userReturned()
-    case .didWake, .pathChanged:
+    case .didWake, .pathChanged, .screenLocked, .screenUnlocked:
       return
     }
   }
