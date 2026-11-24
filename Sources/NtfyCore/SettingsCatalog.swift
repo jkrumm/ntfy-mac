@@ -256,8 +256,8 @@ public enum SettingsCatalog {
       key: "summary.minAwayMinutes", command: "config set",
       example: "ntfy-mac config set summary.minAwayMinutes 15",
       note: "A digest covers what was shown since you last looked: the last digest, or the last "
-        + "time you opened History or the menu bar. It is held back by a pause, quiet hours or a "
-        + "meeting, and those messages roll into the next one."),
+        + "time you opened History or the menu bar. A pause, quiet hours or a meeting "
+        + "hold it back; after a return from lock or sleep those messages roll into the next one."),
     SettingEntry(
       .summaryMinMessages, .summary, "Messages needed for a digest", key: "summary.minMessages",
       command: "config set", example: "ntfy-mac config set summary.minMessages 3"),

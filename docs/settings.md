@@ -69,7 +69,7 @@ Settings in `config.json` apply to the running app through its config watcher; n
 | Summary endpoint | config.json: `summary.endpoint` | `ntfy-mac config set` | `ntfy-mac config set summary.endpoint https://api.anthropic.com` | The base URL of an Anthropic-compatible API; `/v1/messages` is appended. https unless `allowInsecure` is on. An empty value clears it. |
 | Summary API key | Keychain | `ntfy-mac config summary-key set` | `ntfy-mac config summary-key set` | Read from stdin, sent as `x-api-key`. `config summary-key clear` removes it. |
 | Summary model | config.json: `summary.model` | `ntfy-mac config set` | `ntfy-mac config set summary.model claude-haiku-5-5` | A gateway may take an alias such as `haiku`. `config reset summary.model` restores the default. |
-| Minutes away before a digest | config.json: `summary.minAwayMinutes` | `ntfy-mac config set` | `ntfy-mac config set summary.minAwayMinutes 15` | A digest covers what was shown since you last looked: the last digest, or the last time you opened History or the menu bar. It is held back by a pause, quiet hours or a meeting, and those messages roll into the next one. |
+| Minutes away before a digest | config.json: `summary.minAwayMinutes` | `ntfy-mac config set` | `ntfy-mac config set summary.minAwayMinutes 15` | A digest covers what was shown since you last looked: the last digest, or the last time you opened History or the menu bar. A pause, quiet hours or a meeting hold it back; after a return from lock or sleep those messages roll into the next one. |
 | Messages needed for a digest | config.json: `summary.minMessages` | `ntfy-mac config set` | `ntfy-mac config set summary.minMessages 3` |  |
 
 ## Message actions
