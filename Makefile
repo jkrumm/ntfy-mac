@@ -77,8 +77,7 @@ docs-check: build
 
 app: apple-guard
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
-	APPLE_SLOT_NAME=ntfy-mac-app scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
-		-derivedDataPath .build/xcode build
+	APPLE_SLOT_NAME=ntfy-mac-app scripts/apple-slot.sh scripts/build-app.sh .build/xcode
 	scripts/sign.sh $(APP)
 	test -x $(APP)/Contents/MacOS/ntfy-mac
 	$(APP)/Contents/MacOS/ntfy-mac version
@@ -92,8 +91,8 @@ SNAP_DIR ?= .build/snapshots
 
 snapshots: apple-guard
 	cd App && "$$(../$(TOOLS) xcodegen)" generate
-	APPLE_SLOT_NAME=ntfy-mac-snapshots scripts/apple-slot.sh xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release \
-		-derivedDataPath .build/xcode-snap SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
+	APPLE_SLOT_NAME=ntfy-mac-snapshots scripts/apple-slot.sh scripts/build-app.sh .build/xcode-snap \
+		SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS'
 	scripts/sign.sh $(SNAP_APP)
 	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
 		HOME="$$home" CFFIXED_USER_HOME="$$home" $(SNAP_APP)/Contents/MacOS/NtfyMac --ui-snapshot "$(SNAP_DIR)"
