@@ -15,15 +15,15 @@ derived="${1:?usage: build-app.sh <derived-data-dir> [xcodebuild settings…]}"
 shift
 if [ "${CI:-}" = true ]; then jobs="${APP_JOBS:-}"; else jobs="${APP_JOBS:-1}"; fi
 
-# The same scrubbed environment as the script phase in App/project.yml, which asks this build for its bin path.
-env -u SDKROOT -u MACOSX_DEPLOYMENT_TARGET -u CC -u CXX -u LD -u LIBRARY_PATH \
-  xcrun swift build ${jobs:+-j "$jobs"} -c release --arch arm64 --product ntfy-mac --scratch-path .build/cli -debug-info-format none
-
 # xcodebuild adds the app's own dependency (Sparkle) to the package's Package.resolved, which the checked-in file does
-# not carry. Put it back, so a build never leaves the tree dirty.
+# not carry. Put the file back as it was, so a build never leaves the tree dirty.
 pins="$(mktemp)"
 cp Package.resolved "$pins"
 trap 'cp "$pins" Package.resolved; rm -f "$pins"' EXIT
+
+# The same scrubbed environment as the script phase in App/project.yml, which asks this build for its bin path.
+env -u SDKROOT -u MACOSX_DEPLOYMENT_TARGET -u CC -u CXX -u LD -u LIBRARY_PATH \
+  xcrun swift build ${jobs:+-j "$jobs"} -c release --arch arm64 --product ntfy-mac --scratch-path .build/cli -debug-info-format none
 
 xcodebuild -project App/NtfyMac.xcodeproj -scheme NtfyMac -configuration Release -derivedDataPath "$derived" ${jobs:+-jobs "$jobs"} \
   CLI_PREBUILT=YES GCC_GENERATE_DEBUGGING_SYMBOLS=NO DEBUG_INFORMATION_FORMAT=dwarf "$@" build
