@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 base="$(git merge-base HEAD origin/master 2>/dev/null || git merge-base HEAD master 2>/dev/null)" || exit 1
 
-changed="$({ git diff --name-only "$base"; git ls-files --others --exclude-standard; } | sort -u)"
+changed="$({ git diff --no-renames --name-only "$base"; git ls-files --others --exclude-standard; } | sort -u)"
 [ -n "$changed" ] || exit 1
 
 while IFS= read -r path; do

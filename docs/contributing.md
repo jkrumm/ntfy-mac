@@ -15,7 +15,7 @@ cd ntfy-mac
 
 ```bash
 make check            # the gate: format lint, SwiftLint, shellcheck, build, docs check, tests, installer test, app build
-make check-fast       # the same without the app build and the installer test (no xcodebuild)
+make check-fast       # the same without the app build and the installer test (no xcodebuild); builds nothing when only prose changed since the merge base (scripts/docs-only.sh)
 make format           # write swift format changes
 # `check`, `app` and `snapshots` run xcodebuild and refuse outside CI (CI=true) unless FORCE=1; `package` and `install-macbook` set it
 FORCE=1 make app      # build and ad-hoc sign NtfyMac.app into .build/xcode/Build/Products/Release
