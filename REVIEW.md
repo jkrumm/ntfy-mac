@@ -27,8 +27,8 @@ A public app on other people's Macs, so a bad change cannot be rolled back on a 
   priority table.
 - **A notification is lost or doubled.** The cursor advances only after delivery is safe; catch-up, reconnect and boot reconcile
   must not replay or skip a message. A history schema change is a forward migration that keeps existing rows.
-- **The architecture erodes.** `NtfyCore` depends on nothing and does no I/O; adapters see only the core; real adapters meet only in
-  `App/Sources` and the CLI. Shared mutable state lives in actors; no singletons. A test goes through a module's interface.
+- **The architecture erodes.** `NtfyCore` depends on nothing and does no I/O outside the 1.x cleanup (`LegacyInstallCleanup`, `LegacyInstallLayout`); adapters see only the core; real adapters
+  meet only in `App/Sources` and the CLI. Shared mutable state lives in actors; no singletons. A test goes through a module's interface.
 - **The CLI contract drifts.** A command, flag or setting without its `CommandSpec` or `SettingsCatalog` row, an exit code changed
   outside `ErrorCatalog`, or a `schema --json` shape change without a `schemaVersion` bump. Agents script against these.
 - **The IPC protocol breaks an older app.** New socket commands are additive and stay v1; an older app answers `bad-request`.
