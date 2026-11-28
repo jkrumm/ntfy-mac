@@ -2,7 +2,7 @@ APP := .build/xcode/Build/Products/Release/NtfyMac.app
 SWIFT_FILES := Sources tests App/Sources Package.swift
 TOOLS := scripts/tools.sh
 
-.PHONY: apple-guard verify-signature check check-fast toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
+.PHONY: apple-guard verify-signature check check-fast check-fast-run toolchain format lint-format lint lint-sh analyze build test app snapshots package installer-check docs docs-check install-macbook
 
 check: apple-guard toolchain lint-format lint lint-sh build docs-check test installer-check app
 
@@ -17,7 +17,16 @@ apple-guard:
 
 # The lead's tier (project.yaml `checks.fast`): everything `check` runs except the Release xcodebuild (`app`) and the
 # installer test. CI runs the full `check` on the PR head.
-check-fast: toolchain lint-format lint lint-sh build docs-check test
+# A tree whose only changes since the merge base are prose nothing reads (scripts/docs-only.sh) has nothing to build:
+# a fresh worktree would spend about two minutes of the test slot compiling it cold. CI=true never skips.
+check-fast:
+	@if [ "$(CI)" != true ] && scripts/docs-only.sh; then \
+		echo "check-fast: only prose changed since the merge base; nothing to build, lint or test"; \
+	else \
+		$(MAKE) check-fast-run; \
+	fi
+
+check-fast-run: toolchain lint-format lint lint-sh build docs-check test
 
 # Runs once, as the first step of `check`. Fails closed: an unparseable version is an error.
 # The other targets skip it: Package.swift's tools version already rejects a Swift older than 6.2.
